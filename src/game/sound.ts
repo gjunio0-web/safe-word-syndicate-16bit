@@ -24,6 +24,7 @@ class SoundEngine {
   private isAutoSuspended: boolean = false;
   private hasUserGesture: boolean = false;
   private unlockArmed: boolean = false;
+  private unlockListeners: Set<() => void> = new Set();
 
   constructor() {
     this.restorePersistedTracks();
@@ -38,6 +39,23 @@ class SoundEngine {
     }
   }
 
+  public isAudioUnlocked(): boolean {
+    return this.hasUserGesture;
+  }
+
+  public subscribeUnlock(listener: () => void): () => void {
+    this.unlockListeners.add(listener);
+    return () => {
+      this.unlockListeners.delete(listener);
+    };
+  }
+
+  private setUserGesture(value: boolean) {
+    if (this.hasUserGesture === value) return;
+    this.hasUserGesture = value;
+    this.unlockListeners.forEach((listener) => listener());
+  }
+
   private armUnlock() {
     if (typeof window === 'undefined' || this.unlockArmed) return;
     this.unlockArmed = true;
@@ -47,10 +65,11 @@ class SoundEngine {
     const unlock = () => {
       events.forEach((evt) => window.removeEventListener(evt, unlock, true));
       this.unlockArmed = false;
-      this.hasUserGesture = true;
       this.initCtx();
 
       const pending = this.lastRequestedTrack as BgmTrack | null;
+      this.setUserGesture(true);
+
       if (pending && this.musicEnabled) {
         this.playBgm(pending, true);
       }
@@ -770,7 +789,10 @@ class SoundEngine {
             } catch {
               // ignore
             }
+            return;
           }
+
+          this.setUserGesture(true);
         })
         .catch((err: unknown) => {
           if (this.playbackToken !== currentToken) return;
@@ -795,6 +817,12 @@ class SoundEngine {
 
   private playSynthBgm(theme: BgmTrack, token?: number) {
     if (token !== undefined && this.playbackToken !== token) {
+      return;
+    }
+
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.setUserGesture(false);
+      this.armUnlock();
       return;
     }
 

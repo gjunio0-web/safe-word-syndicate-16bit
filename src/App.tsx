@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
@@ -25,6 +25,9 @@ import { CustomAudioModal } from './components/CustomAudioModal';
 import { sound } from './game/sound';
 import { Play, BookOpen, Shield, Flame, RotateCcw, Award, Disc } from 'lucide-react';
 
+const subscribeAudioUnlock = (onChange: () => void) => sound.subscribeUnlock(onChange);
+const getAudioUnlocked = () => sound.isAudioUnlocked();
+
 export default function App() {
   const [screen, setScreen] = useState<GameScreen>('TITLE');
   const [currentStageIdx, setCurrentStageIdx] = useState(0);
@@ -41,6 +44,8 @@ export default function App() {
     showHitboxes: false,
     difficulty: 'NORMAL',
   });
+
+  const audioUnlocked = useSyncExternalStore(subscribeAudioUnlock, getAudioUnlocked, getAudioUnlocked);
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
@@ -225,7 +230,11 @@ export default function App() {
             </div>
             <div className="text-right">
               <div className="text-xs font-mono text-gray-400">VS ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS</div>
-              <div className="text-lg font-black text-[#ffff00] animate-pulse">INSERT COIN [99]</div>
+              <div
+                className={`text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
+              >
+                {audioUnlocked ? 'INSERT COIN [99]' : 'INSERT COIN ► PRESS ANY KEY'}
+              </div>
             </div>
           </div>
 
