@@ -1,0 +1,6 @@
+{
+  "name": "The Safe-Word Syndicate vs. The Ultra Evil League of Conservative Christians",
+  "description": "A 16-bit retro arcade beat 'em up side-scroller featuring a punk-rock squad fighting an oppressive syndicate.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

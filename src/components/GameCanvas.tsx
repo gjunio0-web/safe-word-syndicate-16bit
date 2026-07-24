@@ -1,0 +1,341 @@
+import React, { useRef, useEffect } from 'react';
+import { GameEngine } from '../game/engine';
+import { renderStageBackground } from '../game/stageData';
+import { renderEntitySprite } from '../game/spriteRenderer';
+import { CHARACTERS } from '../game/characterData';
+
+interface GameCanvasProps {
+  engine: GameEngine;
+  crtFilter: boolean;
+}
+
+export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const render = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const width = canvas.width;
+      const height = canvas.height;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // 1. Render Parallax Stage Background
+      renderStageBackground(ctx, engine.stage.bgType, engine.cameraX, width, height);
+
+      // 2. Render Ground Item Pickups
+      engine.items.forEach((item) => {
+        const renderX = item.x - engine.cameraX;
+        const renderY = item.y;
+        ctx.save();
+        ctx.translate(renderX, renderY);
+        if (item.type === 'HEALTH_TACO') {
+          // Vegan Taco icon
+          ctx.fillStyle = '#f5a623';
+          ctx.beginPath();
+          ctx.arc(0, -10, 12, Math.PI, 0);
+          ctx.fill();
+          ctx.fillStyle = '#34c759'; // Lettuce
+          ctx.fillRect(-8, -10, 16, 4);
+        } else {
+          // Energy Drink
+          ctx.fillStyle = '#00f0ff';
+          ctx.fillRect(-6, -18, 12, 18);
+          ctx.fillStyle = '#ff007f';
+          ctx.fillRect(-4, -14, 8, 8);
+        }
+        ctx.restore();
+      });
+
+      // 3. Render Shadows & Entity Sprites (Sorted by Y-depth for 2.5D layering)
+      const sortedEntities = [...engine.entities].sort((a, b) => a.y - b.y);
+
+      sortedEntities.forEach((entity) => {
+        const renderX = entity.x - engine.cameraX;
+        const renderY = entity.y - entity.z; // Y depth minus Z jump vertical height
+
+        // Ground Oval Shadow
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(renderX, entity.y, entity.width / 1.8, entity.width / 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Sprite
+        renderEntitySprite(ctx, entity, renderX, renderY);
+      });
+
+      // 4. Render Particle Effects & Floating Combat Text
+      engine.particles.forEach((p) => {
+        const px = p.x - engine.cameraX;
+        const py = p.y - p.z;
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
+
+        if (p.type === 'TEXT' && p.text) {
+          ctx.fillStyle = p.color;
+          ctx.font = 'black 16px monospace';
+          ctx.shadowColor = '#000000';
+          ctx.shadowBlur = 4;
+          ctx.fillText(p.text, px - 12, py);
+        } else {
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(px, py, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [engine]);
+
+  const p1 = engine.player1;
+  const p2 = engine.player2;
+  const boss = engine.entities.find((e) => e.enemyType?.startsWith('BOSS'));
+
+  return (
+    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
+      {/* HTML5 Canvas */}
+      <canvas
+        ref={canvasRef}
+        width={800}
+        height={450}
+        className="w-full h-full object-contain image-rendering-pixelated"
+      />
+
+      {/* Retro Arcade CRT Scanline & Curved Glass Shader Overlay */}
+      {crtFilter && (
+        <>
+          {/* Scanline Grid */}
+          <div
+            className="absolute inset-0 pointer-events-none z-20"
+            style={{
+              background:
+                'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))',
+              backgroundSize: '100% 4px, 6px 100%',
+            }}
+          />
+          {/* CRT Glass Curved Vignette & Phosphor Corner Reflection */}
+          <div
+            className="absolute inset-0 pointer-events-none z-25 rounded-[12px]"
+            style={{
+              boxShadow: 'inset 0 0 90px rgba(0, 0, 0, 0.85), inset 0 0 15px rgba(255, 0, 255, 0.1)',
+              background: 'radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 40%)',
+            }}
+          />
+        </>
+      )}
+
+      {/* Arcade HUD Overlay (Top Health Bars matching reference image layout!) */}
+      <div className="absolute top-3 left-4 right-4 flex justify-between items-start pointer-events-none z-30 font-mono select-none">
+        {/* Player 1 Health & Meter */}
+        {p1 && p1.charId && (
+          <div className="bg-zinc-950/90 backdrop-blur-md border-2 border-[#ff00ff] p-2.5 rounded-xl shadow-2xl min-w-[240px] flex items-center gap-3">
+            {/* P1 Arcade Portrait Badge */}
+            {CHARACTERS[p1.charId].portraitUrl && (
+              <div className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-[#00ffff] bg-black shrink-0 shadow-lg">
+                <img
+                  src={CHARACTERS[p1.charId].portraitUrl}
+                  alt={CHARACTERS[p1.charId].name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover object-top filter brightness-110"
+                />
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-40"
+                  style={{
+                    background: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%)',
+                    backgroundSize: '100% 4px',
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-[#ff00ff] text-black text-[8px] font-black text-center tracking-tighter uppercase">
+                  1P
+                </div>
+              </div>
+            )}
+
+            <div className="flex-1">
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-black text-xs text-amber-400 uppercase tracking-wide">
+                  {CHARACTERS[p1.charId].name}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-bold">{Math.ceil(p1.hp)} HP</span>
+              </div>
+
+              {/* Health Bar Grid Blocks */}
+              <div className="w-full h-4 bg-zinc-900 rounded-sm p-0.5 flex gap-0.5 border border-zinc-700">
+                {Array.from({ length: 10 }).map((_, idx) => {
+                  const filled = p1.hp / 10 > idx;
+                  return (
+                    <div
+                      key={idx}
+                      className={`h-full flex-1 rounded-xs transition-colors ${
+                        filled ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-zinc-800'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Special Meter Bar */}
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="text-[9px] font-bold text-amber-300">POWER</span>
+                <div className="flex-1 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                  <div
+                    className="h-full bg-amber-400 transition-all"
+                    style={{ width: `${p1.powerMeter}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Player 2 / AI Companion HUD */}
+        {p2 && p2.charId && (
+          <div className="bg-zinc-950/90 backdrop-blur-md border-2 border-[#00ffff] p-2.5 rounded-xl shadow-2xl min-w-[240px] flex items-center gap-3">
+            <div className="flex-1 text-right">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] text-zinc-400 font-bold">{Math.ceil(p2.hp)} HP</span>
+                <span className="font-black text-xs text-cyan-400 uppercase tracking-wide">
+                  {CHARACTERS[p2.charId].name}
+                </span>
+              </div>
+
+              <div className="w-full h-4 bg-zinc-900 rounded-sm p-0.5 flex gap-0.5 border border-zinc-700">
+                {Array.from({ length: 10 }).map((_, idx) => {
+                  const filled = p2.hp / 10 > idx;
+                  return (
+                    <div
+                      key={idx}
+                      className={`h-full flex-1 rounded-xs transition-colors ${
+                        filled ? 'bg-cyan-500 shadow-sm shadow-cyan-500/50' : 'bg-zinc-800'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* P2 Arcade Portrait Badge */}
+            {CHARACTERS[p2.charId].portraitUrl && (
+              <div className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-[#ff00ff] bg-black shrink-0 shadow-lg">
+                <img
+                  src={CHARACTERS[p2.charId].portraitUrl}
+                  alt={CHARACTERS[p2.charId].name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover object-top filter brightness-110"
+                />
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-40"
+                  style={{
+                    background: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%)',
+                    backgroundSize: '100% 4px',
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-[#00ffff] text-black text-[8px] font-black text-center tracking-tighter uppercase">
+                  2P
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Combo Counter Display */}
+        {p1 && p1.comboHits > 1 && (
+          <div className="absolute top-16 left-4 bg-amber-500 text-black px-3 py-1 rounded-lg font-black text-sm italic shadow-xl animate-bounce">
+            🔥 {p1.comboHits} HIT SQUAD COMBO!
+          </div>
+        )}
+      </div>
+
+      {/* Stage Start Banner Overlay */}
+      {engine.stageStartBannerTimer > 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30 font-mono select-none px-4">
+          <div className="bg-black/90 border-y-4 border-[#ff00ff] py-6 px-10 shadow-[0_0_50px_rgba(255,0,255,0.7)] flex flex-col items-center text-center animate-pulse backdrop-blur-md max-w-xl w-full">
+            <span className="text-[#00ffff] text-xs font-black tracking-widest uppercase mb-1">
+              ✦ STAGE {engine.stage.id} START ✦
+            </span>
+            <h1 className="text-xl md:text-2xl font-black text-[#ffff00] uppercase tracking-tighter drop-shadow-[0_0_10px_rgba(255,255,0,0.8)]">
+              {engine.stage.name}
+            </h1>
+            <p className="text-zinc-300 text-xs italic font-bold mt-1 mb-4">
+              "{engine.stage.subtitle}"
+            </p>
+            <div className="bg-[#ff00ff] text-black font-black text-xs md:text-sm px-6 py-1.5 uppercase tracking-widest animate-bounce shadow-lg">
+              READY... GO!!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Boss Warning Banner Overlay */}
+      {engine.bossWarningTimer > 0 && (
+        <div className="absolute top-1/3 left-0 right-0 pointer-events-none z-30 font-mono select-none flex justify-center px-2">
+          <div className="w-full bg-gradient-to-r from-red-950 via-red-600 to-red-950 border-y-4 border-amber-400 py-3 text-center shadow-[0_0_40px_rgba(255,0,0,0.8)] animate-pulse">
+            <span className="text-white font-black text-sm md:text-lg tracking-widest uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              {engine.bossWarningTitle || '⚠️ WARNING: ENEMY SURGE ENCOUNTER ⚠️'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Arcade "GO! ➔" Navigation Prompt when wave is cleared */}
+      {!engine.isWaveActive &&
+        engine.currentWaveIndex < engine.stage.waves.length &&
+        !engine.stageCleared && (
+          <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none z-30 font-mono select-none flex flex-col items-end gap-1.5 animate-bounce">
+            <div className="bg-gradient-to-r from-[#ff00ff] via-[#00ffff] to-[#ffff00] text-black font-black text-sm md:text-base px-4 py-2 rounded-xl border-2 border-white shadow-[0_0_25px_rgba(0,255,255,0.9)] flex items-center gap-2">
+              <span className="tracking-widest">GO!</span>
+              <span className="text-xl animate-ping">➔</span>
+              <span className="text-xl">➔</span>
+            </div>
+            <div className="bg-black/90 border border-[#00ffff] px-2.5 py-1 rounded-md text-[10px] font-bold text-[#ffff00] shadow-md">
+              MARCH FORWARD → (SECTOR {engine.currentWaveIndex + 1}/{engine.stage.waves.length})
+            </div>
+          </div>
+        )}
+
+      {/* Boss Health Bar Display */}
+      {boss && (
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-4/5 max-w-lg bg-black/95 border-2 border-red-600 p-3 rounded-xl shadow-[0_0_30px_rgba(255,0,0,0.7)] pointer-events-none z-30 font-mono text-center">
+          <div className="flex justify-between items-center mb-1 text-xs">
+            <span className="font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping inline-block" />
+              ⚠️ BOSS: {boss.enemyType === 'BOSS_MADAM_MIZYDIA' ? 'MADAM MIZYDIA' : boss.enemyType === 'BOSS_SAYONARA' ? 'SAYONARA' : 'PURITY COMMANDER'}
+            </span>
+            <span className="text-amber-300 font-bold">{Math.ceil(boss.hp)} / {boss.maxHp} HP</span>
+          </div>
+
+          <div className="w-full h-3.5 bg-zinc-950 rounded-full overflow-hidden border border-red-900 p-0.5">
+            <div
+              className="h-full bg-gradient-to-r from-red-700 via-red-500 to-amber-500 rounded-full transition-all duration-150 shadow-sm shadow-red-500"
+              style={{ width: `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%` }}
+            />
+          </div>
+
+          {/* Shield status */}
+          {boss.shieldHp !== undefined && boss.shieldHp > 0 && (
+            <div className="mt-1 text-[10px] text-cyan-400 font-bold tracking-wide">
+              🛡️ CENSURE BARRIER SHIELD ACTIVE ({boss.shieldHp} HP)
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
