@@ -297,7 +297,7 @@ export default function App() {
           dialogue={engineRef.current.activeDialogue}
           onComplete={() => {
             if (engineRef.current) {
-              engineRef.current.activeDialogue = null;
+              engineRef.current.setActiveDialogue(null);
             }
           }}
         />

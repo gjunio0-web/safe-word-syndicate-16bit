@@ -31,7 +31,8 @@ export class GameEngine {
   public stageStartBannerTimer: number = 210;
   public bossWarningTimer: number = 0;
   public bossWarningTitle: string = '';
-  public activeDialogue: import('../types').DialogueLine[] | null = null;
+  private _activeDialogue: import('../types').DialogueLine[] | null = null;
+  private dialogueListeners: Set<() => void> = new Set();
   private shownWaveDialogues: Set<number> = new Set();
 
   public player1: EntityState | null = null;
@@ -47,6 +48,23 @@ export class GameEngine {
 
   private frameCount: number = 0;
   private settings: GameSettings;
+
+  public get activeDialogue(): import('../types').DialogueLine[] | null {
+    return this._activeDialogue;
+  }
+
+  public setActiveDialogue(next: import('../types').DialogueLine[] | null) {
+    if (this._activeDialogue === next) return;
+    this._activeDialogue = next;
+    this.dialogueListeners.forEach((listener) => listener());
+  }
+
+  public subscribeDialogue(listener: () => void): () => void {
+    this.dialogueListeners.add(listener);
+    return () => {
+      this.dialogueListeners.delete(listener);
+    };
+  }
 
   constructor(
     stage: StageConfig,
@@ -66,7 +84,7 @@ export class GameEngine {
 
     this.stageStartBannerTimer = 90;
     if (stage.waves[0]?.dialogueBefore) {
-      this.activeDialogue = stage.waves[0].dialogueBefore;
+      this.setActiveDialogue(stage.waves[0].dialogueBefore);
       this.shownWaveDialogues.add(0);
     }
 
@@ -275,7 +293,7 @@ export class GameEngine {
     if (this.cameraX >= this.effectiveTriggerX(wave) - WAVE_TRIGGER_LOOKAHEAD) {
       // Check if wave has dialogue that hasn't been shown yet
       if (wave.dialogueBefore && !this.shownWaveDialogues.has(this.currentWaveIndex)) {
-        this.activeDialogue = wave.dialogueBefore;
+        this.setActiveDialogue(wave.dialogueBefore);
         this.shownWaveDialogues.add(this.currentWaveIndex);
         return; // wait until dialogue is dismissed before spawning enemies
       }

@@ -24,8 +24,9 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (['enter', ' ', 'space', 'j', 'k', 'z', 'x'].includes(k)) {
+      const isAdvanceKey = e.code === 'Space' || ['enter', ' ', 'j', 'k', 'z', 'x'].includes(e.key.toLowerCase());
+
+      if (isAdvanceKey) {
         e.preventDefault();
         handleNext();
       }
