@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useReducer, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
@@ -46,6 +46,7 @@ export default function App() {
   });
 
   const audioUnlocked = useSyncExternalStore(subscribeAudioUnlock, getAudioUnlocked, getAudioUnlocked);
+  const [, forceRender] = useReducer((n: number) => n + 1, 0);
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
@@ -299,6 +300,7 @@ export default function App() {
             if (engineRef.current) {
               engineRef.current.setActiveDialogue(null);
             }
+            forceRender();
           }}
         />
       )}
