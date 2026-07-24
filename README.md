@@ -77,7 +77,9 @@ O jogo tem quatro slots de música (intro, seleção de personagem, fase 1, boss
 Para trocar as trilhas há duas rotas:
 
 1. **Jukebox in-game** — botão `JUKEBOX / MUSIC` na tela de título. Os arquivos ficam no IndexedDB do navegador e sobrevivem a reloads. Funciona em dev e em produção.
-2. **Arquivos em `public/audio/`** — descobertos automaticamente pelo endpoint `/api/audio-files`. **Só funciona em desenvolvimento**: esse endpoint é um middleware do Vite dev server e não existe no build estático.
+2. **Arquivos em `public/audio/`** — descobertos automaticamente via `/audio/manifest.json`. Funciona em dev e em produção: em desenvolvimento o manifesto é servido dinamicamente (basta colocar o arquivo na pasta e recarregar); no build ele é gerado como asset estático.
+
+   O mapeamento para os slots é por palavra-chave no nome do arquivo (`intro`, `select`, `stage1`, `boss`), com fallback pela ordem alfabética. Os nomes sugeridos em `public/audio/README.md` cobrem todos os casos.
 
 ## Deploy
 

@@ -28,9 +28,9 @@ class SoundEngine {
 
   private async restorePersistedTracks() {
     try {
-      // 1. Check for files dropped into /public/audio/ directory on server
+      // 1. Trilhas colocadas em public/audio/, publicadas via manifesto estático
       if (typeof window !== 'undefined') {
-        fetch('/api/audio-files')
+        fetch('/audio/manifest.json')
           .then((res) => {
             if (res.ok) return res.json();
             return null;
@@ -60,6 +60,8 @@ class SoundEngine {
               if (bossFile && !this.customTrackNames['STAGE1_BOSS']) {
                 this.syncTrackAliases('STAGE1_BOSS', `/audio/${bossFile}`, bossFile);
               }
+
+              this.refreshActiveTrack();
             }
           })
           .catch(() => {});
@@ -73,14 +75,31 @@ class SoundEngine {
         restoredCount++;
       });
 
-      // Automatically switch to user's restored track if music is active
-      if (restoredCount > 0 && this.musicEnabled && (this.currentTrack || this.lastRequestedTrack)) {
-        const active = (this.currentTrack || this.lastRequestedTrack) as any;
-        this.playBgm(active, true);
+      if (restoredCount > 0) {
+        this.refreshActiveTrack();
       }
     } catch {
       // ignore
     }
+  }
+
+  /**
+   * Troca para o arquivo real se a faixa ativa acabou de ganhar um.
+   *
+   * A restauração é assíncrona e quase sempre termina depois que a tela de
+   * título já pediu `playBgm('INTRO')` — sem isso, o synth continua tocando
+   * até a próxima troca de tela e o arquivo do usuário nunca é ouvido.
+   */
+  private refreshActiveTrack() {
+    if (!this.musicEnabled) return;
+
+    const active = this.currentTrack || this.lastRequestedTrack;
+    if (!active || !this.customTrackUrls[active]) return;
+
+    // Já está tocando um arquivo: não interromper.
+    if (this.activeAudioElement && !this.activeAudioElement.paused) return;
+
+    this.playBgm(active as Parameters<SoundEngine['playBgm']>[0], true);
   }
 
   private handleVisibilityOrFocusChange() {
