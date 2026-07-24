@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { GameEngine } from '../game/engine';
 import { renderStageBackground } from '../game/stageData';
 import { renderEntitySprite } from '../game/spriteRenderer';
@@ -104,9 +104,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
     };
   }, [engine]);
 
-  const p1 = engine.player1;
-  const p2 = engine.player2;
-  const boss = engine.entities.find((e) => e.enemyType?.startsWith('BOSS'));
+  // The engine mutates outside the React cycle, so reading its fields straight
+  // from the JSX left the HUD frozen: it only refreshed when some unrelated
+  // state happened to change — a keypress, a pause. Standing still while taking
+  // damage left the health bar stuck. Subscribing fixes that at the source.
+  const subscribeHud = useCallback((onChange: () => void) => engine.subscribeHud(onChange), [engine]);
+  const getHudSnapshot = useCallback(() => engine.getHudSnapshot(), [engine]);
+  const hud = useSyncExternalStore(subscribeHud, getHudSnapshot, getHudSnapshot);
+
+  const { p1, p2, boss } = hud;
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
@@ -264,7 +270,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
       </div>
 
       {/* Stage Start Banner Overlay */}
-      {engine.stageStartBannerTimer > 0 && (
+      {hud.showStageBanner && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30 font-mono select-none px-4">
           <div className="bg-black/90 border-y-4 border-[#ff00ff] py-6 px-10 shadow-[0_0_50px_rgba(255,0,255,0.7)] flex flex-col items-center text-center animate-pulse backdrop-blur-md max-w-xl w-full">
             <span className="text-[#00ffff] text-xs font-black tracking-widest uppercase mb-1">
@@ -284,20 +290,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
       )}
 
       {/* Boss Warning Banner Overlay */}
-      {engine.bossWarningTimer > 0 && (
+      {hud.showBossWarning && (
         <div className="absolute top-1/3 left-0 right-0 pointer-events-none z-30 font-mono select-none flex justify-center px-2">
           <div className="w-full bg-gradient-to-r from-red-950 via-red-600 to-red-950 border-y-4 border-amber-400 py-3 text-center shadow-[0_0_40px_rgba(255,0,0,0.8)] animate-pulse">
             <span className="text-white font-black text-sm md:text-lg tracking-widest uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-              {engine.bossWarningTitle || '⚠️ WARNING: ENEMY SURGE ENCOUNTER ⚠️'}
+              {hud.bossWarningTitle || '⚠️ WARNING: ENEMY SURGE ENCOUNTER ⚠️'}
             </span>
           </div>
         </div>
       )}
 
       {/* Arcade "GO! ➔" Navigation Prompt when wave is cleared */}
-      {!engine.isWaveActive &&
-        engine.currentWaveIndex < engine.stage.waves.length &&
-        !engine.stageCleared && (
+      {!hud.isWaveActive &&
+        hud.currentWaveIndex < engine.stage.waves.length &&
+        !hud.stageCleared && (
           <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none z-30 font-mono select-none flex flex-col items-end gap-1.5 animate-bounce">
             <div className="bg-gradient-to-r from-[#ff00ff] via-[#00ffff] to-[#ffff00] text-black font-black text-sm md:text-base px-4 py-2 rounded-xl border-2 border-white shadow-[0_0_25px_rgba(0,255,255,0.9)] flex items-center gap-2">
               <span className="tracking-widest">GO!</span>
@@ -305,7 +311,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
               <span className="text-xl">➔</span>
             </div>
             <div className="bg-black/90 border border-[#00ffff] px-2.5 py-1 rounded-md text-[10px] font-bold text-[#ffff00] shadow-md">
-              MARCH FORWARD → (SECTOR {engine.currentWaveIndex + 1}/{engine.stage.waves.length})
+              MARCH FORWARD → (SECTOR {hud.currentWaveIndex + 1}/{engine.stage.waves.length})
             </div>
           </div>
         )}

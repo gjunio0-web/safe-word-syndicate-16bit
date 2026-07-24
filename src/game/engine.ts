@@ -14,6 +14,61 @@ import { CHARACTERS, ENEMIES } from './characterData';
 import { maxCameraX, maxWaveTriggerX, WAVE_TRIGGER_LOOKAHEAD } from './constants';
 import { sound } from './sound';
 
+/**
+ * What the HUD actually shows, in display form.
+ *
+ * Every field is discrete: it changes only when the HUD would look different.
+ * That is what makes the equality check below meaningful — the React subtree
+ * re-renders when the numbers move, not once per frame.
+ */
+export interface HudFighter {
+  charId: CharacterId;
+  hp: number;
+  powerMeter: number;
+  comboHits: number;
+}
+
+export interface HudBoss {
+  enemyType: EnemyType;
+  hp: number;
+  maxHp: number;
+  shieldHp?: number;
+}
+
+export interface HudSnapshot {
+  p1: HudFighter | null;
+  p2: HudFighter | null;
+  boss: HudBoss | null;
+  showStageBanner: boolean;
+  showBossWarning: boolean;
+  bossWarningTitle: string;
+  isWaveActive: boolean;
+  currentWaveIndex: number;
+  stageCleared: boolean;
+}
+
+function sameFighter(a: HudFighter | null, b: HudFighter | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.charId === b.charId &&
+    a.hp === b.hp &&
+    a.powerMeter === b.powerMeter &&
+    a.comboHits === b.comboHits
+  );
+}
+
+function sameBoss(a: HudBoss | null, b: HudBoss | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.enemyType === b.enemyType &&
+    a.hp === b.hp &&
+    a.maxHp === b.maxHp &&
+    a.shieldHp === b.shieldHp
+  );
+}
+
 export class GameEngine {
   public entities: EntityState[] = [];
   public items: GroundItem[] = [];
@@ -33,6 +88,9 @@ export class GameEngine {
   public bossWarningTitle: string = '';
   private _activeDialogue: import('../types').DialogueLine[] | null = null;
   private dialogueListeners: Set<() => void> = new Set();
+
+  private hudSnapshot: HudSnapshot;
+  private hudListeners: Set<() => void> = new Set();
   private shownWaveDialogues: Set<number> = new Set();
 
   public player1: EntityState | null = null;
@@ -66,6 +124,80 @@ export class GameEngine {
     if (this._activeDialogue === next) return;
     this._activeDialogue = next;
     this.dialogueListeners.forEach((listener) => listener());
+  }
+
+  /**
+   * Current HUD state. The returned object is referentially stable until
+   * something visible changes — `useSyncExternalStore` compares by identity and
+   * would loop forever on a freshly built object every call.
+   */
+  public getHudSnapshot(): HudSnapshot {
+    return this.hudSnapshot;
+  }
+
+  /** Subscribes to HUD changes. Returns the unsubscribe function. */
+  public subscribeHud(listener: () => void): () => void {
+    this.hudListeners.add(listener);
+    return () => {
+      this.hudListeners.delete(listener);
+    };
+  }
+
+  private buildHudSnapshot(): HudSnapshot {
+    const toFighter = (ent: EntityState | null): HudFighter | null =>
+      ent && ent.charId
+        ? {
+            charId: ent.charId,
+            hp: ent.hp,
+            // The only continuous value in the HUD: it regenerates every frame.
+            // Rounding to the percent actually rendered keeps the snapshot from
+            // changing 60 times a second for a sub-pixel difference.
+            powerMeter: Math.round(ent.powerMeter),
+            comboHits: ent.comboHits,
+          }
+        : null;
+
+    const bossEntity = this.entities.find((e) => e.enemyType?.startsWith('BOSS'));
+
+    return {
+      p1: toFighter(this.player1),
+      p2: toFighter(this.player2),
+      boss: bossEntity
+        ? {
+            enemyType: bossEntity.enemyType!,
+            hp: bossEntity.hp,
+            maxHp: bossEntity.maxHp,
+            shieldHp: bossEntity.shieldHp,
+          }
+        : null,
+      showStageBanner: this.stageStartBannerTimer > 0,
+      showBossWarning: this.bossWarningTimer > 0,
+      bossWarningTitle: this.bossWarningTitle,
+      isWaveActive: this.isWaveActive,
+      currentWaveIndex: this.currentWaveIndex,
+      stageCleared: this.stageCleared,
+    };
+  }
+
+  private notifyHud() {
+    const next = this.buildHudSnapshot();
+    const prev = this.hudSnapshot;
+
+    const unchanged =
+      sameFighter(prev.p1, next.p1) &&
+      sameFighter(prev.p2, next.p2) &&
+      sameBoss(prev.boss, next.boss) &&
+      prev.showStageBanner === next.showStageBanner &&
+      prev.showBossWarning === next.showBossWarning &&
+      prev.bossWarningTitle === next.bossWarningTitle &&
+      prev.isWaveActive === next.isWaveActive &&
+      prev.currentWaveIndex === next.currentWaveIndex &&
+      prev.stageCleared === next.stageCleared;
+
+    if (unchanged) return;
+
+    this.hudSnapshot = next;
+    this.hudListeners.forEach((listener) => listener());
   }
 
   /** Subscribes to dialogue changes. Returns the unsubscribe function. */
@@ -114,6 +246,8 @@ export class GameEngine {
     } else {
       sound.playBgm(stage.musicTrack);
     }
+
+    this.hudSnapshot = this.buildHudSnapshot();
   }
 
   private createPlayerEntity(
@@ -290,6 +424,8 @@ export class GameEngine {
         sound.playStageClear();
       }
     }
+
+    this.notifyHud();
   }
 
   /**
