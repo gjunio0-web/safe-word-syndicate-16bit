@@ -2,6 +2,15 @@
 
 import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from './audioStore';
 
+export type BgmTrack =
+  | 'INTRO'
+  | 'CHAR_SELECT'
+  | 'STAGE1'
+  | 'STAGE1_BOSS'
+  | 'NEON_BEAT'
+  | 'SUBURBAN_GRAY'
+  | 'SACRED_METAL';
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   public enabled: boolean = true;
@@ -13,10 +22,13 @@ class SoundEngine {
   private currentTrack: string | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private isAutoSuspended: boolean = false;
+  private hasUserGesture: boolean = false;
+  private unlockArmed: boolean = false;
 
   constructor() {
     this.restorePersistedTracks();
     if (typeof window !== 'undefined') {
+      this.armUnlock();
       window.addEventListener('pagehide', () => this.suspendAudio());
       window.addEventListener('beforeunload', () => this.stopAll());
 
@@ -24,6 +36,27 @@ class SoundEngine {
         document.addEventListener('visibilitychange', () => this.handleVisibilityOrFocusChange());
       }
     }
+  }
+
+  private armUnlock() {
+    if (typeof window === 'undefined' || this.unlockArmed) return;
+    this.unlockArmed = true;
+
+    const events = ['pointerdown', 'keydown', 'touchstart'] as const;
+
+    const unlock = () => {
+      events.forEach((evt) => window.removeEventListener(evt, unlock, true));
+      this.unlockArmed = false;
+      this.hasUserGesture = true;
+      this.initCtx();
+
+      const pending = this.lastRequestedTrack as BgmTrack | null;
+      if (pending && this.musicEnabled) {
+        this.playBgm(pending, true);
+      }
+    };
+
+    events.forEach((evt) => window.addEventListener(evt, unlock, true));
   }
 
   private async restorePersistedTracks() {
@@ -99,7 +132,7 @@ class SoundEngine {
     // Já está tocando um arquivo: não interromper.
     if (this.activeAudioElement && !this.activeAudioElement.paused) return;
 
-    this.playBgm(active as Parameters<SoundEngine['playBgm']>[0], true);
+    this.playBgm(active as BgmTrack, true);
   }
 
   private handleVisibilityOrFocusChange() {
@@ -689,14 +722,16 @@ class SoundEngine {
     );
   }
 
-  public playBgm(
-    track: 'INTRO' | 'CHAR_SELECT' | 'STAGE1' | 'STAGE1_BOSS' | 'NEON_BEAT' | 'SUBURBAN_GRAY' | 'SACRED_METAL',
-    forceRestart: boolean = false
-  ) {
+  public playBgm(track: BgmTrack, forceRestart: boolean = false) {
     this.lastRequestedTrack = track;
 
     if (!this.musicEnabled) {
       this.pauseBgm();
+      return;
+    }
+
+    if (!this.hasUserGesture) {
+      this.armUnlock();
       return;
     }
 
@@ -737,13 +772,19 @@ class SoundEngine {
             }
           }
         })
-        .catch(() => {
-          // Audio file not found or browser prevented autoplay
-          // ONLY fallback to built-in synth if NO newer track was requested
-          if (this.playbackToken === currentToken) {
+        .catch((err: unknown) => {
+          if (this.playbackToken !== currentToken) return;
+
+          const isAutoplayBlocked = (err as { name?: string } | null)?.name === 'NotAllowedError';
+          if (isAutoplayBlocked) {
+            this.hasUserGesture = false;
             this.activeAudioElement = null;
-            this.playSynthBgm(track, currentToken);
+            this.armUnlock();
+            return;
           }
+
+          this.activeAudioElement = null;
+          this.playSynthBgm(track, currentToken);
         });
       return;
     }
@@ -752,10 +793,7 @@ class SoundEngine {
     this.playSynthBgm(track, currentToken);
   }
 
-  private playSynthBgm(
-    theme: 'INTRO' | 'CHAR_SELECT' | 'STAGE1' | 'STAGE1_BOSS' | 'NEON_BEAT' | 'SUBURBAN_GRAY' | 'SACRED_METAL',
-    token?: number
-  ) {
+  private playSynthBgm(theme: BgmTrack, token?: number) {
     if (token !== undefined && this.playbackToken !== token) {
       return;
     }
