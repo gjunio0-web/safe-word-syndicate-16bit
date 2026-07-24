@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useReducer, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
   GameMode,
   PlayerInput,
   GameSettings,
+  DialogueLine,
 } from './types';
 import { STAGES } from './game/stageData';
 import { GameEngine } from './game/engine';
@@ -25,8 +26,22 @@ import { CustomAudioModal } from './components/CustomAudioModal';
 import { sound } from './game/sound';
 import { Play, BookOpen, Shield, Flame, RotateCcw, Award, Disc } from 'lucide-react';
 
+// Kept module-level: useSyncExternalStore resubscribes on every render if the
+// accessors are recreated.
 const subscribeAudioUnlock = (onChange: () => void) => sound.subscribeUnlock(onChange);
 const getAudioUnlocked = () => sound.isAudioUnlocked();
+
+const NEUTRAL_INPUT: PlayerInput = {
+  left: false,
+  right: false,
+  up: false,
+  down: false,
+  punch: false,
+  kick: false,
+  special: false,
+  jump: false,
+  grab: false,
+};
 
 export default function App() {
   const [screen, setScreen] = useState<GameScreen>('TITLE');
@@ -46,7 +61,13 @@ export default function App() {
   });
 
   const audioUnlocked = useSyncExternalStore(subscribeAudioUnlock, getAudioUnlocked, getAudioUnlocked);
-  const [, forceRender] = useReducer((n: number) => n + 1, 0);
+
+  // Engine instance counter. engineRef is a ref, so replacing it neither
+  // triggers a render nor re-runs effects. Restarting the current stage leaves
+  // both `screen` and `currentStageIdx` untouched, so without this the
+  // subscription below would stay attached to the discarded engine.
+  const [engineVersion, setEngineVersion] = useState(0);
+  const [activeDialogue, setActiveDialogue] = useState<DialogueLine[] | null>(null);
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
@@ -55,17 +76,7 @@ export default function App() {
   const engineRef = useRef<GameEngine | null>(null);
 
   // Keyboard controls state
-  const [inputP1, setInputP1] = useState<PlayerInput>({
-    left: false,
-    right: false,
-    up: false,
-    down: false,
-    punch: false,
-    kick: false,
-    special: false,
-    jump: false,
-    grab: false,
-  });
+  const [inputP1, setInputP1] = useState<PlayerInput>(NEUTRAL_INPUT);
 
   // Handle Keyboard Listener
   useEffect(() => {
@@ -102,17 +113,7 @@ export default function App() {
     };
 
     const handleBlur = () => {
-      setInputP1({
-        left: false,
-        right: false,
-        up: false,
-        down: false,
-        punch: false,
-        kick: false,
-        special: false,
-        jump: false,
-        grab: false,
-      });
+      setInputP1(NEUTRAL_INPUT);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -124,6 +125,18 @@ export default function App() {
       window.removeEventListener('blur', handleBlur);
     };
   }, []);
+
+  // Mirror the engine's dialogue into React state. The engine lives outside the
+  // React cycle, so clearing the field there does not unmount the overlay.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      setActiveDialogue(null);
+      return;
+    }
+    setActiveDialogue(engine.activeDialogue);
+    return engine.subscribeDialogue(() => setActiveDialogue(engine.activeDialogue));
+  }, [engineVersion]);
 
   const gameRootRef = useRef<HTMLDivElement>(null);
 
@@ -199,6 +212,7 @@ export default function App() {
     const p2 = p2Override !== undefined ? p2Override : p2Char;
     const stage = STAGES[stageIdx];
     engineRef.current = new GameEngine(stage, p1, p2, settings);
+    setEngineVersion((v) => v + 1);
     setCurrentStageIdx(stageIdx);
     setScreen('GAMEPLAY');
   };
@@ -293,14 +307,15 @@ export default function App() {
       )}
 
       {/* 3. DIALOGUE OVERLAY */}
-      {engineRef.current?.activeDialogue && (
+      {screen === 'GAMEPLAY' && activeDialogue && (
         <DialogueOverlay
-          dialogue={engineRef.current.activeDialogue}
+          dialogue={activeDialogue}
           onComplete={() => {
-            if (engineRef.current) {
-              engineRef.current.setActiveDialogue(null);
-            }
-            forceRender();
+            engineRef.current?.setActiveDialogue(null);
+            // The key that dismisses the dialogue (space, J, K) also feeds the
+            // game input. Without clearing it the player jumps or punches on
+            // the first frame after the overlay closes.
+            setInputP1(NEUTRAL_INPUT);
           }}
         />
       )}
