@@ -22,6 +22,12 @@ class SoundEngine {
   private currentTrack: string | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private isAutoSuspended: boolean = false;
+
+  /**
+   * Autoplay policy: until the first user gesture, the browser refuses both
+   * `HTMLAudioElement.play()` and the AudioContext. Without tracking this, the
+   * track requested on page load failed silently and was never retried.
+   */
   private hasUserGesture: boolean = false;
   private unlockArmed: boolean = false;
   private unlockListeners: Set<() => void> = new Set();
@@ -39,10 +45,16 @@ class SoundEngine {
     }
   }
 
+  /** Has the browser released audio playback yet? */
   public isAudioUnlocked(): boolean {
     return this.hasUserGesture;
   }
 
+  /**
+   * Notifies changes to the lock state. Built for `useSyncExternalStore`: the
+   * UI has to react to state that lives outside the React cycle.
+   * Returns the unsubscribe function.
+   */
   public subscribeUnlock(listener: () => void): () => void {
     this.unlockListeners.add(listener);
     return () => {
@@ -56,6 +68,10 @@ class SoundEngine {
     this.unlockListeners.forEach((listener) => listener());
   }
 
+  /**
+   * Waits for the first user gesture to unlock audio and resume the pending
+   * track. Idempotent: re-arming after a block does not duplicate listeners.
+   */
   private armUnlock() {
     if (typeof window === 'undefined' || this.unlockArmed) return;
     this.unlockArmed = true;
@@ -68,6 +84,9 @@ class SoundEngine {
       this.initCtx();
 
       const pending = this.lastRequestedTrack as BgmTrack | null;
+
+      // Must precede playback: `playBgm` bails out early while the gesture
+      // flag is unset.
       this.setUserGesture(true);
 
       if (pending && this.musicEnabled) {
@@ -75,12 +94,14 @@ class SoundEngine {
       }
     };
 
+    // Capture phase: runs before the application's own handlers, so the gesture
+    // that changes screens already finds audio unlocked.
     events.forEach((evt) => window.addEventListener(evt, unlock, true));
   }
 
   private async restorePersistedTracks() {
     try {
-      // 1. Trilhas colocadas em public/audio/, publicadas via manifesto estático
+      // 1. Tracks placed in public/audio/, published through the static manifest
       if (typeof window !== 'undefined') {
         fetch('/audio/manifest.json')
           .then((res) => {
@@ -136,11 +157,11 @@ class SoundEngine {
   }
 
   /**
-   * Troca para o arquivo real se a faixa ativa acabou de ganhar um.
+   * Switches to the real file if the active track has just gained one.
    *
-   * A restauração é assíncrona e quase sempre termina depois que a tela de
-   * título já pediu `playBgm('INTRO')` — sem isso, o synth continua tocando
-   * até a próxima troca de tela e o arquivo do usuário nunca é ouvido.
+   * Restoration is asynchronous and almost always finishes after the title
+   * screen has already called `playBgm('INTRO')` — without this the synth keeps
+   * playing until the next screen change and the user's file is never heard.
    */
   private refreshActiveTrack() {
     if (!this.musicEnabled) return;
@@ -148,7 +169,7 @@ class SoundEngine {
     const active = this.currentTrack || this.lastRequestedTrack;
     if (!active || !this.customTrackUrls[active]) return;
 
-    // Já está tocando um arquivo: não interromper.
+    // A file is already playing: do not interrupt it.
     if (this.activeAudioElement && !this.activeAudioElement.paused) return;
 
     this.playBgm(active as BgmTrack, true);

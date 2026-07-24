@@ -1,46 +1,46 @@
 /**
- * Constantes espaciais do motor.
+ * Spatial constants for the engine.
  *
- * Estes valores estavam espalhados como números mágicos entre `engine.ts` e
- * `stageData.ts`, sem nenhuma relação declarada entre eles. Como o alcance
- * máximo da câmera é derivado do comprimento da fase, e o disparo de uma onda
- * depende da posição da câmera, o design de fase e o motor estão acoplados —
- * e esse acoplamento precisa ser explícito para não voltar a quebrar.
+ * These used to be magic numbers scattered between `engine.ts` and
+ * `stageData.ts` with no declared relationship. The camera's maximum reach is
+ * derived from the stage length, and wave triggering depends on the camera
+ * position, so stage design and the engine are coupled. That coupling has to
+ * be explicit, or it silently breaks again.
  */
 
-/** Largura do viewport do canvas, em unidades de mundo. */
+/** Canvas viewport width, in world units. */
 export const VIEWPORT_WIDTH = 800;
 
-/** Quanto antes do `triggerX` a onda dispara. */
+/** How far ahead of `triggerX` a wave fires. */
 export const WAVE_TRIGGER_LOOKAHEAD = 100;
 
 /**
- * Folga exigida além do mínimo teórico.
+ * Slack required beyond the theoretical minimum.
  *
- * Sem ela, a onda dispararia exatamente no frame em que a câmera atinge seu
- * limite — sem margem para arredondamento ou para o jogador parar um pixel
- * antes. A folga garante que o gatilho aconteça com a câmera ainda em curso.
+ * Without it a wave would fire on the exact frame the camera hits its limit,
+ * leaving no room for rounding or for the player stopping one pixel short.
+ * The margin guarantees the trigger lands while the camera is still moving.
  */
 export const WAVE_TRIGGER_SAFETY_MARGIN = 100;
 
-/** Posição máxima que a câmera pode alcançar numa fase. */
+/** Furthest position the camera can reach in a stage. */
 export function maxCameraX(stageLength: number): number {
   return stageLength - VIEWPORT_WIDTH;
 }
 
 /**
- * Maior `triggerX` que ainda é alcançável numa fase deste comprimento.
+ * Largest `triggerX` still reachable in a stage of this length.
  *
- * Qualquer onda acima disso nunca dispara: a câmera para antes, o
- * `currentWaveIndex` nunca avança e a fase fica impossível de concluir.
+ * Any wave above this never fires: the camera stops short, `currentWaveIndex`
+ * never advances, and the stage becomes impossible to complete.
  */
 export function maxWaveTriggerX(stageLength: number): number {
   return maxCameraX(stageLength) + WAVE_TRIGGER_LOOKAHEAD - WAVE_TRIGGER_SAFETY_MARGIN;
 }
 
 /**
- * Comprimento mínimo de fase para acomodar um dado `triggerX`.
- * Útil ao desenhar uma fase nova: escolha os gatilhos e derive o comprimento.
+ * Minimum stage length that accommodates a given `triggerX`.
+ * Useful when designing a new stage: pick the triggers, derive the length.
  */
 export function minStageLengthFor(triggerX: number): number {
   return triggerX + VIEWPORT_WIDTH - WAVE_TRIGGER_LOOKAHEAD + WAVE_TRIGGER_SAFETY_MARGIN;

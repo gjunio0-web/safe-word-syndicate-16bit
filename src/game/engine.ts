@@ -49,6 +49,15 @@ export class GameEngine {
   private frameCount: number = 0;
   private settings: GameSettings;
 
+  /**
+   * Dialogue currently on screen. Read-only: writing goes through
+   * `setActiveDialogue`, which notifies subscribers.
+   *
+   * This used to be a public mutable field. Since the engine lives outside the
+   * React cycle, clearing it did not unmount the overlay — it only disappeared
+   * when some unrelated state happened to change. That is why the FIGHT button
+   * responded solely to keys that also fed the game input.
+   */
   public get activeDialogue(): import('../types').DialogueLine[] | null {
     return this._activeDialogue;
   }
@@ -59,6 +68,7 @@ export class GameEngine {
     this.dialogueListeners.forEach((listener) => listener());
   }
 
+  /** Subscribes to dialogue changes. Returns the unsubscribe function. */
   public subscribeDialogue(listener: () => void): () => void {
     this.dialogueListeners.add(listener);
     return () => {
@@ -282,6 +292,13 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Wave trigger clamped to what the camera can actually reach.
+   *
+   * Production safety net: a badly designed stage loses its intended pacing but
+   * never locks up. In dev, `assertStagesAreCompletable` would have thrown long
+   * before execution got here.
+   */
   private effectiveTriggerX(wave: import('../types').WaveConfig): number {
     return Math.min(wave.triggerX, maxWaveTriggerX(this.stage.length));
   }
