@@ -1,4 +1,5 @@
 import { StageConfig, DialogueLine } from '../types';
+import { assertStagesAreCompletable } from './stageValidation';
 
 export const STAGES: StageConfig[] = [
   {
@@ -7,7 +8,7 @@ export const STAGES: StageConfig[] = [
     subtitle: 'Defend the Sanctuary from the Purity Raid',
     location: 'Downtown Queer Nightlife Quarter',
     bgType: 'STAGE_1_NEON',
-    length: 2200,
+    length: 2600,
     musicTrack: 'NEON_BEAT',
     waves: [
       {
@@ -87,7 +88,7 @@ export const STAGES: StageConfig[] = [
     subtitle: 'Smash through the Cookie-Cutter Cul-de-Sac',
     location: 'Cul-de-sac Training Grounds',
     bgType: 'STAGE_2_SUBURB',
-    length: 2400,
+    length: 2700,
     musicTrack: 'SUBURBAN_GRAY',
     waves: [
       {
@@ -154,7 +155,7 @@ export const STAGES: StageConfig[] = [
     subtitle: 'Dismantle the Global Broadcasting Signal',
     location: 'Pinnacle Tower & Executive Boardroom',
     bgType: 'STAGE_3_CHURCH',
-    length: 1600,
+    length: 2000,
     musicTrack: 'SACRED_METAL',
     waves: [
       {
@@ -207,6 +208,12 @@ export const STAGES: StageConfig[] = [
     ],
   },
 ];
+
+// Falha na carga do módulo, em dev, se alguma onda ficar fora do alcance da câmera.
+// Em produção o motor limita o gatilho e a fase continua jogável.
+if (import.meta.env.DEV) {
+  assertStagesAreCompletable(STAGES);
+}
 
 // 16-Bit Multi-Layer Parallax Background Engine
 export function renderStageBackground(

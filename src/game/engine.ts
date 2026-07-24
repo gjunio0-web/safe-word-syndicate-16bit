@@ -11,6 +11,7 @@ import {
   GameSettings,
 } from '../types';
 import { CHARACTERS, ENEMIES } from './characterData';
+import { maxCameraX, maxWaveTriggerX, WAVE_TRIGGER_LOOKAHEAD } from './constants';
 import { sound } from './sound';
 
 export class GameEngine {
@@ -206,10 +207,10 @@ export class GameEngine {
     // Limit camera scrolling during locked wave battles
     if (this.isWaveActive) {
       const currentWave = this.stage.waves[this.currentWaveIndex];
-      const maxCamX = currentWave.triggerX - 50;
+      const maxCamX = this.effectiveTriggerX(currentWave) - 50;
       this.cameraX = Math.min(targetCameraX, maxCamX);
     } else {
-      this.cameraX = Math.min(targetCameraX, this.stage.length - 800);
+      this.cameraX = Math.min(targetCameraX, maxCameraX(this.stage.length));
     }
 
     // Keep players inside camera viewport bounds
@@ -263,11 +264,15 @@ export class GameEngine {
     }
   }
 
+  private effectiveTriggerX(wave: import('../types').WaveConfig): number {
+    return Math.min(wave.triggerX, maxWaveTriggerX(this.stage.length));
+  }
+
   private updateWaveTriggers() {
     if (this.isWaveActive || this.currentWaveIndex >= this.stage.waves.length) return;
 
     const wave = this.stage.waves[this.currentWaveIndex];
-    if (this.cameraX >= wave.triggerX - 100) {
+    if (this.cameraX >= this.effectiveTriggerX(wave) - WAVE_TRIGGER_LOOKAHEAD) {
       // Check if wave has dialogue that hasn't been shown yet
       if (wave.dialogueBefore && !this.shownWaveDialogues.has(this.currentWaveIndex)) {
         this.activeDialogue = wave.dialogueBefore;
