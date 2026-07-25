@@ -117,6 +117,77 @@ export function readConnectedGamepads(): PlayerInput[] {
   return pads;
 }
 
+/**
+ * Stable mapping of pads to players.
+ *
+ * The previous version derived the assignment from `pads.length` on every
+ * frame, and that list is volatile: a browser only announces a pad after its
+ * first button press, drops idle devices, and some controllers register twice
+ * (Bluetooth plus a wired or dongle identity). Each flip silently reassigned
+ * who the keyboard and the controller were driving — the reported symptom of
+ * one player's input dying for a while and coming back.
+ *
+ * Assignment is now keyed by `gamepad.index`, which the browser keeps stable
+ * for the life of a connection, and only changes when a pad genuinely appears
+ * or disappears.
+ */
+export interface PlayerPadInputs {
+  p1: PlayerInput | null;
+  p2: PlayerInput | null;
+}
+
+let assignedP1Index: number | null = null;
+let assignedP2Index: number | null = null;
+
+/** Live pads keyed by their stable browser index. */
+function livePads(): Map<number, Gamepad> {
+  const map = new Map<number, Gamepad>();
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return map;
+  for (const pad of navigator.getGamepads()) {
+    if (pad && pad.connected) map.set(pad.index, pad);
+  }
+  return map;
+}
+
+export function readPlayerPads(coop: boolean): PlayerPadInputs {
+  const pads = livePads();
+
+  // Release slots whose pad went away.
+  if (assignedP1Index !== null && !pads.has(assignedP1Index)) assignedP1Index = null;
+  if (assignedP2Index !== null && !pads.has(assignedP2Index)) assignedP2Index = null;
+
+  const unassigned = [...pads.keys()]
+    .filter((i) => i !== assignedP1Index && i !== assignedP2Index)
+    .sort((a, b) => a - b);
+
+  // In co-op the first controller joins as player two: the keyboard player
+  // already holds player one, and handing the pad to P1 would put both people
+  // on the same fighter.
+  for (const index of unassigned) {
+    if (coop) {
+      if (assignedP2Index === null) assignedP2Index = index;
+      else if (assignedP1Index === null) assignedP1Index = index;
+    } else {
+      if (assignedP1Index === null) assignedP1Index = index;
+      else if (assignedP2Index === null) assignedP2Index = index;
+    }
+  }
+
+  const read = (index: number | null) => {
+    if (index === null) return null;
+    const pad = pads.get(index);
+    return pad ? mapGamepadToInput(pad) : null;
+  };
+
+  return { p1: read(assignedP1Index), p2: read(assignedP2Index) };
+}
+
+/** Drops every assignment. Called when a match starts, so slots are not inherited. */
+export function resetPadAssignments() {
+  assignedP1Index = null;
+  assignedP2Index = null;
+}
+
 /** How many pads are currently connected. */
 export function connectedGamepadCount(): number {
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return 0;

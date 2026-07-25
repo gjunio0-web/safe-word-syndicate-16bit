@@ -56,6 +56,18 @@ export function validateStages(stages: StageConfig[]): StageValidationIssue[] {
  * stays playable.
  */
 export function assertStagesAreCompletable(stages: StageConfig[]): void {
+  // Exactly one stage ends the campaign. Zero means victory is unreachable;
+  // more than one means it fires early, which is precisely what happened when
+  // Madam Mizydia — the boss of two stages — was treated as the final boss
+  // wherever she appeared.
+  const finals = stages.filter((s) => s.isFinalStage);
+  if (finals.length !== 1) {
+    throw new Error(
+      `[stageData] expected exactly one stage flagged isFinalStage, found ${finals.length}` +
+        (finals.length ? `: ${finals.map((s) => s.id).join(', ')}` : '')
+    );
+  }
+
   const issues = validateStages(stages);
   if (issues.length === 0) return;
 

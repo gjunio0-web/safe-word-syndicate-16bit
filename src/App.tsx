@@ -17,7 +17,7 @@ import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
 import { AttractMode } from './components/AttractMode';
-import { readConnectedGamepads, mergeInputs } from './game/gamepad';
+import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { CharacterSelect } from './components/CharacterSelect';
 import { DialogueOverlay } from './components/DialogueOverlay';
@@ -223,19 +223,14 @@ export default function App() {
             // Polled here rather than in React state: the Gamepad API reports
             // no button events, so reading it through setState would re-render
             // the tree every frame.
-            const pads = readConnectedGamepads();
-
-            // With a single pad in co-op, the keyboard player keeps P1 and the
-            // controller takes P2 — that is what someone plugging in one
-            // controller to play together expects. Otherwise pads follow slot
-            // order, and P1 accepts keyboard and controller at once.
-            const soloPadCoop = gameMode === 'COOP' && pads.length === 1;
-            const p1Pad = soloPadCoop ? null : (pads[0] ?? null);
-            const p2Pad = soloPadCoop ? pads[0] : (pads[1] ?? null);
+            // Assignment is stable across frames and keyed by the browser's
+            // pad index, so a device announcing itself late or briefly idling
+            // no longer swaps which fighter each person is driving.
+            const pads = readPlayerPads(gameMode === 'COOP');
 
             engineRef.current.update(
-              mergeInputs(inputRef.current, p1Pad),
-              p2Pad ?? undefined
+              mergeInputs(inputRef.current, pads.p1),
+              pads.p2 ?? undefined
             );
           }
 
@@ -259,6 +254,9 @@ export default function App() {
     const p2 = p2Override !== undefined ? p2Override : p2Char;
     const stage = STAGES[stageIdx];
     engineRef.current = new GameEngine(stage, p1, p2, settings);
+    // Slots are not inherited between matches: co-op and solo assign them
+    // differently, and a stale assignment would survive the mode change.
+    resetPadAssignments();
     setEngineVersion((v) => v + 1);
     setCurrentStageIdx(stageIdx);
     setScreen('GAMEPLAY');

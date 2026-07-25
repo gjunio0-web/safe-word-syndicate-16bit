@@ -151,6 +151,7 @@ export const STAGES: StageConfig[] = [
   },
   {
     id: 3,
+    isFinalStage: true,
     name: 'FINAL STAGE: MEGA-CHURCH CORPORATE HQ',
     subtitle: 'Dismantle the Global Broadcasting Signal',
     location: 'Pinnacle Tower & Executive Boardroom',

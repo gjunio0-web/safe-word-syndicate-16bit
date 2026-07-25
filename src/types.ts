@@ -148,6 +148,11 @@ export interface StageConfig {
   length: number; // World width in pixels
   waves: WaveConfig[];
   musicTrack: 'NEON_BEAT' | 'SUBURBAN_GRAY' | 'SACRED_METAL';
+  /**
+   * Marks the stage that ends the campaign. Madam Mizydia is the boss of two
+   * stages, so "Mizydia died" cannot mean "the game is won" on its own.
+   */
+  isFinalStage?: boolean;
 }
 
 export interface WaveConfig {

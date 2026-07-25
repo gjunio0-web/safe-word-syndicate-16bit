@@ -971,7 +971,12 @@ export class GameEngine {
 
     // Check Boss Sayonara Defeat Resolution
     if (target.enemyType === 'BOSS_MADAM_MIZYDIA' && target.hp <= 0) {
-      this.bossDefeated = true;
+      // Mizydia is the boss of stage 2 as well, where the fiction calls her a
+      // hologram. Without this gate, beating her there set bossDefeated and the
+      // campaign ended two stages early — the final stage was unreachable.
+      if (this.stage.isFinalStage) {
+        this.bossDefeated = true;
+      }
       // Free Sayonara!
       const sayonara = this.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
       if (sayonara) {
