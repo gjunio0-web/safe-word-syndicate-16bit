@@ -430,7 +430,12 @@ export class GameEngine {
     this.updateParticles();
 
     // Remove dead non-boss enemies after animation
-    this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer < 60);
+    // Keep the corpse only while its death animation still has frames left.
+    // The condition used to be `actionTimer < 60`, which is always true for a
+    // corpse — death sets actionTimer to 18 and it counts down to 0 — so the
+    // filter preserved exactly what it was meant to discard. Bodies piled up
+    // in the arena and kept being drawn.
+    this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer > 0);
 
     // Check wave clear status
     const remainingEnemies = this.entities.filter((ent) => !ent.isPlayer && ent.hp > 0);
@@ -512,10 +517,18 @@ export class GameEngine {
       // Spawn wave enemies
       wave.enemies.forEach((spawnGroup) => {
         for (let i = 0; i < spawnGroup.count; i++) {
-          const spawnX =
-            spawnGroup.spawnSide === 'LEFT'
-              ? this.cameraX - 40 - i * 30
-              : this.cameraX + 820 + i * 40;
+          // 'BOTH' used to fall through to the RIGHT branch, so every wave
+          // meant to surround the player arrived as a single-file queue from
+          // one side. Alternate instead, and count each side separately so the
+          // stagger offset does not gap.
+          const fromLeft =
+            spawnGroup.spawnSide === 'LEFT' ||
+            (spawnGroup.spawnSide === 'BOTH' && i % 2 === 0);
+          const indexOnSide = spawnGroup.spawnSide === 'BOTH' ? Math.floor(i / 2) : i;
+
+          const spawnX = fromLeft
+            ? this.cameraX - 40 - indexOnSide * 30
+            : this.cameraX + 820 + indexOnSide * 40;
           const spawnY = 240 + Math.random() * 160;
           this.spawnEnemy(spawnGroup.type, spawnX, spawnY);
         }
@@ -545,7 +558,10 @@ export class GameEngine {
 
     if (player.slowTimer > 0) player.slowTimer--;
     if (player.suppressedTimer > 0) player.suppressedTimer--;
-    if (player.invulnerableTimer > 0) player.invulnerableTimer--;
+    // invulnerableTimer is ticked in updateEntityPhysics, which runs for every
+    // entity. Decrementing it here too halved every invulnerability window.
+    // The physics one is the survivor because this method returns early while
+    // stunned, which would otherwise freeze the timer exactly when it matters.
 
     // Passive Power Meter Regeneration (+0.04 per frame = ~2.4%/sec)
     player.powerMeter = Math.min(100, player.powerMeter + 0.04);
