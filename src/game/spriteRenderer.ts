@@ -80,8 +80,8 @@ export function renderEntitySprite(
   // 7. Main Sprite Rendering
   if (entity.isPlayer && entity.charId) {
     renderPlayerSprite(ctx, entity.charId, entity);
-    // Unobtrusive Arcade P1 Arrow Indicator high above head (never covers face!)
-    renderPlayer1Indicator(ctx, entity);
+    // Unobtrusive Arcade Player Arrow Indicator high above head (never covers face!)
+    renderPlayerIndicator(ctx, entity);
   } else if (entity.enemyType) {
     renderEnemySprite(ctx, entity.enemyType, entity);
     // Render Overhead Arcade Health Bar for Enemies
@@ -145,12 +145,26 @@ function renderPowerMoveCutIn(ctx: CanvasRenderingContext2D, charId: CharacterId
 }
 
 // ----------------------------------------------------------------------------
-// CLEAN ARCADE 1P INDICATOR (Floats high above character head, keeping face 100% visible)
+// CLEAN ARCADE PLAYER INDICATOR (Floats high above character head, keeping face 100% visible)
 // ----------------------------------------------------------------------------
 
-function renderPlayer1Indicator(ctx: CanvasRenderingContext2D, entity: EntityState) {
+/**
+ * Player badge above the head.
+ *
+ * `playerNum` was already on EntityState and already set correctly by the
+ * engine, but nothing read it: this function hardcoded '1P' and ran for every
+ * entity with isPlayer, so the second fighter was labelled as the first.
+ *
+ * Colour follows arcade convention — yellow for 1P, cyan for 2P — so the two
+ * are distinguishable in a crowd without reading the text.
+ */
+function renderPlayerIndicator(ctx: CanvasRenderingContext2D, entity: EntityState) {
   // Spaced at y = -entity.height - 45 so badge & arrow sit completely above tall hair & helmets
   const indicatorY = -entity.height - 45;
+
+  const playerNum = entity.playerNum ?? 1;
+  const label = `${playerNum}P`;
+  const badgeColor = playerNum === 2 ? '#22d3ee' : '#facc15';
 
   ctx.save();
   ctx.translate(0, indicatorY);
@@ -160,8 +174,8 @@ function renderPlayer1Indicator(ctx: CanvasRenderingContext2D, entity: EntitySta
     ctx.scale(-1, 1);
   }
 
-  // Bright Yellow Arcade Arrow
-  ctx.fillStyle = '#facc15';
+  // Arcade Arrow
+  ctx.fillStyle = badgeColor;
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(-7, -8);
@@ -172,8 +186,8 @@ function renderPlayer1Indicator(ctx: CanvasRenderingContext2D, entity: EntitySta
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // "1P" Badge Box
-  ctx.fillStyle = '#facc15';
+  // Player Badge Box
+  ctx.fillStyle = badgeColor;
   ctx.fillRect(-10, -18, 20, 10);
   ctx.strokeStyle = '#000000';
   ctx.strokeRect(-10, -18, 20, 10);
@@ -181,7 +195,7 @@ function renderPlayer1Indicator(ctx: CanvasRenderingContext2D, entity: EntitySta
   ctx.fillStyle = '#000000';
   ctx.font = '900 8px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('1P', 0, -10);
+  ctx.fillText(label, 0, -10);
 
   ctx.restore();
 }
