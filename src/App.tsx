@@ -17,6 +17,7 @@ import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
 import { readConnectedGamepads, mergeInputs } from './game/gamepad';
+import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { CharacterSelect } from './components/CharacterSelect';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
@@ -256,6 +257,35 @@ export default function App() {
     sound.playPunch();
     setScreen('CHAR_SELECT');
   };
+
+  // Gamepad navigation for every screen except CHAR_SELECT, which owns its own
+  // cursor and handles it internally.
+  useGamepadMenu(
+    (action) => {
+      if (screen === 'TITLE') {
+        if (action === 'CONFIRM' || action === 'START') handleStartBrawl();
+        return;
+      }
+      if (screen === 'GAMEPLAY') {
+        // Only START pauses. The face buttons are live gameplay input.
+        if (action === 'START') setIsPaused((prev) => !prev);
+        return;
+      }
+      if (screen === 'STAGE_CLEAR') {
+        if (action === 'CONFIRM' || action === 'START') handleNextStage();
+        return;
+      }
+      if (screen === 'GAME_OVER') {
+        if (action === 'CONFIRM' || action === 'START') startStage(currentStageIdx);
+        if (action === 'BACK') setScreen('TITLE');
+        return;
+      }
+      if (screen === 'VICTORY') {
+        if (action === 'CONFIRM' || action === 'START' || action === 'BACK') setScreen('TITLE');
+      }
+    },
+    screen !== 'CHAR_SELECT'
+  );
 
   return (
     <div className="relative w-screen h-screen bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">

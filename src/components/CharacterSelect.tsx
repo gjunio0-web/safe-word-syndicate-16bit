@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useGamepadMenu } from '../hooks/useGamepadMenu';
 import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
 import { Zap, Shield, Flame, Crosshair, Users, Bot, UserCheck, Play, User, CheckCircle2 } from 'lucide-react';
@@ -63,6 +64,25 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, activeSlot, selectedP1, selectedP2]);
+
+  // Gamepad navigation. There is no separate cursor: moving the stick changes
+  // the active slot's selection directly, mirroring how the number keys work.
+  useGamepadMenu((action) => {
+    if (action === 'LEFT' || action === 'RIGHT') {
+      const current = activeSlot === 'P1' ? selectedP1 : selectedP2;
+      const at = charList.findIndex((c) => c.id === current);
+      const step = action === 'RIGHT' ? 1 : -1;
+      const next = charList[(at + step + charList.length) % charList.length];
+      if (next) selectCharacterForActiveSlot(next.id);
+      return;
+    }
+    if (action === 'UP' || action === 'DOWN') {
+      if (mode !== 'SINGLE') setActiveSlot((prev) => (prev === 'P1' ? 'P2' : 'P1'));
+      return;
+    }
+    if (action === 'CONFIRM' || action === 'START') handleStart();
+    if (action === 'BACK') onBack();
+  });
 
   const selectCharacterForActiveSlot = (charId: CharacterId) => {
     sound.playPunch();

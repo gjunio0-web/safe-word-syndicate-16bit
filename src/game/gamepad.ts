@@ -156,3 +156,78 @@ export function subscribeGamepadConnection(listener: () => void): () => void {
     connectionListeners.delete(listener);
   };
 }
+
+/**
+ * Menu navigation.
+ *
+ * Kept separate from `mapGamepadToInput` because menus need press *edges*, not
+ * held state — reading "held" would scroll a four-item list off the end in a
+ * fraction of a second. Edge detection and auto-repeat live in the React hook;
+ * this function only reports the raw per-frame state.
+ */
+export type MenuAction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'CONFIRM' | 'BACK' | 'START';
+
+const MENU_BUTTON = {
+  CONFIRM: 0, // A / Cross
+  BACK: 1, // B / Circle
+  START: 9, // Start / Options
+} as const;
+
+export type MenuState = Record<MenuAction, boolean>;
+
+function emptyMenuState(): MenuState {
+  return {
+    UP: false,
+    DOWN: false,
+    LEFT: false,
+    RIGHT: false,
+    CONFIRM: false,
+    BACK: false,
+    START: false,
+  };
+}
+
+/**
+ * Menu state merged across every connected pad, so either player can drive the
+ * menus without the game caring which slot they hold.
+ */
+export function readMenuState(): MenuState {
+  const state = emptyMenuState();
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return state;
+
+  for (const pad of navigator.getGamepads()) {
+    if (!pad || !pad.connected) continue;
+
+    const dir = mapGamepadToInput(pad);
+    state.UP = state.UP || dir.up;
+    state.DOWN = state.DOWN || dir.down;
+    state.LEFT = state.LEFT || dir.left;
+    state.RIGHT = state.RIGHT || dir.right;
+
+    state.CONFIRM = state.CONFIRM || pressed(pad, MENU_BUTTON.CONFIRM);
+    state.BACK = state.BACK || pressed(pad, MENU_BUTTON.BACK);
+    state.START = state.START || pressed(pad, MENU_BUTTON.START);
+  }
+  return state;
+}
+
+export const MENU_ACTIONS: MenuAction[] = [
+  'UP',
+  'DOWN',
+  'LEFT',
+  'RIGHT',
+  'CONFIRM',
+  'BACK',
+  'START',
+];
+
+/** Directions auto-repeat while held; buttons fire once per press. */
+export const MENU_REPEATS: Record<MenuAction, boolean> = {
+  UP: true,
+  DOWN: true,
+  LEFT: true,
+  RIGHT: true,
+  CONFIRM: false,
+  BACK: false,
+  START: false,
+};
