@@ -232,6 +232,14 @@ export default function App() {
     }
   };
 
+  // Shared by START BRAWL and the INSERT COIN indicator: both are the same
+  // "insert coin" arcade action, and the indicator looks tappable (it pulses
+  // and changes color) but used to be inert, forcing a second tap elsewhere.
+  const handleStartBrawl = () => {
+    sound.playPunch();
+    setScreen('CHAR_SELECT');
+  };
+
   return (
     <div className="relative w-screen h-screen bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
       {/* 1. TITLE SCREEN */}
@@ -245,11 +253,12 @@ export default function App() {
             </div>
             <div className="text-right">
               <div className="text-xs font-mono text-gray-400">VS ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS</div>
-              <div
-                className={`text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
+              <button
+                onClick={handleStartBrawl}
+                className={`bg-transparent border-0 p-0 cursor-pointer text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
               >
                 {audioUnlocked ? 'INSERT COIN [99]' : 'INSERT COIN ► PRESS ANY KEY'}
-              </div>
+              </button>
             </div>
           </div>
 
@@ -269,10 +278,7 @@ export default function App() {
           {/* Actions */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3 max-w-lg mx-auto w-full pb-4">
             <button
-              onClick={() => {
-                sound.playPunch();
-                setScreen('CHAR_SELECT');
-              }}
+              onClick={handleStartBrawl}
               className="w-full sm:flex-1 py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Play className="w-5 h-5 fill-current" /> START BRAWL
