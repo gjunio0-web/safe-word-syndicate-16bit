@@ -49,7 +49,7 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
   if (!line) return null;
 
   return (
-    <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-40 flex flex-col justify-end p-6 select-none">
+    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-40 flex flex-col justify-end p-6 select-none">
       {/* Cutscene Dialog Container */}
       <div className="bg-[#111] border-4 border-[#ff00ff] p-6 shadow-[0_0_30px_rgba(255,0,255,0.4)] max-w-2xl mx-auto w-full relative">
         {/* Speaker Name Tag */}
