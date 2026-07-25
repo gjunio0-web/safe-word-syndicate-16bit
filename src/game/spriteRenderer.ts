@@ -272,6 +272,29 @@ function renderEnemyHealthBar(ctx: CanvasRenderingContext2D, entity: EntityState
 // Articulated leg-stepping walk cycles with foot lifts & knee bends
 // ----------------------------------------------------------------------------
 
+/**
+ * Per-hero outline colour.
+ *
+ * The outline used to be #090812 for everyone — luminance 9, effectively
+ * black. An outline exists to guarantee separation whatever is behind it, and
+ * a black one only does that over a light background. Measured against the
+ * three stage backgrounds, Omega Biker cleared his by 12 of 255 and Feet
+ * Master cleared Suburbia by 0.3: the silhouettes dissolved.
+ *
+ * These sit around luminance 100 — bright enough to read over the dark stages,
+ * dark enough to still read over the pale one — and are tinted per character
+ * so the line reinforces identity instead of looking like a generic halo.
+ *
+ * Enemies keep the near-black outline on purpose: the heroes should be the
+ * things that pop out of a crowd.
+ */
+const HERO_OUTLINE: Record<CharacterId, string> = {
+  FEET_MASTER: '#8a6440',
+  FUN_MAKER: '#c74bb0',
+  OMEGA_BIKER: '#a86a1c',
+  ANGRY_CORSO: '#b8552a',
+};
+
 function renderPlayerSprite(
   ctx: CanvasRenderingContext2D,
   charId: CharacterId,
@@ -310,7 +333,7 @@ function renderPlayerSprite(
   }
 
   // Crisp 16-Bit Arcade Dark Outline
-  ctx.strokeStyle = '#090812';
+  ctx.strokeStyle = HERO_OUTLINE[charId] ?? '#090812';
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
@@ -847,6 +870,20 @@ function renderPlayerSprite(
 
       drawOmegaSigil(ctx, 0, -64, 5.5, '#f5a623');
 
+      // Shoulder lamps, belt strip and knee bars. Small emissive accents
+      // spread across the silhouette so the shape reads even when the
+      // background is as dark as the armour.
+      ctx.fillStyle = '#f5a623';
+      ctx.fillRect(-24, -74, 6, 4);
+      ctx.fillRect(18, -74, 6, 4);
+      ctx.fillRect(-16, -44, 32, 2);
+
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(-19, -30 - lift1 / 2 + stride1 / 2, 12, 2);
+      ctx.fillRect(3, -30 - lift2 / 2 + stride2 / 2, 12, 2);
+      ctx.restore();
+
       // 4. ARMORED GAUNTLETS
       ctx.fillStyle = '#121217';
       if (isPunch) {
@@ -867,7 +904,14 @@ function renderPlayerSprite(
       ctx.stroke();
 
       ctx.fillStyle = '#f5a623';
-      ctx.fillRect(-3, -94, 19, 9);
+      // Visor widened and given a bloom. Emissive area is what lifts this
+      // character off a dark background, and it is on-concept: he is neon-lit
+      // armour, not a shadow.
+      ctx.fillRect(-5, -95, 23, 11);
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(-8, -97, 29, 15);
+      ctx.restore();
 
       ctx.restore();
       ctx.restore();
