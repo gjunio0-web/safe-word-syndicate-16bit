@@ -148,6 +148,12 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
             <div>
               <span className="text-xs font-mono font-bold text-[#ff00ff] uppercase block">QUICK BULK IMPORT</span>
               <span className="text-[11px] text-zinc-300 font-mono">Select or drop all 4 audio files at once (Intro, Selection, Stage 1, Boss)</span>
+              {/* The picker this opens belongs to the operating system and takes
+                  no gamepad input. Saying so beats a controller cursor that
+                  reaches the button and then dead-ends. */}
+              <span className="block text-[10px] text-amber-400 font-mono mt-0.5 uppercase tracking-wider">
+                ⌨ Mouse or touch required — file picker ignores gamepads
+              </span>
             </div>
           </div>
 

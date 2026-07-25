@@ -40,6 +40,31 @@ function focusableItems(): HTMLElement[] {
   return Array.from(currentScope().querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isVisible);
 }
 
+/** How far one press scrolls a panel, in pixels. */
+const SCROLL_STEP = 120;
+
+/**
+ * A scrollable panel in the current scope that the focus ring cannot reach.
+ *
+ * Focus navigation only moves between focusable elements, so a panel of pure
+ * prose is unreachable: the lore codex has four tabs and a body of text, and
+ * with a controller the text could not be scrolled at all.
+ *
+ * The panel only qualifies when it holds no focusable items of its own. The
+ * jukebox also scrolls, but its list is made of buttons — there, moving focus
+ * is the right behaviour and the browser scrolls them into view for free.
+ */
+function unreachableScrollPanel(): HTMLElement | null {
+  const scope = currentScope();
+  const candidates = Array.from(scope.querySelectorAll<HTMLElement>('*')).filter((el) => {
+    if (el.scrollHeight <= el.clientHeight + 4) return false;
+    const overflow = window.getComputedStyle(el).overflowY;
+    if (overflow !== 'auto' && overflow !== 'scroll') return false;
+    return el.querySelectorAll(FOCUSABLE).length === 0;
+  });
+  return candidates[0] ?? null;
+}
+
 /**
  * Applies one menu action to whatever is on screen.
  *
@@ -48,10 +73,27 @@ function focusableItems(): HTMLElement[] {
  */
 export function applyMenuNavigation(action: MenuAction): boolean {
   const items = focusableItems();
-  if (items.length === 0) return false;
+  if (items.length === 0) {
+    // No buttons at all: a scroll panel may still be the whole point of the screen.
+    const only = unreachableScrollPanel();
+    if (only && (action === 'UP' || action === 'DOWN')) {
+      only.scrollBy({ top: action === 'DOWN' ? SCROLL_STEP : -SCROLL_STEP, behavior: 'smooth' });
+      return true;
+    }
+    return false;
+  }
 
   const active = document.activeElement as HTMLElement | null;
   const at = active ? items.indexOf(active) : -1;
+
+  // Vertical presses scroll an unreachable panel rather than cycling the ring,
+  // which in the codex means the four tabs stay on the horizontal axis and the
+  // text becomes readable.
+  const panel = unreachableScrollPanel();
+  if (panel && (action === 'UP' || action === 'DOWN')) {
+    panel.scrollBy({ top: action === 'DOWN' ? SCROLL_STEP : -SCROLL_STEP, behavior: 'smooth' });
+    return true;
+  }
 
   switch (action) {
     case 'UP':

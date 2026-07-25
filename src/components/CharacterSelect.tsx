@@ -67,6 +67,20 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
 
   // Gamepad navigation. There is no separate cursor: moving the stick changes
   // the active slot's selection directly, mirroring how the number keys work.
+  // Every axis on this screen is spoken for, so the assignment is declared in
+  // one place rather than grown a case at a time:
+  //
+  //   left / right   roster
+  //   up / down      game mode — previously unreachable with a controller
+  //   LB / RB        active player slot, the keyboard's Tab
+  //   A / Start      begin
+  //   B              back
+  //
+  // Slot switching moved off the vertical axis because mode has three values
+  // and slot has two: cycling the longer list deserves the stick, and the
+  // binary toggle fits a button.
+  const MODE_ORDER: GameMode[] = ['SINGLE', 'AI_COMPANION', 'COOP'];
+
   useGamepadMenu((action) => {
     if (action === 'LEFT' || action === 'RIGHT') {
       const current = activeSlot === 'P1' ? selectedP1 : selectedP2;
@@ -77,7 +91,20 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
       return;
     }
     if (action === 'UP' || action === 'DOWN') {
-      if (mode !== 'SINGLE') setActiveSlot((prev) => (prev === 'P1' ? 'P2' : 'P1'));
+      const at = MODE_ORDER.indexOf(mode);
+      const step = action === 'DOWN' ? 1 : -1;
+      const next = MODE_ORDER[(at + step + MODE_ORDER.length) % MODE_ORDER.length];
+      setMode(next);
+      // Leaving a two-player mode must not strand the cursor on P2.
+      if (next === 'SINGLE') setActiveSlot('P1');
+      sound.playSelect();
+      return;
+    }
+    if (action === 'TOGGLE') {
+      if (mode !== 'SINGLE') {
+        setActiveSlot((prev) => (prev === 'P1' ? 'P2' : 'P1'));
+        sound.playSelect();
+      }
       return;
     }
     if (action === 'CONFIRM' || action === 'START') handleStart();

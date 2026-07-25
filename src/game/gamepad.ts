@@ -236,12 +236,17 @@ export function subscribeGamepadConnection(listener: () => void): () => void {
  * fraction of a second. Edge detection and auto-repeat live in the React hook;
  * this function only reports the raw per-frame state.
  */
-export type MenuAction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'CONFIRM' | 'BACK' | 'START';
+export type MenuAction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'CONFIRM' | 'BACK' | 'START' | 'TOGGLE';
 
 const MENU_BUTTON = {
   CONFIRM: 0, // A / Cross
   BACK: 1, // B / Circle
   START: 9, // Start / Options
+  // Shoulders. The character select screen already spends both sticks — one
+  // axis on the roster, one on the game mode — so switching the active player
+  // slot needed a button of its own.
+  TOGGLE_L: 4, // LB / L1
+  TOGGLE_R: 5, // RB / R1
 } as const;
 
 export type MenuState = Record<MenuAction, boolean>;
@@ -255,6 +260,7 @@ function emptyMenuState(): MenuState {
     CONFIRM: false,
     BACK: false,
     START: false,
+    TOGGLE: false,
   };
 }
 
@@ -278,6 +284,10 @@ export function readMenuState(): MenuState {
     state.CONFIRM = state.CONFIRM || pressed(pad, MENU_BUTTON.CONFIRM);
     state.BACK = state.BACK || pressed(pad, MENU_BUTTON.BACK);
     state.START = state.START || pressed(pad, MENU_BUTTON.START);
+    state.TOGGLE =
+      state.TOGGLE ||
+      pressed(pad, MENU_BUTTON.TOGGLE_L) ||
+      pressed(pad, MENU_BUTTON.TOGGLE_R);
   }
   return state;
 }
@@ -290,6 +300,7 @@ export const MENU_ACTIONS: MenuAction[] = [
   'CONFIRM',
   'BACK',
   'START',
+  'TOGGLE',
 ];
 
 /** Directions auto-repeat while held; buttons fire once per press. */
@@ -301,4 +312,5 @@ export const MENU_REPEATS: Record<MenuAction, boolean> = {
   CONFIRM: false,
   BACK: false,
   START: false,
+  TOGGLE: false,
 };
