@@ -2,6 +2,14 @@
 
 import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from './audioStore';
 
+/**
+ * Backoff between manifest-fetch retries, in ms. A flaky first request used
+ * to leave the game silently stuck on the synth fallback for the rest of the
+ * session — nothing else ever re-triggers the fetch, so one dropped request
+ * on a bad connection was permanent until a full page reload.
+ */
+const MANIFEST_RETRY_DELAYS_MS = [500, 1500, 4000];
+
 export type BgmTrack =
   | 'INTRO'
   | 'CHAR_SELECT'
@@ -99,45 +107,58 @@ class SoundEngine {
     events.forEach((evt) => window.addEventListener(evt, unlock, true));
   }
 
+  /**
+   * Fetches and validates the audio manifest, retrying on failure with
+   * backoff (`MANIFEST_RETRY_DELAYS_MS`). Returns null once retries are
+   * exhausted — the caller falls back to the synth, same as before.
+   */
+  private async fetchAudioManifest(attempt: number = 0): Promise<{ files: string[] } | null> {
+    try {
+      const res = await fetch('/audio/manifest.json');
+      if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
+      const data = await res.json();
+      if (!data || !Array.isArray(data.files)) throw new Error('malformed manifest');
+      return data;
+    } catch {
+      if (attempt >= MANIFEST_RETRY_DELAYS_MS.length) return null;
+      await new Promise((resolve) => setTimeout(resolve, MANIFEST_RETRY_DELAYS_MS[attempt]));
+      return this.fetchAudioManifest(attempt + 1);
+    }
+  }
+
   private async restorePersistedTracks() {
     try {
       // 1. Tracks placed in public/audio/, published through the static manifest
       if (typeof window !== 'undefined') {
-        fetch('/audio/manifest.json')
-          .then((res) => {
-            if (res.ok) return res.json();
-            return null;
-          })
-          .then((data) => {
-            if (data && Array.isArray(data.files) && data.files.length > 0) {
-              const files: string[] = data.files;
+        this.fetchAudioManifest().then((data) => {
+          if (data && data.files.length > 0) {
+            const files: string[] = data.files;
 
-              // Helper to find file by keyword
-              const findFile = (keywords: string[]) =>
-                files.find((f) => keywords.some((kw) => f.toLowerCase().includes(kw)));
+            // Helper to find file by keyword
+            const findFile = (keywords: string[]) =>
+              files.find((f) => keywords.some((kw) => f.toLowerCase().includes(kw)));
 
-              const introFile = findFile(['intro', 'title', 'main', 'theme', '01']) || files[0];
-              const selectFile = findFile(['select', 'char', 'roster', 'menu', '02']) || files[1] || files[0];
-              const stage1File = findFile(['stage1', 'stage_1', 'street', 'city', 'brawl', '03']) || files[2] || files[0];
-              const bossFile = findFile(['boss', 'mech', 'apex', 'fight', '04']) || files[3] || files[0];
+            const introFile = findFile(['intro', 'title', 'main', 'theme', '01']) || files[0];
+            const selectFile = findFile(['select', 'char', 'roster', 'menu', '02']) || files[1] || files[0];
+            const stage1File = findFile(['stage1', 'stage_1', 'street', 'city', 'brawl', '03']) || files[2] || files[0];
+            const bossFile = findFile(['boss', 'mech', 'apex', 'fight', '04']) || files[3] || files[0];
 
-              if (introFile && !this.customTrackNames['INTRO']) {
-                this.syncTrackAliases('INTRO', `/audio/${introFile}`, introFile);
-              }
-              if (selectFile && !this.customTrackNames['CHAR_SELECT']) {
-                this.syncTrackAliases('CHAR_SELECT', `/audio/${selectFile}`, selectFile);
-              }
-              if (stage1File && !this.customTrackNames['STAGE1']) {
-                this.syncTrackAliases('STAGE1', `/audio/${stage1File}`, stage1File);
-              }
-              if (bossFile && !this.customTrackNames['STAGE1_BOSS']) {
-                this.syncTrackAliases('STAGE1_BOSS', `/audio/${bossFile}`, bossFile);
-              }
-
-              this.refreshActiveTrack();
+            if (introFile && !this.customTrackNames['INTRO']) {
+              this.syncTrackAliases('INTRO', `/audio/${introFile}`, introFile);
             }
-          })
-          .catch(() => {});
+            if (selectFile && !this.customTrackNames['CHAR_SELECT']) {
+              this.syncTrackAliases('CHAR_SELECT', `/audio/${selectFile}`, selectFile);
+            }
+            if (stage1File && !this.customTrackNames['STAGE1']) {
+              this.syncTrackAliases('STAGE1', `/audio/${stage1File}`, stage1File);
+            }
+            if (bossFile && !this.customTrackNames['STAGE1_BOSS']) {
+              this.syncTrackAliases('STAGE1_BOSS', `/audio/${bossFile}`, bossFile);
+            }
+
+            this.refreshActiveTrack();
+          }
+        });
       }
 
       // 2. Check IndexedDB in browser for files uploaded via Jukebox Modal
