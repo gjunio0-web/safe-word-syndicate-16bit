@@ -148,7 +148,17 @@ describe('movement', () => {
           dy: i % 2 ? 12 : -12,
         }))
       );
-      for (const enemy of livingEnemies(engine)) enemy.hp = 9999;
+      for (const enemy of livingEnemies(engine)) {
+        enemy.hp = 9999;
+        // This test is about the body-collision push, which is deterministic.
+        // At arm's length the melee AI also rolls a ~4%/frame punch chance
+        // that shoves the player with an unrelated, unseeded vx kick — left
+        // alone, that occasionally lands enough hits in 300 frames to swing
+        // the measured distance across the assertion's threshold. Keeping
+        // actionTimer permanently nonzero blocks the punch branch without
+        // touching the movement AI the test actually exercises.
+        enemy.actionTimer = 999999;
+      }
 
       const from = engine.player1!.x;
       advance(engine, 300, walk);
