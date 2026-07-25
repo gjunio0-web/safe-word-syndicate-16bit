@@ -60,7 +60,11 @@ export function minStageLengthFor(triggerX: number): number {
  */
 export const PLAYER_BODY_SEPARATION_X = 72;
 export const PLAYER_BODY_SEPARATION_Y = 27;
-export const ENEMY_BODY_SEPARATION_X = 34;
+// Widened from 34: still far tighter than the player's 72 (so the crowd
+// behavior above holds), but 34 was narrower than a grunt's overhead
+// nameplate and picket sign, so two adjacent enemies at rest rendered their
+// labels as one overlapping smear.
+export const ENEMY_BODY_SEPARATION_X = 44;
 export const ENEMY_BODY_SEPARATION_Y = 14;
 
 /**
