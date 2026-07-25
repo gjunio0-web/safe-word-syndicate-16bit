@@ -292,18 +292,30 @@ function renderEnemyHealthBar(ctx: CanvasRenderingContext2D, entity: EntityState
  * three stage backgrounds, Omega Biker cleared his by 12 of 255 and Feet
  * Master cleared Suburbia by 0.3: the silhouettes dissolved.
  *
- * These sit around luminance 100 — bright enough to read over the dark stages,
- * dark enough to still read over the pale one — and are tinted per character
- * so the line reinforces identity instead of looking like a generic halo.
+ * The previous set sat around luminance 105 and was chosen as a compromise
+ * across all three stages. Re-measured against the stages' area colours only —
+ * sky, buildings, ground, with the few-pixel accent neons excluded — that
+ * compromise turned out to be the worst of both: Suburbia's mid-greys sit at
+ * luminance 99-152, so an outline at 105 cleared its nearest backdrop by 1.
+ * The silhouette held over the two dark stages and vanished over the pale one.
+ *
+ * Suburbia's area colours leave two gaps, around luminance 168 and 206. These
+ * values land in them, which also puts them 79-181 clear of the dark stages.
+ * Worst-case separation per hero went from 1-9 to 10-22.
+ *
+ * The hues follow the character portraits, so the line reinforces identity
+ * instead of looking like a generic halo. Magenta and cyan are deliberately
+ * kept off the low-luminance end: they are the two most common neon hues in
+ * the Neon Nightlife District, and a dim outline in either disappears there.
  *
  * Enemies keep the near-black outline on purpose: the heroes should be the
  * things that pop out of a crowd.
  */
 const HERO_OUTLINE: Record<CharacterId, string> = {
-  FEET_MASTER: '#8a6440',
-  FUN_MAKER: '#c74bb0',
-  OMEGA_BIKER: '#a86a1c',
-  ANGRY_CORSO: '#b8552a',
+  FEET_MASTER: '#e8a83e',  // Amber, from the specs glint and belt buckle
+  FUN_MAKER: '#ff86e4',    // Hot pink, from the portrait's aura
+  OMEGA_BIKER: '#ff9a45',  // Orange, from the armour's energy lines
+  ANGRY_CORSO: '#56ff47',  // Acid green, sampled from the portrait's aura (hue 115°)
 };
 
 function renderPlayerSprite(
