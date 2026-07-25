@@ -128,6 +128,14 @@ export function applyMenuNavigation(action: MenuAction): boolean {
  *
  * A modal opening leaves focus on whatever button was behind it, so the first
  * direction press would move through elements the player cannot see.
+ *
+ * It also pre-focuses the first item in the new scope. Without this, arriving
+ * on a fresh screen has nothing focused, so `applyMenuNavigation`'s CONFIRM
+ * case only focuses the first item rather than activating it — a correct
+ * safeguard against firing a random action, but with no focus ring to explain
+ * why the first press did nothing, it reads as the controller not working at
+ * all. Pre-focusing removes that dead first press while keeping the same
+ * safeguard: nothing activates until the player actually presses confirm.
  */
 export function useMenuFocusReset(scopeKey: unknown) {
   const previous = useRef<unknown>(null);
@@ -139,5 +147,8 @@ export function useMenuFocusReset(scopeKey: unknown) {
     const active = document.activeElement as HTMLElement | null;
     if (active && focusableItems().includes(active)) return;
     if (active && active !== document.body) active.blur();
+
+    const items = focusableItems();
+    if (items.length > 0) items[0].focus();
   }, [scopeKey]);
 }

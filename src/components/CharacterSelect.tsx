@@ -113,7 +113,16 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
       return;
     }
     if (action === 'CONFIRM' || action === 'START') handleStart();
-    if (action === 'BACK') onBack();
+    if (action === 'BACK') {
+      // Picking P1 auto-advances to P2/AI, which reads as a step forward —
+      // BACK should undo that step before it leaves the whole screen.
+      if (mode !== 'SINGLE' && activeSlot === 'P2') {
+        setActiveSlot('P1');
+        sound.playSelect();
+      } else {
+        onBack();
+      }
+    }
   });
 
   const selectCharacterForActiveSlot = (charId: CharacterId) => {
