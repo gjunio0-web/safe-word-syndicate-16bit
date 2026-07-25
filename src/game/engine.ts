@@ -11,7 +11,18 @@ import {
   GameSettings,
 } from '../types';
 import { CHARACTERS, ENEMIES } from './characterData';
-import { maxCameraX, maxWaveTriggerX, WAVE_TRIGGER_LOOKAHEAD } from './constants';
+import {
+  maxCameraX,
+  maxWaveTriggerX,
+  WAVE_TRIGGER_LOOKAHEAD,
+  PLAYER_BODY_SEPARATION_X,
+  PLAYER_BODY_SEPARATION_Y,
+  ENEMY_BODY_SEPARATION_X,
+  ENEMY_BODY_SEPARATION_Y,
+  MAX_SIMULTANEOUS_ATTACKERS,
+  ATTACKER_STANDOFF_X,
+  ATTACKER_STANDOFF_TOLERANCE,
+} from './constants';
 import { sound } from './sound';
 
 /**
@@ -91,6 +102,9 @@ export class GameEngine {
 
   private hudSnapshot: HudSnapshot;
   private hudListeners: Set<() => void> = new Set();
+
+  /** Ids of the melee enemies currently allowed to engage. */
+  private attackSlots: Set<string> = new Set();
   private shownWaveDialogues: Set<number> = new Set();
 
   public player1: EntityState | null = null;
@@ -395,6 +409,10 @@ export class GameEngine {
       }
     });
 
+    // Grant attack slots before the AI runs, so each enemy knows this frame
+    // whether it is engaging or waiting.
+    this.updateAttackSlots();
+
     // Update Enemies & AI
     this.entities.forEach((ent) => {
       if (!ent.isPlayer && ent.hp > 0) {
@@ -437,6 +455,45 @@ export class GameEngine {
    */
   private effectiveTriggerX(wave: import('../types').WaveConfig): number {
     return Math.min(wave.triggerX, maxWaveTriggerX(this.stage.length));
+  }
+
+  /** Player the enemies are currently converging on. */
+  private currentTarget(): EntityState | null {
+    if (this.player1 && this.player1.hp > 0) return this.player1;
+    if (this.player2 && this.player2.hp > 0) return this.player2;
+    return null;
+  }
+
+  private isMelee(enemy: EntityState): boolean {
+    return enemy.enemyType !== 'CONVERSION_THERAPIST';
+  }
+
+  /**
+   * Hands out the attack slots, closest melee enemy first.
+   *
+   * Holders keep their slot while alive, so an engaged enemy is not swapped out
+   * mid-swing. Everyone else waits on the standoff ring in `updateEnemyAi`.
+   */
+  private updateAttackSlots() {
+    for (const id of this.attackSlots) {
+      const holder = this.entities.find((e) => e.id === id);
+      if (!holder || holder.hp <= 0) this.attackSlots.delete(id);
+    }
+
+    const free = MAX_SIMULTANEOUS_ATTACKERS - this.attackSlots.size;
+    if (free <= 0) return;
+
+    const target = this.currentTarget();
+    if (!target) return;
+
+    this.entities
+      .filter((e) => !e.isPlayer && e.hp > 0 && this.isMelee(e) && !this.attackSlots.has(e.id))
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y)
+      )
+      .slice(0, free)
+      .forEach((e) => this.attackSlots.add(e.id));
   }
 
   private updateWaveTriggers() {
@@ -690,9 +747,11 @@ export class GameEngine {
         const absDx = Math.abs(dx);
         const absDy = Math.abs(dy);
 
-        // Required physical body arm's-length spacing: 72px on X, 27px on Y
-        const minDx = 72;
-        const minDy = 27;
+        // Enemies crowd each other more tightly than they crowd the player.
+        // A single shared spacing put every attacker outside its own reach.
+        const betweenEnemies = !a.isPlayer && !b.isPlayer;
+        const minDx = betweenEnemies ? ENEMY_BODY_SEPARATION_X : PLAYER_BODY_SEPARATION_X;
+        const minDy = betweenEnemies ? ENEMY_BODY_SEPARATION_Y : PLAYER_BODY_SEPARATION_Y;
 
         if (absDx < minDx && absDy < minDy) {
           const overlapX = minDx - absDx;
@@ -1006,6 +1065,29 @@ export class GameEngine {
     } else {
       // Melee AI (Purity Patrol, Trad-Wife Striker, Bosses)
       const idealRange = Math.max(75, info.attackRange);
+
+      // No attack slot: hold the standoff ring and wait for one to open.
+      // This is what keeps the crowd from shoving the committed attackers out
+      // of their own reach.
+      if (!this.attackSlots.has(enemy.id)) {
+        const desiredX = targetPlayer.x + (dx > 0 ? -ATTACKER_STANDOFF_X : ATTACKER_STANDOFF_X);
+        const gap = desiredX - enemy.x;
+
+        if (Math.abs(gap) > ATTACKER_STANDOFF_TOLERANCE) {
+          const stepVx = Math.sign(gap) * info.speed * 0.6;
+          const nextX = enemy.x + stepVx;
+          enemy.vx = nextX >= arenaMinX + 10 && nextX <= arenaMaxX - 10 ? stepVx : 0;
+          enemy.action = 'WALK';
+        } else {
+          enemy.vx = 0;
+          enemy.action = 'IDLE';
+        }
+
+        // Line up vertically while waiting, so taking a slot means committing
+        // immediately instead of spending it closing the gap.
+        enemy.vy = absDy > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.35 : 0;
+        return;
+      }
 
       if (absDx < 55) {
         // Too close! Step back slightly to maintain arm's length distance
