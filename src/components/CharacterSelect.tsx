@@ -95,8 +95,13 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
       const step = action === 'DOWN' ? 1 : -1;
       const next = MODE_ORDER[(at + step + MODE_ORDER.length) % MODE_ORDER.length];
       setMode(next);
-      // Leaving a two-player mode must not strand the cursor on P2.
-      if (next === 'SINGLE') setActiveSlot('P1');
+      // Leaving a two-player mode must not strand the cursor on P2, nor leave
+      // a stale P2 highlight on the roster card (SINGLE mode has no P2) —
+      // mirrors what the "1P SOLO" button already does.
+      if (next === 'SINGLE') {
+        setActiveSlot('P1');
+        setSelectedP2(null);
+      }
       sound.playSelect();
       return;
     }
