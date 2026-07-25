@@ -236,19 +236,15 @@ function renderEnemyHealthBar(ctx: CanvasRenderingContext2D, entity: EntityState
   const hpRatio = Math.max(0, Math.min(1, entity.hp / entity.maxHp));
 
   // Enemy Name Label
-  // PURITY_PATROL is the most common grunt and spawns in tight clusters at the
-  // attack-slot system's crowd spacing. 'PURITY PATROL' at this font is wider
-  // than the gap between two adjacent enemies, so neighboring labels rendered
-  // as one overlapping smear; 'PATROL' fits inside that gap.
   let enemyName = 'TARGET';
-  if (entity.enemyType === 'PURITY_PATROL') enemyName = 'PATROL';
+  if (entity.enemyType === 'PURITY_PATROL') enemyName = 'PURITY PATROL';
   else if (entity.enemyType === 'TRAD_WIFE_STRIKER') enemyName = 'TRAD-WIFE';
   else if (entity.enemyType === 'CONVERSION_THERAPIST') enemyName = 'THERAPIST';
   else if (entity.enemyType === 'BOSS_MADAM_MIZYDIA') enemyName = 'MADAM MIZYDIA';
   else if (entity.enemyType === 'BOSS_SAYONARA') enemyName = 'SAYONARA';
 
   ctx.fillStyle = isBoss ? '#ff4d4d' : '#f3f4f6';
-  ctx.font = isBoss ? 'bold 8px monospace' : 'bold 7px monospace';
+  ctx.font = 'bold 8px monospace';
   ctx.textAlign = 'center';
   ctx.shadowColor = '#000000';
   ctx.shadowBlur = 4;
@@ -1201,23 +1197,19 @@ function renderEnemySprite(
       ctx.fillRect(-5, -75, 10, 2);
 
       // Wooden Picket Sign
-      // Centered on the body (was offset to +17): at the tighter crowd spacing
-      // introduced for the attack-slot system, a sign hung off one side reached
-      // past a neighboring enemy standing at the new minimum distance, and two
-      // adjacent signs rendered as one unreadable blob.
       ctx.fillStyle = '#b45309';
-      ctx.fillRect(-3, -104, 6, 74);
+      ctx.fillRect(16, -104, 6, 74);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-19, -126, 38, 30);
+      ctx.fillRect(-2, -126, 38, 30);
       ctx.strokeStyle = '#dc2626';
       ctx.lineWidth = 2.5;
-      ctx.strokeRect(-19, -126, 38, 30);
+      ctx.strokeRect(-2, -126, 38, 30);
       ctx.fillStyle = '#dc2626';
       ctx.font = 'bold 12px sans-serif';
       // The board follows the body, but the lettering must not: mirrored text
       // on a protest sign read as "!ON".
       ctx.save();
-      ctx.translate(0, -106);
+      ctx.translate(17, -106);
       if (entity.facing === 'LEFT') {
         ctx.scale(-1, 1);
       }
