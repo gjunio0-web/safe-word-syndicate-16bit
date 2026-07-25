@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DialogueLine } from '../types';
 import { sound } from '../game/sound';
+import { useGamepadMenu } from '../hooks/useGamepadMenu';
 import { ArrowRight, MessageSquareQuote } from 'lucide-react';
 
 interface DialogueOverlayProps {
@@ -35,6 +36,15 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [index, dialogue]);
+
+  // Gameplay's own gamepad handling only reads START (it toggles pause) while
+  // this overlay is up, so a controller had no way to advance the dialogue —
+  // the face buttons still went straight to the engine as combat input, which
+  // update() ignores while a dialogue is active. CONFIRM only: START stays
+  // reserved for pause, so a player can still back out mid-cutscene.
+  useGamepadMenu((action) => {
+    if (action === 'CONFIRM') handleNext();
+  });
 
   if (!line) return null;
 
