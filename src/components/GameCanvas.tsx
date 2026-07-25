@@ -33,6 +33,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
       ctx.clearRect(0, 0, width, height);
 
       // 1. Render Parallax Stage Background
+      // Hard edges are the point of the art. Without this the browser smooths
+      // every scaled draw, softening exactly the outlines and emissives the
+      // sprite work spent its effort on.
+      ctx.imageSmoothingEnabled = false;
+
       renderStageBackground(ctx, engine.stage.bgType, engine.cameraX, width, height);
 
       // 2. Render Ground Item Pickups
@@ -139,11 +144,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         const renderX = entity.x - engine.cameraX;
         const renderY = entity.y - entity.z; // Y depth minus Z jump vertical height
 
-        // Ground Oval Shadow
+        // Ground shadow. Stays on the ground plane at entity.y and shrinks as
+        // the fighter rises, which is what sells the jump in a 2.5D brawler.
+        const shadowScale = Math.max(0.2, 1 - entity.z / 180);
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.beginPath();
-        ctx.ellipse(renderX, entity.y, entity.width / 1.8, entity.width / 3.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+          renderX,
+          entity.y,
+          (entity.width / 1.8) * shadowScale,
+          (entity.width / 3.5) * shadowScale,
+          0,
+          0,
+          Math.PI * 2
+        );
         ctx.fill();
         ctx.restore();
 
@@ -160,7 +175,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
 
         if (p.type === 'TEXT' && p.text) {
           ctx.fillStyle = p.color;
-          ctx.font = 'black 16px monospace';
+          // 'black' is not a valid weight in the CSS font shorthand, so the
+          // whole assignment was discarded and damage numbers fell back to the
+          // canvas default of 10px sans-serif.
+          ctx.font = '900 16px monospace';
           ctx.shadowColor = '#000000';
           ctx.shadowBlur = 4;
           ctx.fillText(p.text, px - 12, py);
@@ -202,7 +220,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         ref={canvasRef}
         width={800}
         height={450}
-        className="w-full h-full object-contain image-rendering-pixelated"
+        className="w-full h-full object-contain [image-rendering:pixelated]"
       />
 
       {/* Retro Arcade CRT Scanline & Curved Glass Shader Overlay */}

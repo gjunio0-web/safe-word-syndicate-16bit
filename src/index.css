@@ -1,1 +1,39 @@
 @import "tailwindcss";
+
+/*
+ * Animation utilities used across the interface.
+ *
+ * `animate-spin-slow` and `animate-fadeIn` were referenced in four places and
+ * defined nowhere: there is no tailwind config, and this file was a single
+ * import line. Tailwind emits nothing for a class it does not know, so the
+ * jukebox disc never turned and its modal appeared with no fade — failing in
+ * silence, which is why it survived so long.
+ *
+ * Written as plain CSS rather than theme tokens so the existing class names
+ * keep working untouched.
+ */
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s ease-out;
+}

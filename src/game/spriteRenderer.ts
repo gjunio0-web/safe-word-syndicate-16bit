@@ -36,12 +36,11 @@ export function renderEntitySprite(
   // Scale characters to 1.5x their original size
   ctx.scale(1.5, 1.5);
 
-  // 1. Dynamic Ground Oval Shadow (glued flat to ground plane y=0)
-  const shadowScale = Math.max(0.2, 1 - entity.z / 180);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, (entity.width / 1.6) * shadowScale, 9 * shadowScale, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // The ground shadow used to be drawn here as well as in GameCanvas — two
+  // shadows per entity every frame. This one also claimed to be glued to the
+  // ground while sitting inside a transform translated by `entity.y - entity.z`,
+  // so it climbed with the jump. GameCanvas keeps the one at ground level and
+  // took over the height scaling.
 
   // 2. Facing Direction Flip
   if (entity.facing === 'LEFT') {
