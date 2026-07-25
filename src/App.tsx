@@ -16,6 +16,7 @@ import { STAGES } from './game/stageData';
 import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
+import { AttractMode } from './components/AttractMode';
 import { readConnectedGamepads, mergeInputs } from './game/gamepad';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { CharacterSelect } from './components/CharacterSelect';
@@ -33,6 +34,9 @@ import { Play, BookOpen, Shield, Flame, RotateCcw, Award, Disc } from 'lucide-re
 const subscribeAudioUnlock = (onChange: () => void) => sound.subscribeUnlock(onChange);
 const getAudioUnlocked = () => sound.isAudioUnlocked();
 
+/** Idle time on the title screen before the cabinet returns to attract mode. */
+const IDLE_RETURN_MS = 45_000;
+
 const NEUTRAL_INPUT: PlayerInput = {
   left: false,
   right: false,
@@ -46,7 +50,7 @@ const NEUTRAL_INPUT: PlayerInput = {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<GameScreen>('TITLE');
+  const [screen, setScreen] = useState<GameScreen>('ATTRACT');
   const [currentStageIdx, setCurrentStageIdx] = useState(0);
 
   const [p1Char, setP1Char] = useState<CharacterId>('FEET_MASTER');
@@ -140,6 +144,27 @@ export default function App() {
     return engine.subscribeDialogue(() => setActiveDialogue(engine.activeDialogue));
   }, [engineVersion]);
 
+  // An abandoned cabinet goes back to attracting. Without this the attract
+  // sequence would only ever be seen once per session.
+  useEffect(() => {
+    if (screen !== 'TITLE') return;
+
+    let timerId = 0;
+    const arm = () => {
+      window.clearTimeout(timerId);
+      timerId = window.setTimeout(() => setScreen('ATTRACT'), IDLE_RETURN_MS);
+    };
+
+    arm();
+    window.addEventListener('pointerdown', arm);
+    window.addEventListener('keydown', arm);
+    return () => {
+      window.clearTimeout(timerId);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [screen]);
+
   const gameRootRef = useRef<HTMLDivElement>(null);
 
   const focusContainer = () => {
@@ -160,7 +185,11 @@ export default function App() {
 
   // Manage Screen Background Music (Intro, Char Select)
   useEffect(() => {
-    if (screen === 'TITLE') {
+    if (screen === 'ATTRACT' || screen === 'TITLE') {
+      // Asking for the theme on ATTRACT costs nothing while audio is still
+      // locked: playBgm arms the unlock and stays silent. Once a coin has been
+      // inserted earlier in the session, the same call brings the music back —
+      // so the first attract loop is silent and later ones are not.
       sound.playBgm('INTRO');
     } else if (screen === 'CHAR_SELECT') {
       sound.playBgm('CHAR_SELECT');
@@ -250,11 +279,15 @@ export default function App() {
     }
   };
 
-  // Shared by START BRAWL and the INSERT COIN indicator: both are the same
-  // "insert coin" arcade action, and the indicator looks tappable (it pulses
-  // and changes color) but used to be inert, forcing a second tap elsewhere.
+  // Inserting the coin and starting the match are separate actions, as on a
+  // cabinet. The coin leaves attract mode; START begins the match.
+  const handleInsertCoin = () => {
+    sound.playCoin();
+    setScreen('TITLE');
+  };
+
   const handleStartBrawl = () => {
-    sound.playPunch();
+    sound.playStart();
     setScreen('CHAR_SELECT');
   };
 
@@ -262,6 +295,11 @@ export default function App() {
   // cursor and handles it internally.
   useGamepadMenu(
     (action) => {
+      if (screen === 'ATTRACT') {
+        // Every button is the coin slot here, matching keyboard and touch.
+        handleInsertCoin();
+        return;
+      }
       if (screen === 'TITLE') {
         if (action === 'CONFIRM' || action === 'START') handleStartBrawl();
         return;
@@ -289,6 +327,9 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
+      {/* 0. ATTRACT MODE */}
+      {screen === 'ATTRACT' && <AttractMode onInsertCoin={handleInsertCoin} />}
+
       {/* 1. TITLE SCREEN */}
       {screen === 'TITLE' && (
         <div className="relative w-full h-full bg-[#0a0a0a] flex flex-col justify-between p-8 text-white text-center border-[12px] border-[#ff00ff]/10">
@@ -304,7 +345,7 @@ export default function App() {
                 onClick={handleStartBrawl}
                 className={`bg-transparent border-0 p-0 cursor-pointer text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
               >
-                {audioUnlocked ? 'INSERT COIN [99]' : 'INSERT COIN ► PRESS ANY KEY'}
+                CREDIT 99 ► PRESS START
               </button>
             </div>
           </div>

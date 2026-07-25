@@ -1,4 +1,5 @@
-export type GameScreen = 
+export type GameScreen =
+  | 'ATTRACT'
   | 'TITLE'
   | 'CHAR_SELECT'
   | 'DIALOGUE'
