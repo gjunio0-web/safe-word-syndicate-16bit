@@ -16,6 +16,7 @@ import { STAGES } from './game/stageData';
 import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
+import { readConnectedGamepads, mergeInputs } from './game/gamepad';
 import { CharacterSelect } from './components/CharacterSelect';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
@@ -189,7 +190,23 @@ export default function App() {
         if (engineRef.current) {
           // Pause physics updates if active dialogue overlay is open
           if (!engineRef.current.activeDialogue) {
-            engineRef.current.update(inputRef.current);
+            // Polled here rather than in React state: the Gamepad API reports
+            // no button events, so reading it through setState would re-render
+            // the tree every frame.
+            const pads = readConnectedGamepads();
+
+            // With a single pad in co-op, the keyboard player keeps P1 and the
+            // controller takes P2 — that is what someone plugging in one
+            // controller to play together expects. Otherwise pads follow slot
+            // order, and P1 accepts keyboard and controller at once.
+            const soloPadCoop = gameMode === 'COOP' && pads.length === 1;
+            const p1Pad = soloPadCoop ? null : (pads[0] ?? null);
+            const p2Pad = soloPadCoop ? pads[0] : (pads[1] ?? null);
+
+            engineRef.current.update(
+              mergeInputs(inputRef.current, p1Pad),
+              p2Pad ?? undefined
+            );
           }
 
           if (engineRef.current.stageCleared) {
@@ -205,7 +222,7 @@ export default function App() {
 
     animFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [screen, isPaused]);
+  }, [screen, isPaused, gameMode]);
 
   const startStage = (stageIdx: number, p1Override?: CharacterId, p2Override?: CharacterId) => {
     const p1 = p1Override ?? p1Char;

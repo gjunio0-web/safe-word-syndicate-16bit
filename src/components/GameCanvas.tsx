@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { GameEngine } from '../game/engine';
 import { renderStageBackground } from '../game/stageData';
+import { subscribeGamepadConnection, connectedGamepadCount } from '../game/gamepad';
 import { renderEntitySprite } from '../game/spriteRenderer';
 import { CHARACTERS } from '../game/characterData';
 
@@ -8,6 +9,11 @@ interface GameCanvasProps {
   engine: GameEngine;
   crtFilter: boolean;
 }
+
+// Stable across renders: useSyncExternalStore resubscribes when handed
+// freshly created functions.
+const subscribeGamepads = (onChange: () => void) => subscribeGamepadConnection(onChange);
+const getGamepadCount = () => connectedGamepadCount();
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -113,6 +119,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
   const hud = useSyncExternalStore(subscribeHud, getHudSnapshot, getHudSnapshot);
 
   const { p1, p2, boss } = hud;
+
+  const gamepadCount = useSyncExternalStore(subscribeGamepads, getGamepadCount, getGamepadCount);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
@@ -315,6 +323,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
             </div>
           </div>
         )}
+
+      {/* Gamepad connection badge */}
+      {gamepadCount > 0 && (
+        <div className="absolute bottom-2 right-2 pointer-events-none z-30 bg-black/80 border border-[#00ffff] px-2 py-0.5 rounded text-[10px] font-mono font-bold text-[#00ffff]">
+          🎮 {gamepadCount === 1 ? 'PAD 1' : `PAD 1-${gamepadCount}`}
+        </div>
+      )}
 
       {/* Boss Health Bar Display */}
       {boss && (
