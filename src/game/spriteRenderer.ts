@@ -325,10 +325,10 @@ function renderPlayerSprite(
         ctx.stroke();
       }
 
-      // 1. COMBAT BOOTS (Black Leather with Tread Soles & Metallic Eyelets)
+      // 1. COMBAT BOOTS (Worn Brown Leather, sampled from the character art)
       if (isKick) {
-        drawArcadeBoot(ctx, -20, -10, 16, 12, '#121216');
-        drawArcadeBoot(ctx, 10, -52, 42, 22, '#121216');
+        drawArcadeBoot(ctx, -20, -10, 16, 12, '#54483c');
+        drawArcadeBoot(ctx, 10, -52, 42, 22, '#54483c');
         ctx.fillStyle = '#cbd5e1';
         ctx.fillRect(46, -50, 5, 5);
 
@@ -338,12 +338,12 @@ function renderPlayerSprite(
         ctx.arc(8, -42, 44, -0.6, 0.6);
         ctx.stroke();
       } else if (isJumping) {
-        drawArcadeBoot(ctx, -18, -26, 16, 14, '#121216');
-        drawArcadeBoot(ctx, 6, -18, 16, 14, '#121216');
+        drawArcadeBoot(ctx, -18, -26, 16, 14, '#54483c');
+        drawArcadeBoot(ctx, 6, -18, 16, 14, '#54483c');
       } else {
         // Leg 1 (Back) & Leg 2 (Front) Boots stepping on ground
-        drawArcadeBoot(ctx, -18 + stride1, -12 - lift1, 16, 13, '#121216');
-        drawArcadeBoot(ctx, 4 + stride2, -12 - lift2, 16, 13, '#121216');
+        drawArcadeBoot(ctx, -18 + stride1, -12 - lift1, 16, 13, '#54483c');
+        drawArcadeBoot(ctx, 4 + stride2, -12 - lift2, 16, 13, '#54483c');
       }
 
       // 2. DENIM JEANS (Indigo Blue with Faded Thigh Wash & Rolled Cuffs)
@@ -511,27 +511,30 @@ function renderPlayerSprite(
       ctx.ellipse(-4, -102, 10, 4, -0.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Full Dark Brown Beard & Mustache
+      // Beard, sitting on the jaw instead of swallowing the head.
+      // It used to be arc(0, -84, 14), which met the bottom edge of the
+      // glasses with no gap: hair, lenses and beard tiled the whole skull and
+      // no skin was ever visible, despite the comment above claiming otherwise.
       ctx.fillStyle = '#3a2213';
       ctx.beginPath();
-      ctx.arc(0, -84, 14, 0.1, Math.PI - 0.1);
+      ctx.arc(0, -80, 12, 0.1, Math.PI - 0.1);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(0, -84, 10, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -80, 8, 3, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Rectangular Black Glasses with Cyan Lens Glint
+      // Rectangular Black Glasses with a dim glass highlight
       ctx.fillStyle = '#0b0b0f';
       ctx.beginPath();
-      ctx.roundRect(-13, -92, 12, 9, 2);
-      ctx.roundRect(1, -92, 12, 9, 2);
+      ctx.roundRect(-13, -92, 12, 7, 2);
+      ctx.roundRect(1, -92, 12, 7, 2);
       ctx.fill();
       ctx.fillRect(-2, -90, 4, 3);
 
-      ctx.fillStyle = '#00f0ff';
-      ctx.fillRect(-10, -90, 4, 5);
-      ctx.fillRect(4, -90, 4, 5);
+      ctx.fillStyle = '#39404d';
+      ctx.fillRect(-10, -90, 4, 4);
+      ctx.fillRect(4, -90, 4, 4);
 
       ctx.restore(); // end upper body
       ctx.restore(); // end character
@@ -547,7 +550,7 @@ function renderPlayerSprite(
 
       if (isFlying || isJumping || isSpecial) {
         const jetGlow = 18 + Math.sin(Date.now() / 30) * 6;
-        ctx.fillStyle = '#00f0ff';
+        ctx.fillStyle = '#ff00ff';
         ctx.beginPath();
         ctx.arc(-12, 6, jetGlow, 0, Math.PI * 2);
         ctx.arc(12, 6, jetGlow, 0, Math.PI * 2);
@@ -578,7 +581,7 @@ function renderPlayerSprite(
       if (isKick) {
         drawArcadeBoot(ctx, -18, -10, 16, 13, '#422817');
         drawArcadeBoot(ctx, 12, -52, 40, 22, '#422817');
-        ctx.strokeStyle = '#00f0ff';
+        ctx.strokeStyle = '#ff00ff';
         ctx.lineWidth = 6;
         ctx.beginPath();
         ctx.arc(10, -42, 44, -0.7, 0.7);
@@ -673,7 +676,7 @@ function renderPlayerSprite(
         ctx.roundRect(10, -72, 38, 16, 8);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#00f0ff';
+        ctx.fillStyle = '#ff00ff';
         ctx.fillRect(36, -74, 8, 20);
       } else if (isFlying) {
         // Outstretched Superhero Flight Arms
@@ -683,7 +686,7 @@ function renderPlayerSprite(
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#00f0ff';
+        ctx.fillStyle = '#ff00ff';
         ctx.fillRect(30, -76, 8, 18);
         ctx.fillRect(-20, -76, 8, 18);
       } else {
@@ -693,7 +696,7 @@ function renderPlayerSprite(
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#00f0ff';
+        ctx.fillStyle = '#ff00ff';
         ctx.fillRect(-24 - armSwing, -54, 6, 8);
         ctx.fillRect(18 + armSwing, -54, 6, 8);
       }
@@ -732,12 +735,12 @@ function renderPlayerSprite(
       ctx.fillStyle = '#facc15';
       ctx.beginPath();
       ctx.moveTo(-16, -92);
-      ctx.lineTo(-24, -112);
-      ctx.lineTo(-14, -102);
-      ctx.lineTo(-5, -118);
-      ctx.lineTo(5, -102);
-      ctx.lineTo(15, -116);
-      ctx.lineTo(22, -98);
+      ctx.lineTo(-21, -105);
+      ctx.lineTo(-13, -99);
+      ctx.lineTo(-5, -108);
+      ctx.lineTo(4, -99);
+      ctx.lineTo(13, -107);
+      ctx.lineTo(19, -96);
       ctx.lineTo(14, -86);
       ctx.closePath();
       ctx.fill();
@@ -754,7 +757,7 @@ function renderPlayerSprite(
       if (isHurt) ctx.rotate(0.2);
 
       if (isSpecial) {
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+        ctx.fillStyle = 'rgba(245, 166, 35, 0.4)';
         ctx.beginPath();
         ctx.arc(0, -42, 75, 0, Math.PI * 2);
         ctx.fill();
@@ -764,7 +767,7 @@ function renderPlayerSprite(
       if (isKick) {
         drawArcadeBoot(ctx, -18, -12, 16, 14, '#0f0f14');
         drawArcadeBoot(ctx, 12, -54, 44, 24, '#0f0f14');
-        ctx.fillStyle = '#ef4444';
+        ctx.fillStyle = '#f5a623';
         ctx.fillRect(46, -54, 8, 24);
       } else {
         drawArcadeBoot(ctx, -18 + stride1, -12 - lift1, 16, 14, '#0f0f14');
@@ -812,7 +815,7 @@ function renderPlayerSprite(
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = '#f5a623';
       ctx.fillRect(-22, -76, 4, 34);
       ctx.fillRect(18, -76, 4, 34);
 
@@ -823,12 +826,12 @@ function renderPlayerSprite(
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+      ctx.fillStyle = 'rgba(245, 166, 35, 0.35)';
       ctx.beginPath();
       ctx.arc(0, -63, 7, 0, Math.PI * 2);
       ctx.fill();
 
-      drawOmegaSigil(ctx, 0, -64, 5.5, '#ef4444');
+      drawOmegaSigil(ctx, 0, -64, 5.5, '#f5a623');
 
       // 4. ARMORED GAUNTLETS
       ctx.fillStyle = '#121217';
@@ -849,7 +852,7 @@ function renderPlayerSprite(
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = '#f5a623';
       ctx.fillRect(-3, -94, 19, 9);
 
       ctx.restore();
