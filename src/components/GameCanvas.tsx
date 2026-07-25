@@ -59,6 +59,60 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         ctx.restore();
       });
 
+      // 2b. Render Hazards
+      //
+      // These were created and simulated by the engine but never drawn: the
+      // Conversion Therapist's guilt vials crossed the screen invisibly and the
+      // player lost health to nothing at all.
+      engine.hazards.forEach((hazard) => {
+        if (!hazard.active) return;
+        const hx = hazard.x - engine.cameraX;
+
+        ctx.save();
+
+        // Ground shadow, so the arc reads as height rather than distance.
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.ellipse(hx, hazard.y, 9, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.translate(hx, hazard.y - hazard.z);
+
+        // Motion trail behind the direction of travel.
+        const dir = hazard.vx >= 0 ? -1 : 1;
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#a855f7';
+        for (let t = 1; t <= 3; t++) {
+          ctx.globalAlpha = 0.35 / t;
+          ctx.beginPath();
+          ctx.arc(dir * t * 9, 0, 5 - t, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Vial: glass body, glowing contents, cork.
+        ctx.rotate(Date.now() / 90);
+        ctx.fillStyle = '#22d3ee';
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0e7490';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#a855f7';
+        ctx.beginPath();
+        ctx.arc(0, 1.5, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(-2.5, -10, 5, 4);
+
+        ctx.restore();
+      });
+
       // 3. Render Shadows & Entity Sprites (Sorted by Y-depth for 2.5D layering)
       const sortedEntities = [...engine.entities].sort((a, b) => a.y - b.y);
 

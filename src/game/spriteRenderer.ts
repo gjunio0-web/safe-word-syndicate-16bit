@@ -1145,6 +1145,24 @@ function renderEnemySprite(
     bodyY = 0;
   }
 
+  // Attack state.
+  //
+  // Enemies had no arms drawn at all and no branch on `action`: they walked,
+  // and damage simply appeared. The AI already sets PUNCH1 with a countdown,
+  // so the pose only needed reading.
+  //
+  // `attackSwing` runs 0 → 1 → 0 across the action: a wind-up, a strike at the
+  // peak, and a recovery. Melee actions run 25 frames, the thrown vial 30.
+  const isAttacking = entity.action === 'PUNCH1' || entity.action === 'PUNCH2' || entity.action === 'KICK';
+  const attackFrames = type === 'CONVERSION_THERAPIST' ? 30 : 25;
+  const attackProgress = isAttacking
+    ? 1 - Math.max(0, Math.min(1, entity.actionTimer / attackFrames))
+    : 0;
+  const attackSwing = isAttacking ? Math.sin(attackProgress * Math.PI) : 0;
+
+  // Arms rest at the sides and swing while walking, opposite to the legs.
+  const armSwing = isMoving ? -stepPhase * 9 : 0;
+
   switch (type) {
     case 'PURITY_PATROL': {
       // Khaki pants, light blue polo, wooden picket protest sign
@@ -1196,7 +1214,20 @@ function renderEnemySprite(
       ctx.fillStyle = '#991b1b';
       ctx.fillRect(-5, -75, 10, 2);
 
-      // Wooden Picket Sign
+      // Arms. The rear arm swings with the walk; the front one grips the sign.
+      ctx.fillStyle = '#f0c8a0';
+      ctx.fillRect(-16 - armSwing * 0.5, -88 + armSwing, 8, 22);
+
+      // Picket sign, swung down like a club on attack.
+      ctx.save();
+      ctx.translate(19, -92);
+      ctx.rotate(attackSwing * 1.1);
+      ctx.translate(-19, 92);
+
+      // Front arm follows the sign
+      ctx.fillStyle = '#f0c8a0';
+      ctx.fillRect(10, -90, 8, 20);
+
       ctx.fillStyle = '#b45309';
       ctx.fillRect(16, -104, 6, 74);
       ctx.fillStyle = '#ffffff';
@@ -1220,7 +1251,8 @@ function renderEnemySprite(
       ctx.fillText('NO!', 0, 0);
       ctx.restore();
 
-      ctx.restore();
+      ctx.restore(); // sign swing
+      ctx.restore(); // upper body
       break;
     }
 
@@ -1255,9 +1287,23 @@ function renderEnemySprite(
       ctx.fillStyle = '#1e293b';
       ctx.fillRect(-4, -77, 8, 2);
 
+      // Throwing arm: cocked back, then whipped forward and up, ending where
+      // the vial leaves the hand.
+      ctx.fillStyle = '#e8c39e';
+      ctx.save();
+      ctx.translate(10, -70);
+      ctx.rotate(-0.6 + attackSwing * 2.0);
+      ctx.fillRect(0, -5, 22, 9);
+      ctx.strokeRect(0, -5, 22, 9);
+      ctx.restore();
+
+      // Rear arm holding the case of vials
+      ctx.fillStyle = '#e8c39e';
+      ctx.fillRect(-20 - armSwing * 0.4, -70 + armSwing, 8, 20);
+
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
-      ctx.arc(20, -54, 10, 0, Math.PI * 2);
+      ctx.arc(20 + attackSwing * 16, -54 - attackSwing * 22, 10, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -1292,6 +1338,23 @@ function renderEnemySprite(
       ctx.fillRect(3, -68, 3, 3);
       ctx.fillStyle = '#dc2626';
       ctx.fillRect(-4, -58, 8, 3);
+
+      // Skillet arm. Raised overhead on the wind-up and brought down in an arc:
+      // the swing the description promises and the sprite never showed.
+      ctx.save();
+      ctx.translate(12, -52);
+      ctx.rotate(-2.2 + attackSwing * 2.6);
+
+      ctx.fillStyle = '#f0c8a0';
+      ctx.fillRect(0, -4, 18, 8);
+      ctx.strokeRect(0, -4, 18, 8);
+
+      ctx.fillStyle = '#3f3f46';
+      ctx.beginPath();
+      ctx.arc(26, 0, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
 
       ctx.fillStyle = '#18181b';
       ctx.beginPath();
@@ -1338,6 +1401,33 @@ function renderEnemySprite(
       ctx.fillStyle = '#be123c';
       ctx.fillRect(-6, -98, 12, 4);
 
+      // Casting arms. She fights from behind a table, so the tell has to be
+      // the arms: they rise and the censure light gathers between the palms.
+      ctx.fillStyle = '#7a1f3d';
+      ctx.save();
+      ctx.translate(-26, -84);
+      ctx.rotate(-attackSwing * 1.2);
+      ctx.fillRect(-18, -6, 20, 12);
+      ctx.strokeRect(-18, -6, 20, 12);
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(26, -84);
+      ctx.rotate(attackSwing * 1.2);
+      ctx.fillRect(-2, -6, 20, 12);
+      ctx.strokeRect(-2, -6, 20, 12);
+      ctx.restore();
+
+      if (attackSwing > 0.05) {
+        ctx.save();
+        ctx.globalAlpha = attackSwing;
+        ctx.fillStyle = '#d63031';
+        ctx.beginPath();
+        ctx.arc(0, -100 - attackSwing * 14, 6 + attackSwing * 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       if (entity.shieldHp && entity.shieldHp > 0) {
         ctx.strokeStyle = '#06b6d4';
         ctx.lineWidth = 6;
@@ -1365,21 +1455,21 @@ function renderEnemySprite(
       ctx.translate(0, bodyY);
 
       ctx.fillStyle = '#18181b';
-      ctx.fillRect(-30, -32, 60, 28);
+      ctx.fillRect(-30 + attackSwing * 14, -32, 60, 28);
       ctx.strokeRect(-30, -32, 60, 28);
 
-      ctx.fillRect(20, -46, 24, 24);
+      ctx.fillRect(20 + attackSwing * 22, -46 + attackSwing * 6, 24, 24);
       ctx.strokeRect(20, -46, 24, 24);
       ctx.fillStyle = '#c2410c';
-      ctx.fillRect(30, -38, 14, 16);
+      ctx.fillRect(30 + attackSwing * 22, -38 + attackSwing * 6, 14, 16);
 
       ctx.fillStyle = '#eab308';
-      ctx.fillRect(16, -40, 7, 20);
+      ctx.fillRect(16 + attackSwing * 20, -40 + attackSwing * 6, 7, 20);
 
       ctx.fillStyle = '#dc2626';
-      ctx.fillRect(26, -42, 16, 5);
+      ctx.fillRect(26 + attackSwing * 22, -42 + attackSwing * 6, 16, 5);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(32, -32, 10, 4);
+      ctx.fillRect(32 + attackSwing * 22, -32 + attackSwing * 6, 10, 4);
 
       ctx.restore();
       break;
