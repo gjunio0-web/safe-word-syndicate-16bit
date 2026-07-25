@@ -420,6 +420,30 @@ function renderPlayerSprite(
       ctx.ellipse(10, -64, 9, 7, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      // Skull-over-boot tee print, the shirt graphic from the character art.
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.roundRect(-5, -68, 10, 8, 3);
+      ctx.fill();
+      ctx.fillRect(-3, -61, 6, 2);
+
+      ctx.fillStyle = '#18181c';
+      ctx.fillRect(-3, -66, 2, 3);
+      ctx.fillRect(1, -66, 2, 3);
+      ctx.fillRect(-1, -60, 1, 2);
+
+      // Boot silhouette beneath the skull
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.moveTo(-3, -57);
+      ctx.lineTo(1, -57);
+      ctx.lineTo(1, -52);
+      ctx.lineTo(5, -52);
+      ctx.lineTo(5, -50);
+      ctx.lineTo(-3, -50);
+      ctx.closePath();
+      ctx.fill();
+
       // 4. MUSCULAR ARMS & BLACK GRAPPLING GLOVES
       ctx.fillStyle = '#e8a87c'; // Tan skin
 
@@ -610,12 +634,31 @@ function renderPlayerSprite(
       ctx.fill();
       ctx.stroke();
 
-      // BLACK LEATHER HARNESS WITH METALLIC CENTRAL O-RING
+      // Leather harness. The straps used to be two horizontal bars; the
+      // character art has them crossing from the shoulders into the O-ring.
       ctx.fillStyle = '#121216';
-      ctx.fillRect(-18, -72, 36, 4);
-      ctx.fillRect(-18, -60, 36, 4);
-      ctx.fillRect(-15, -72, 4, 16);
-      ctx.fillRect(11, -72, 4, 16);
+      ctx.beginPath();
+      ctx.moveTo(-19, -75);
+      ctx.lineTo(-13, -75);
+      ctx.lineTo(6, -60);
+      ctx.lineTo(1, -57);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(19, -75);
+      ctx.lineTo(13, -75);
+      ctx.lineTo(-6, -60);
+      ctx.lineTo(-1, -57);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillRect(-18, -73, 36, 4);
+
+      // Studs along the chest strap
+      ctx.fillStyle = '#94a3b8';
+      for (let sx = -14; sx <= 14; sx += 7) {
+        ctx.fillRect(sx, -72, 2, 2);
+      }
 
       ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
@@ -773,11 +816,19 @@ function renderPlayerSprite(
       ctx.fillRect(-22, -76, 4, 34);
       ctx.fillRect(18, -76, 4, 34);
 
-      // Reactor LED Core
-      ctx.fillStyle = '#ef4444';
+      // Reactor core, now bearing the omega the character is named after.
+      ctx.fillStyle = '#0d0d11';
       ctx.beginPath();
-      ctx.arc(0, -64, 6, 0, Math.PI * 2);
+      ctx.arc(0, -63, 9, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+      ctx.beginPath();
+      ctx.arc(0, -63, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      drawOmegaSigil(ctx, 0, -64, 5.5, '#ef4444');
 
       // 4. ARMORED GAUNTLETS
       ctx.fillStyle = '#121217';
@@ -863,11 +914,31 @@ function renderPlayerSprite(
       ctx.fill();
       ctx.stroke();
 
-      // HARNESS & DOG TAGS
+      // Studded harness crossing the chest, matching the character art.
       ctx.fillStyle = '#141414';
+      ctx.beginPath();
+      ctx.moveTo(-19, -76);
+      ctx.lineTo(-13, -76);
+      ctx.lineTo(6, -58);
+      ctx.lineTo(1, -55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(19, -76);
+      ctx.lineTo(13, -76);
+      ctx.lineTo(-6, -58);
+      ctx.lineTo(-1, -55);
+      ctx.closePath();
+      ctx.fill();
       ctx.fillRect(-18, -74, 36, 4);
+
+      ctx.fillStyle = '#94a3b8';
+      for (let sx = -15; sx <= 13; sx += 7) {
+        ctx.fillRect(sx, -73, 2, 2);
+      }
+
       ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(-2, -64, 5, 10);
+      ctx.fillRect(-2, -60, 5, 9);
 
       // 4. ARMS & SPIKED WRISTBANDS
       ctx.fillStyle = '#c27c4d';
@@ -880,6 +951,11 @@ function renderPlayerSprite(
         ctx.fillRect(14 + armSwing, -72, 14, 28);
         ctx.strokeRect(-26 - armSwing, -72, 14, 28);
         ctx.strokeRect(14 + armSwing, -72, 14, 28);
+
+        // Flame tattoos. Drawn after the arms and offset by the same armSwing,
+        // so they ride the limb instead of floating over the torso.
+        drawFlameMark(ctx, -19 - armSwing, -50, 11, '#ea580c', '#fbbf24');
+        drawFlameMark(ctx, 21 + armSwing, -50, 11, '#ea580c', '#fbbf24');
       }
 
       // 5. DOG MASK & FACIAL FEATURES (Clean Z-index layer order)
@@ -900,6 +976,45 @@ function renderPlayerSprite(
       ctx.moveTo(12, -96);
       ctx.lineTo(22, -116);
       ctx.lineTo(6, -102);
+      ctx.fill();
+
+      // Snarling muzzle. Drawn along +x, which the facing flip at the top of
+      // renderEntitySprite mirrors automatically.
+      ctx.fillStyle = '#5b6673';
+      ctx.beginPath();
+      ctx.ellipse(9, -85, 13, 8, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Open jaw
+      ctx.fillStyle = '#3f1d2b';
+      ctx.beginPath();
+      ctx.ellipse(11, -81, 9, 4, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Upper and lower fangs
+      ctx.fillStyle = '#f8fafc';
+      for (const [fx, fw] of [[4, 2], [9, 2.5], [15, 2]] as const) {
+        ctx.beginPath();
+        ctx.moveTo(fx, -84);
+        ctx.lineTo(fx + fw, -84);
+        ctx.lineTo(fx + fw / 2, -80);
+        ctx.closePath();
+        ctx.fill();
+      }
+      for (const [fx, fw] of [[6, 2], [13, 2]] as const) {
+        ctx.beginPath();
+        ctx.moveTo(fx, -78);
+        ctx.lineTo(fx + fw, -78);
+        ctx.lineTo(fx + fw / 2, -82);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Nose
+      ctx.fillStyle = '#111318';
+      ctx.beginPath();
+      ctx.ellipse(19, -88, 4, 3, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Dual Glowing Amber Predator Eyes
@@ -1188,6 +1303,65 @@ function renderEnemySprite(
 }
 
 // Helper: 16-Bit Arcade Boot Drawing with Sole & Tread
+/**
+ * Omega sigil: a bowl open at the bottom with two outward feet.
+ *
+ * Stroked from primitives rather than `fillText` so it stays crisp at sprite
+ * scale — canvas text antialiases and reads as a smudge next to hard-edged
+ * pixel work.
+ */
+function drawOmegaSigil(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: string
+) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'butt';
+
+  // 0.8pi -> 0.2pi clockwise sweeps left, top and right, leaving the bottom open.
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, Math.PI * 0.8, Math.PI * 0.2);
+  ctx.stroke();
+
+  const footY = cy + radius * 0.62;
+  const footW = radius * 0.75;
+  ctx.fillStyle = color;
+  ctx.fillRect(cx - radius * 1.15, footY, footW, 2.5);
+  ctx.fillRect(cx + radius * 0.4, footY, footW, 2.5);
+  ctx.restore();
+}
+
+/** Small upward flame, used for arm tattoos. */
+function drawFlameMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  height: number,
+  outer: string,
+  inner: string
+) {
+  ctx.save();
+  ctx.fillStyle = outer;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(x - height * 0.45, y - height * 0.5, x - height * 0.15, y - height);
+  ctx.quadraticCurveTo(x + height * 0.1, y - height * 0.55, x + height * 0.35, y - height * 0.85);
+  ctx.quadraticCurveTo(x + height * 0.5, y - height * 0.3, x, y);
+  ctx.fill();
+
+  ctx.fillStyle = inner;
+  ctx.beginPath();
+  ctx.moveTo(x, y - height * 0.1);
+  ctx.quadraticCurveTo(x - height * 0.2, y - height * 0.45, x - height * 0.05, y - height * 0.7);
+  ctx.quadraticCurveTo(x + height * 0.2, y - height * 0.4, x, y - height * 0.1);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawArcadeBoot(
   ctx: CanvasRenderingContext2D,
   x: number,
