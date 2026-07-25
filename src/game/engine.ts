@@ -1117,8 +1117,34 @@ export class GameEngine {
         enemy.vy = absDy > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
         enemy.action = 'WALK';
       } else if (absDx > idealRange || absDy > 16) {
-        // Approach towards target
-        enemy.vx = (dx > 0 ? 1 : -1) * info.speed * 0.8;
+        // Approach towards target. Each axis moves only if IT is the one out
+        // of range — otherwise an enemy already at ideal X range keeps
+        // walking horizontally into the player just because Y is still
+        // misaligned, feeding the body-collision push a fresh overlap every
+        // frame and dragging the (unmoving) player across the arena.
+        //
+        // Also hold if a teammate already occupies the space ahead: walking
+        // into them doesn't get this enemy any closer (resolveBodyCollisions
+        // only refunds half the overlap per frame), but it does relay a
+        // steady shove through the teammate onto whoever is at the front of
+        // the queue — usually the player, dragging them across the arena
+        // with no way to stop it since they never even took a hit.
+        // resolveBodyCollisions rests touching entities at exactly
+        // ENEMY_BODY_SEPARATION_X apart, so a strict "<" here never
+        // triggers at that resting distance — add a few px of slack so
+        // "in contact" reliably reads as blocked instead of flickering.
+        const wantsAdvanceX = absDx > idealRange;
+        const blockedAhead =
+          wantsAdvanceX &&
+          this.entities.some(
+            (other) =>
+              other !== enemy &&
+              other.hp > 0 &&
+              (dx > 0 ? other.x > enemy.x : other.x < enemy.x) &&
+              Math.abs(other.x - enemy.x) < ENEMY_BODY_SEPARATION_X + 4 &&
+              Math.abs(other.y - enemy.y) < ENEMY_BODY_SEPARATION_Y + 4
+          );
+        enemy.vx = wantsAdvanceX && !blockedAhead ? (dx > 0 ? 1 : -1) * info.speed * 0.8 : 0;
         enemy.vy = absDy > 16 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
         enemy.action = 'WALK';
       } else {
