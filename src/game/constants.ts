@@ -79,3 +79,16 @@ export const ATTACKER_STANDOFF_X = 190;
 
 /** Tolerance around the standoff ring, so waiting enemies do not jitter. */
 export const ATTACKER_STANDOFF_TOLERANCE = 30;
+
+/**
+ * Share of a body overlap absorbed by the player when colliding with an enemy.
+ *
+ * The correction used to be split evenly, so every adjacent enemy shoved the
+ * player once per frame. Measured walking into a crowd, that cost 27% of the
+ * player's speed with one enemy alongside and 50% with two or more — the
+ * fighter appeared to wade through mud exactly when the fight got busy.
+ *
+ * Beat 'em ups resolve this by weight: the hero pushes through and the crowd
+ * yields. A small non-zero share keeps contact readable without dragging.
+ */
+export const PLAYER_PUSH_SHARE = 0.15;

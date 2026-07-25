@@ -19,6 +19,7 @@ import {
   PLAYER_BODY_SEPARATION_Y,
   ENEMY_BODY_SEPARATION_X,
   ENEMY_BODY_SEPARATION_Y,
+  PLAYER_PUSH_SHARE,
   MAX_SIMULTANEOUS_ATTACKERS,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
@@ -770,26 +771,34 @@ export class GameEngine {
         const minDy = betweenEnemies ? ENEMY_BODY_SEPARATION_Y : PLAYER_BODY_SEPARATION_Y;
 
         if (absDx < minDx && absDy < minDy) {
-          const overlapX = minDx - absDx;
-          const pushX = overlapX * 0.5;
+          // Split the correction by weight instead of evenly. An even split
+          // meant each neighbouring enemy displaced the player once per frame,
+          // and a crowd halved their walking speed.
+          let aShare = 0.5;
+          if (a.isPlayer !== b.isPlayer) {
+            aShare = a.isPlayer ? PLAYER_PUSH_SHARE : 1 - PLAYER_PUSH_SHARE;
+          }
+          const bShare = 1 - aShare;
 
+          const overlapX = minDx - absDx;
           if (dx >= 0) {
-            a.x -= pushX;
-            b.x += pushX;
+            a.x -= overlapX * aShare;
+            b.x += overlapX * bShare;
           } else {
-            a.x += pushX;
-            b.x -= pushX;
+            a.x += overlapX * aShare;
+            b.x -= overlapX * bShare;
           }
 
           if (absDy < minDy) {
-            const overlapY = minDy - absDy;
-            const pushY = overlapY * 0.3;
+            // 0.6 of the vertical overlap, as before: a softer correction on
+            // this axis keeps fighters from snapping apart in depth.
+            const overlapY = (minDy - absDy) * 0.6;
             if (dy >= 0) {
-              a.y -= pushY;
-              b.y += pushY;
+              a.y -= overlapY * aShare;
+              b.y += overlapY * bShare;
             } else {
-              a.y += pushY;
-              b.y -= pushY;
+              a.y += overlapY * aShare;
+              b.y -= overlapY * bShare;
             }
           }
         }

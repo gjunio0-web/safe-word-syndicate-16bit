@@ -68,26 +68,52 @@ export function createMenuDispatcher() {
  * a controller cannot start the very first interaction of a session. The title
  * screen's tappable INSERT COIN covers that.
  */
+/**
+ * One dispatcher for the whole application, deliberately at module scope.
+ *
+ * It used to be created inside the effect, so every consumer got a fresh one
+ * with no memory of what was already held. Confirming on the title screen
+ * mounted the character select's hook while A was still down, that hook saw
+ * the button as a brand-new press, and the match started before the player
+ * ever saw the roster.
+ *
+ * Held state has to outlive the components that listen to it.
+ */
+const step = createMenuDispatcher();
+const listeners = new Set<(action: MenuAction) => void>();
+let frameId = 0;
+
+function poll() {
+  const fired = step(readMenuState());
+  for (const action of fired) {
+    // Copied because a handler may unsubscribe others mid-dispatch.
+    for (const listener of [...listeners]) listener(action);
+  }
+  frameId = requestAnimationFrame(poll);
+}
+
+function subscribe(listener: (action: MenuAction) => void): () => void {
+  listeners.add(listener);
+  if (listeners.size === 1 && typeof window !== 'undefined') {
+    frameId = requestAnimationFrame(poll);
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      cancelAnimationFrame(frameId);
+      frameId = 0;
+    }
+  };
+}
+
 export function useGamepadMenu(onAction: (action: MenuAction) => void, enabled: boolean = true) {
-  // Held in a ref so a caller passing an inline arrow does not restart the
-  // polling loop on every render.
+  // Held in a ref so a caller passing an inline arrow does not resubscribe on
+  // every render.
   const handlerRef = useRef(onAction);
   handlerRef.current = onAction;
 
   useEffect(() => {
     if (!enabled) return;
-
-    const step = createMenuDispatcher();
-    let frameId = 0;
-
-    const poll = () => {
-      for (const action of step(readMenuState())) {
-        handlerRef.current(action);
-      }
-      frameId = requestAnimationFrame(poll);
-    };
-
-    frameId = requestAnimationFrame(poll);
-    return () => cancelAnimationFrame(frameId);
+    return subscribe((action) => handlerRef.current(action));
   }, [enabled]);
 }
