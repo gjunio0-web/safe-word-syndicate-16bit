@@ -1012,6 +1012,13 @@ export class GameEngine {
   }
 
   private updateEnemyAi(enemy: EntityState) {
+    // Phase describes the state of the fight, not what the boss is doing this
+    // frame, so it is computed before the early returns below — otherwise it
+    // would freeze for the whole duration of a cast.
+    if (enemy.enemyType === 'BOSS_MADAM_MIZYDIA') {
+      enemy.bossPhase = (enemy.shieldHp ?? 0) <= 0 && enemy.hp < enemy.maxHp * 0.5 ? 2 : 1;
+    }
+
     if (enemy.stunTimer > 0) {
       enemy.stunTimer--;
       enemy.vx = 0;
@@ -1056,9 +1063,65 @@ export class GameEngine {
       return;
     }
 
+    if (enemy.enemyType === 'BOSS_MADAM_MIZYDIA') {
+      // The Matriarch is a caster, not a brawler.
+      //
+      // She fell into the generic melee branch with attackRange 250, so she
+      // stood a quarter of the screen away and "punched" — damage landed at
+      // 275px with nothing drawn between her and the player. Her own data says
+      // Status Quo Magic and Excommunication waves; this is that.
+      //
+      // `bossPhase` was written at spawn and never read anywhere. It now marks
+      // the turn of the fight: once the barrier is down and she is below half
+      // health, the censure comes in threes.
+      const enraged = enemy.bossPhase === 2;
+
+      const holdAt = info.attackRange * 0.8;
+      if (dist > holdAt + 40) {
+        enemy.vx = (dx > 0 ? 1 : -1) * info.speed;
+        enemy.action = 'WALK';
+      } else if (dist < holdAt - 60) {
+        enemy.vx = (dx > 0 ? -1 : 1) * info.speed * 0.7;
+        enemy.action = 'WALK';
+      } else {
+        enemy.vx = 0;
+        enemy.action = enemy.actionTimer > 0 ? enemy.action : 'IDLE';
+      }
+      enemy.vy = Math.abs(dy) > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.4 : 0;
+      enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
+
+      const castChance = enraged ? 0.03 : 0.016;
+      if (dist < info.attackRange && enemy.actionTimer === 0 && Math.random() < castChance) {
+        enemy.action = 'PUNCH1';
+        enemy.actionTimer = 30;
+        enemy.vx = 0;
+        enemy.vy = 0;
+        sound.playBossAlarm();
+
+        // Excommunication wave. Phase two fans three of them.
+        const spread = enraged ? [-26, 0, 26] : [0];
+        for (const offset of spread) {
+          this.hazards.push({
+            id: 'censure_' + Math.random(),
+            type: 'LASER_CROSS',
+            x: enemy.x,
+            y: enemy.y + offset,
+            z: 34,
+            vx: dx > 0 ? 6.5 : -6.5,
+            vy: offset * 0.02,
+            timer: 90,
+            active: true,
+          });
+        }
+      }
+      return;
+    }
+
     if (enemy.enemyType === 'CONVERSION_THERAPIST') {
       // Ranged enemy: Throws Guilt Vials / Repression Darts
-      if (dist < 220 && Math.random() < 0.02 && enemy.actionTimer === 0) {
+      // Was hardcoded to 220 while characterData declares attackRange: 300 —
+      // two numbers for the same thing, one of them decorative.
+      if (dist < info.attackRange && Math.random() < 0.02 && enemy.actionTimer === 0) {
         enemy.action = 'PUNCH1';
         enemy.actionTimer = 30;
         enemy.vx = 0;
@@ -1284,18 +1347,33 @@ export class GameEngine {
         return;
       }
 
-      // Hit detection with player ONLY when hazard is within the visible fighting arena
-      if (
-        this.player1 &&
-        hazard.x >= this.cameraX + 10 &&
-        hazard.x <= this.cameraX + 790 &&
-        Math.hypot(this.player1.x - hazard.x, this.player1.y - hazard.y) < 48
-      ) {
-        this.damageEntity(this.player1, 15, { isPlayer: false } as EntityState);
-        this.player1.slowTimer = 120;
-        this.player1.suppressedTimer = 180;
-        this.addParticle(this.player1.x, this.player1.y - 70, 0, '#a29bfe', 'GUILT VIAL SUPPRESSED!', 'TEXT');
-        hazard.active = false;
+      // Hit detection ONLY when the hazard is inside the visible arena.
+      //
+      // This used to name `this.player1` directly, so player two was immune to
+      // every projectile in the game. Harmless while P2 was an AI companion;
+      // once a second person could hold a controller it meant one player took
+      // ranged damage and the other did not.
+      const inArena = hazard.x >= this.cameraX + 10 && hazard.x <= this.cameraX + 790;
+      if (inArena) {
+        for (const target of [this.player1, this.player2]) {
+          if (!target || target.hp <= 0) continue;
+          if (Math.hypot(target.x - hazard.x, target.y - hazard.y) >= 48) continue;
+
+          const isCensure = hazard.type === 'LASER_CROSS';
+          this.damageEntity(target, isCensure ? 22 : 15, { isPlayer: false } as EntityState);
+          target.slowTimer = isCensure ? 90 : 120;
+          target.suppressedTimer = isCensure ? 240 : 180;
+          this.addParticle(
+            target.x,
+            target.y - 70,
+            0,
+            isCensure ? '#d63031' : '#a29bfe',
+            isCensure ? 'CENSURED!' : 'GUILT VIAL SUPPRESSED!',
+            'TEXT'
+          );
+          hazard.active = false;
+          break;
+        }
       }
     });
     this.hazards = this.hazards.filter((h) => h.timer > 0 && h.active);

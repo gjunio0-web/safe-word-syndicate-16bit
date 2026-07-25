@@ -83,7 +83,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         // Motion trail behind the direction of travel.
         const dir = hazard.vx >= 0 ? -1 : 1;
         ctx.globalAlpha = 0.5;
-        ctx.fillStyle = '#a855f7';
+        ctx.fillStyle = hazard.type === 'LASER_CROSS' ? '#d63031' : '#a855f7';
         for (let t = 1; t <= 3; t++) {
           ctx.globalAlpha = 0.35 / t;
           ctx.beginPath();
@@ -92,23 +92,42 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         }
         ctx.globalAlpha = 1;
 
-        // Vial: glass body, glowing contents, cork.
-        ctx.rotate(Date.now() / 90);
-        ctx.fillStyle = '#22d3ee';
-        ctx.beginPath();
-        ctx.arc(0, 0, 7, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#0e7490';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        if (hazard.type === 'LASER_CROSS') {
+          // Excommunication wave: a crimson cross, the boss's censure made
+          // visible. She used to land this damage with nothing on screen.
+          ctx.rotate(Date.now() / 200);
+          ctx.fillStyle = '#d63031';
+          ctx.fillRect(-3.5, -14, 7, 28);
+          ctx.fillRect(-11, -3.5, 22, 7);
+          ctx.strokeStyle = '#ff7675';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-3.5, -14, 7, 28);
+          ctx.strokeRect(-11, -3.5, 22, 7);
 
-        ctx.fillStyle = '#a855f7';
-        ctx.beginPath();
-        ctx.arc(0, 1.5, 4.5, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.globalAlpha = 0.35;
+          ctx.fillStyle = '#ff7675';
+          ctx.beginPath();
+          ctx.arc(0, 0, 16, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Vial: glass body, glowing contents, cork.
+          ctx.rotate(Date.now() / 90);
+          ctx.fillStyle = '#22d3ee';
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#0e7490';
+          ctx.lineWidth = 2;
+          ctx.stroke();
 
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(-2.5, -10, 5, 4);
+          ctx.fillStyle = '#a855f7';
+          ctx.beginPath();
+          ctx.arc(0, 1.5, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(-2.5, -10, 5, 4);
+        }
 
         ctx.restore();
       });

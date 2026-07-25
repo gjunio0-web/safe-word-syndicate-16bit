@@ -99,12 +99,19 @@ describe('combat', () => {
       stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 70 }]);
       advance(engine, 2);
       livingEnemies(engine).forEach((boss) => {
+        // The Censure Barrier absorbs 150 before health is touched; this test
+        // is about what happens when she dies, not about breaking the shield.
+        boss.shieldHp = 0;
         boss.hp = 1;
       });
 
-      const punch = input({ punch: true });
-      for (let i = 0; i < 600 && livingEnemies(engine).length > 0; i++) {
-        engine.update(i % 8 < 2 ? punch : NEUTRAL);
+      // She is a caster now and backs away, so the player has to close the
+      // distance the way a person would rather than standing and swinging.
+      for (let i = 0; i < 1200 && livingEnemies(engine).length > 0; i++) {
+        const boss = livingEnemies(engine)[0];
+        const towards = boss.x > engine.player1!.x ? { right: true } : { left: true };
+        const near = Math.abs(boss.x - engine.player1!.x) < 90;
+        engine.update(input(near ? { punch: i % 8 < 2 } : towards));
       }
       return engine;
     };
@@ -186,5 +193,90 @@ describe('wave spawning', () => {
     const left = enemies.filter((e) => e.x < player.x).length;
     expect(left).toBeGreaterThan(0);
     expect(enemies.length - left).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Ranged attacks were half-implemented: the boss dealt damage from a quarter of
+ * a screen away with nothing drawn, projectiles only ever hit player one, and
+ * the Conversion Therapist's declared 300px range was contradicted by a
+ * hardcoded 220 in the AI.
+ */
+describe('ranged attacks', () => {
+  const withBoss = () => {
+    const engine = startEngine();
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 200 }]);
+    advance(engine, 2);
+    return engine;
+  };
+
+  it('makes the boss launch a visible projectile instead of an invisible punch', () => {
+    const engine = withBoss();
+    let sawHazard = false;
+    for (let i = 0; i < 1200 && !sawHazard; i++) {
+      engine.update(NEUTRAL);
+      sawHazard = engine.hazards.some((h) => h.type === 'LASER_CROSS');
+    }
+    expect(sawHazard).toBe(true);
+  });
+
+  it('drives bossPhase from the state of the fight', () => {
+    const engine = withBoss();
+    advance(engine, 120);
+    const boss = livingEnemies(engine)[0];
+    expect(boss.bossPhase).toBe(1);
+
+    boss.shieldHp = 0;
+    boss.hp = boss.maxHp * 0.2;
+    advance(engine, 5);
+    expect(boss.bossPhase).toBe(2);
+  });
+
+  it('damages player two, who used to be immune to every projectile', () => {
+    const engine = startEngine(0, 'FEET_MASTER', 'FUN_MAKER');
+    engine.setActiveDialogue(null);
+    advance(engine, 60);
+    // P1 and P2 spawn 44px apart, inside the 48px blast radius, so a hazard
+    // dropped on P2 would hit P1 first and prove nothing.
+    const p2 = engine.player2!;
+    p2.x = engine.player1!.x + 220;
+    const before = p2.hp;
+
+    engine.hazards.push({
+      id: 'test_vial',
+      type: 'OFFERING_DRONE',
+      x: p2.x,
+      y: p2.y,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      timer: 60,
+      active: true,
+    });
+    engine.update(NEUTRAL);
+
+    expect(p2.hp).toBeLessThan(before);
+  });
+
+  it('honours the declared attack range instead of a hardcoded one', () => {
+    const engine = startEngine();
+    advance(engine, 60);
+    // 260 sits between the old hardcoded 220 and the declared 300.
+    stageEnemies(engine, [{ type: 'CONVERSION_THERAPIST', dx: 260 }]);
+    advance(engine, 2);
+
+    const therapist = livingEnemies(engine)[0];
+    const holdAt = therapist.x;
+
+    let threw = false;
+    for (let i = 0; i < 1500 && !threw; i++) {
+      // Pinned in place each frame. Left free it simply walks to 220 and
+      // throws from there, which would pass whatever the range check says.
+      therapist.x = holdAt;
+      engine.update(NEUTRAL);
+      threw = engine.hazards.length > 0;
+    }
+    expect(threw).toBe(true);
   });
 });
