@@ -1213,6 +1213,10 @@ function renderEnemySprite(
       if (entity.facing === 'LEFT') {
         ctx.scale(-1, 1);
       }
+      // Without this the default 'start' alignment draws the text growing
+      // rightward from this point instead of centered on it, leaving it
+      // pinned to the right half of the board.
+      ctx.textAlign = 'center';
       ctx.fillText('NO!', 0, 0);
       ctx.restore();
 
