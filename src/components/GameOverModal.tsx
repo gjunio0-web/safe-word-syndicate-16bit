@@ -32,7 +32,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({ onRetry, onQuit })
   };
 
   return (
-    <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none">
+    <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none" data-gamepad-scope>
       <div className="bg-[#111] border-4 border-[#ff4e00] p-8 max-w-sm w-full text-center space-y-6 shadow-[0_0_30px_rgba(255,78,0,0.4)]">
         <h2 className="text-4xl font-black italic text-[#ff4e00] tracking-tighter uppercase">
           GAME OVER<span className="text-[#ff00ff]">.</span>

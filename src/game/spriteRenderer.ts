@@ -63,7 +63,7 @@ export function renderEntitySprite(
 
   // 5. Power Move Cut-In Banner with Full Roster Portrait Artwork
   if (entity.isPlayer && entity.charId && entity.action === 'POWER_MOVE') {
-    renderPowerMoveCutIn(ctx, entity.charId);
+    renderPowerMoveCutIn(ctx, entity.charId, entity.facing);
   }
 
   // 6. Motion Trail After-Images for Special Moves & Heavy Attacks
@@ -95,11 +95,23 @@ export function renderEntitySprite(
 // POWER MOVE ROSTER PORTRAIT CUT-IN BANNER (Arcade Super Attack Flash)
 // ----------------------------------------------------------------------------
 
-function renderPowerMoveCutIn(ctx: CanvasRenderingContext2D, charId: CharacterId) {
+function renderPowerMoveCutIn(
+  ctx: CanvasRenderingContext2D,
+  charId: CharacterId,
+  facing: EntityState['facing']
+) {
   const img = portraitImages[charId];
   if (!img || !img.complete) return;
 
   ctx.save();
+
+  // Undo the sprite's facing flip. This banner is interface, not part of the
+  // body: without this its two labels render mirrored whenever the fighter
+  // faces left. renderPlayerIndicator and renderEnemyHealthBar already do the
+  // same counter-scale; this one and the picket sign were missed.
+  if (facing === 'LEFT') {
+    ctx.scale(-1, 1);
+  }
   // Floats high above the character head (y = -145) to prevent obscuring facial features
   ctx.translate(0, -145);
 
@@ -1194,7 +1206,15 @@ function renderEnemySprite(
       ctx.strokeRect(-2, -126, 38, 30);
       ctx.fillStyle = '#dc2626';
       ctx.font = 'bold 12px sans-serif';
-      ctx.fillText('NO!', 8, -106);
+      // The board follows the body, but the lettering must not: mirrored text
+      // on a protest sign read as "!ON".
+      ctx.save();
+      ctx.translate(17, -106);
+      if (entity.facing === 'LEFT') {
+        ctx.scale(-1, 1);
+      }
+      ctx.fillText('NO!', 0, 0);
+      ctx.restore();
 
       ctx.restore();
       break;

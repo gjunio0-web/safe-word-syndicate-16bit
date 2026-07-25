@@ -19,6 +19,7 @@ import { OnScreenControls } from './components/OnScreenControls';
 import { AttractMode } from './components/AttractMode';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
+import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
@@ -165,6 +166,9 @@ export default function App() {
     };
   }, [screen]);
 
+  // Modals change the navigable set; drop stale focus when that happens.
+  useMenuFocusReset(`${screen}:${isPaused}`);
+
   const gameRootRef = useRef<HTMLDivElement>(null);
 
   const focusContainer = () => {
@@ -299,25 +303,37 @@ export default function App() {
         return;
       }
       if (screen === 'TITLE') {
-        if (action === 'CONFIRM' || action === 'START') handleStartBrawl();
+        // START always begins the match; the rest walks the buttons, so the
+        // jukebox and the codex are reachable with a controller.
+        if (action === 'START') return handleStartBrawl();
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') handleStartBrawl();
         return;
       }
       if (screen === 'GAMEPLAY') {
-        // Only START pauses. The face buttons are live gameplay input.
-        if (action === 'START') setIsPaused((prev) => !prev);
+        // Only START pauses. The face buttons are live gameplay input — until
+        // the pause modal is up, when the generic navigation takes over so its
+        // buttons can be reached.
+        if (action === 'START') {
+          setIsPaused((prev) => !prev);
+          return;
+        }
+        if (isPaused) applyMenuNavigation(action);
         return;
       }
       if (screen === 'STAGE_CLEAR') {
-        if (action === 'CONFIRM' || action === 'START') handleNextStage();
+        if (action === 'START') return handleNextStage();
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') handleNextStage();
         return;
       }
       if (screen === 'GAME_OVER') {
-        if (action === 'CONFIRM' || action === 'START') startStage(currentStageIdx);
-        if (action === 'BACK') setScreen('TITLE');
+        if (action === 'START') return startStage(currentStageIdx);
+        if (action === 'BACK') return setScreen('TITLE');
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') startStage(currentStageIdx);
         return;
       }
       if (screen === 'VICTORY') {
-        if (action === 'CONFIRM' || action === 'START' || action === 'BACK') setScreen('TITLE');
+        if (action === 'START' || action === 'BACK') return setScreen('TITLE');
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') setScreen('TITLE');
       }
     },
     screen !== 'CHAR_SELECT'

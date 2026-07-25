@@ -117,7 +117,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn" data-gamepad-scope>
       <div className="bg-[#0e071b] border-2 sm:border-4 border-[#00ffff] rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-[0_0_50px_rgba(0,255,255,0.4)] flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header Bar */}
         <div className="flex items-center justify-between pb-3 border-b border-[#00ffff]/30 mb-4 shrink-0">

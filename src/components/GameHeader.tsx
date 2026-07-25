@@ -125,7 +125,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
       {/* Pause Menu Modal Overlay */}
       {isPaused && (
-        <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none">
+        <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none" data-gamepad-scope>
           <div className="bg-[#111] border-4 border-[#ffff00] p-6 max-w-sm w-full text-center space-y-5 shadow-[0_0_40px_rgba(255,255,0,0.4)]">
             <h2 className="text-3xl font-black italic text-[#ffff00] tracking-tighter uppercase">
               GAME PAUSED

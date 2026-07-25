@@ -325,8 +325,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         )}
 
       {/* Gamepad connection badge */}
+      {/* Sat in the bottom-right corner, where the on-screen D-pad covers it and
+          nobody looks. Moved under the health bars, which is where a player
+          checks whether their controller registered. */}
       {gamepadCount > 0 && (
-        <div className="absolute bottom-2 right-2 pointer-events-none z-30 bg-black/80 border border-[#00ffff] px-2 py-0.5 rounded text-[10px] font-mono font-bold text-[#00ffff]">
+        <div className="absolute top-24 left-4 pointer-events-none z-30 bg-black/85 border-2 border-[#00ffff] px-2.5 py-1 rounded-lg text-xs font-mono font-black text-[#00ffff] shadow-[0_0_12px_rgba(0,255,255,0.5)]">
           🎮 {gamepadCount === 1 ? 'PAD 1' : `PAD 1-${gamepadCount}`}
         </div>
       )}

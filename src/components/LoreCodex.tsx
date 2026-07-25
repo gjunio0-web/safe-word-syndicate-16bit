@@ -10,7 +10,7 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
   const [tab, setTab] = useState<'HEROES' | 'ENEMIES' | 'BOSSES' | 'COMBOS'>('HEROES');
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none font-sans text-white">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none font-sans text-white" data-gamepad-scope>
       <div className="bg-[#111] border-4 border-[#ff00ff] w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden shadow-[0_0_30px_rgba(255,0,255,0.4)]">
         {/* Top Header */}
         <div className="p-4 border-b-4 border-[#ff00ff] flex justify-between items-center bg-[#1a1a1a]">
