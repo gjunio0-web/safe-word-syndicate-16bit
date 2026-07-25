@@ -770,10 +770,9 @@ class SoundEngine {
       return;
     }
 
-    if (!this.hasUserGesture) {
-      this.armUnlock();
-      return;
-    }
+    // Do not bail out optimistically: Chrome grants autoplay to sites the user
+    // has engaged with before. Attempt playback and only defer if the browser
+    // actually refuses — bailing here means the permission can never be used.
 
     // Guard: Avoid restarting if this track is ALREADY playing actively
     if (!forceRestart && this.currentTrack === track) {
