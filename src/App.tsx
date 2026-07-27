@@ -253,11 +253,16 @@ export default function App() {
     return () => cancelAnimationFrame(animFrameId);
   }, [screen, isPaused, gameMode]);
 
-  const startStage = (stageIdx: number, p1Override?: CharacterId, p2Override?: CharacterId) => {
+  const startStage = (
+    stageIdx: number,
+    p1Override?: CharacterId,
+    p2Override?: CharacterId,
+    settingsOverride?: GameSettings
+  ) => {
     const p1 = p1Override ?? p1Char;
     const p2 = p2Override !== undefined ? p2Override : p2Char;
     const stage = STAGES[stageIdx];
-    engineRef.current = new GameEngine(stage, p1, p2, settings);
+    engineRef.current = new GameEngine(stage, p1, p2, settingsOverride ?? settings);
     // Slots are not inherited between matches: co-op and solo assign them
     // differently, and a stale assignment would survive the mode change.
     resetPadAssignments();
@@ -266,11 +271,21 @@ export default function App() {
     setScreen('GAMEPLAY');
   };
 
-  const handleSelectFighter = (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => {
+  const handleSelectFighter = (
+    p1: CharacterId,
+    p2?: CharacterId,
+    mode?: GameMode,
+    difficulty?: GameSettings['difficulty']
+  ) => {
     setP1Char(p1);
     setP2Char(p2);
     if (mode) setGameMode(mode);
-    startStage(0, p1, p2);
+    // setSettings is async, so startStage can't read the new difficulty back
+    // out of `settings` in the same call — pass the resolved object directly
+    // and let the state update catch up for the stages after this one.
+    const nextSettings = difficulty ? { ...settings, difficulty } : settings;
+    if (difficulty) setSettings(nextSettings);
+    startStage(0, p1, p2, nextSettings);
   };
 
   const handleNextStage = () => {
