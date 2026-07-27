@@ -79,13 +79,6 @@ const SCENES: Scene[] = [
       'THE WORLD WAS FORCED INTO A DULL, GRAY STATUS QUO.',
     fallback: '#2a0b3d',
   },
-  /*
-   * Two bars shorter than it used to run (was 12–17, now 12–15) — the two
-   * bars given up here are what let each hero close-up below hold for a full
-   * bar instead of half of one. The flash below was retimed to still land
-   * comfortably inside the shorter window; the two lines of text still get a
-   * full bar to read after they finish typing.
-   */
   {
     key: 'matriarch',
     startBar: 12,
@@ -93,16 +86,9 @@ const SCENES: Scene[] = [
     text: 'ALL DIVERSITY WAS BANNED.\nALL NOISE WAS SILENCED.',
     fallback: '#1c1c1f',
   },
-  /*
-   * Starts two bars earlier than it used to (15 instead of 17), borrowed from
-   * matriarch's tail: at 2 beats each, the four hero close-ups blurred past
-   * too fast to read as individual reveals. They now get a full bar apiece —
-   * still inside the same closeup-to-closeup rhythm the burst-in animation
-   * below was already cut to, just twice as long per hero.
-   */
   {
     key: 'resistance',
-    startBar: 15,
+    startBar: 17,
     textBar: 22,
     text: 'BUT FOUR REBELS REFUSED TO FADE AWAY.',
     fallback: '#0d0d10',
@@ -126,17 +112,12 @@ function sceneAt(elapsed: number): Scene {
   return current;
 }
 
-/**
- * Which hero close-up is on screen, or -1 for the wide alley shot.
- *
- * One full bar per hero (was 2 beats, a quarter of that) — long enough to
- * actually register as that character before cutting to the next.
- */
+/** Which hero close-up is on screen, or -1 for the wide alley shot. */
 function closeupAt(elapsed: number, count: number): number {
   const scene = sceneAt(elapsed);
   if (scene.key !== 'resistance') return -1;
   const into = elapsed - scene.startBar * BAR;
-  const index = Math.floor((into - 2 * BAR) / BAR);
+  const index = Math.floor((into - 2 * BAR) / (2 * BEAT));
   return index >= 0 && index < count ? index : -1;
 }
 
@@ -520,12 +501,9 @@ const INTRO_CSS = `
 /* --- Scenes 2 and 3 ship monochrome already; scene 4 does not --- */
 .sws-gray { filter: grayscale(100%) contrast(1.1); }
 .sws-dead { filter: grayscale(100%) brightness(1.15) contrast(1.35); }
-/* Retimed from a delay of 3.5 bars to 2: matriarch itself shrank from 5 bars
-   to 3 to give the hero close-ups more room, and the old delay landed after
-   the scene was already over, so the flash never had a chance to play. */
 .sws-gavel-flash {
   position: absolute; inset: 0; background: #fff; opacity: 0;
-  animation: sws-flash calc(var(--beat) * 1.5) steps(3) calc(var(--bar) * 2) forwards;
+  animation: sws-flash calc(var(--beat) * 1.5) steps(3) calc(var(--bar) * 3.5) forwards;
 }
 @keyframes sws-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
 
