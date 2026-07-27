@@ -5,6 +5,7 @@ import { subscribeGamepadConnection, connectedGamepadCount } from '../game/gamep
 import { renderEntitySprite } from '../game/spriteRenderer';
 import { CHARACTERS, ENEMIES } from '../game/characterData';
 import { ATTACKER_STANDOFF_X, PLAYER_KICK_REACH } from '../game/constants';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, fitViewport } from '../game/viewport';
 
 interface GameCanvasProps {
   engine: GameEngine;
@@ -23,13 +24,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
   useEffect(() => {
     let animationFrameId: number;
 
-    // Design resolution every draw call below is written against — cameraX,
-    // arena bounds and spawn positions in engine.ts all assume an 800-wide
-    // viewport. Kept as fixed logical constants rather than reading
-    // canvas.width/height directly, now that those hold the scaled backing
-    // buffer size instead.
-    const DESIGN_WIDTH = 800;
-    const DESIGN_HEIGHT = 450;
 
     const render = () => {
       const canvas = canvasRef.current;
@@ -67,13 +61,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
       const width = DESIGN_WIDTH;
       const height = DESIGN_HEIGHT;
 
-      // Maps the fixed 800x450 design space onto however large the buffer
-      // actually is, so every existing draw call below keeps using design-
-      // space coordinates unmodified.
-      const scale = canvas.width / DESIGN_WIDTH;
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      // Maps the fixed design space onto however large the buffer actually
+      // is, so every draw call below keeps using design-space coordinates.
+      const { scale, offsetX, offsetY } = fitViewport(canvas.width, canvas.height);
 
-      ctx.clearRect(0, 0, width, height);
+      // Clear the whole buffer, not just the design area: the letterbox bars
+      // sit outside it and would otherwise keep the previous frame.
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
 
       // 1. Render Parallax Stage Background
       // Hard edges are the point of the art. Without this the browser smooths
@@ -311,10 +308,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
       // instead, in the same 800x450 space the sprites are drawn in, means
       // they scale together at any display size.
       if (crtFilter) {
-        ctx.globalAlpha = 0.12;
+        // Drawn in device pixels, not design pixels.
+        //
+        // In design space a 2-on-2-off pattern is multiplied by the display
+        // scale along with everything else: at 3x that is a six-pixel black bar
+        // every twelve pixels, which reads as banding laid over the characters
+        // rather than as screen texture. A scanline belongs to the screen, so
+        // it is one device pixel wherever it is shown.
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 0.14;
         ctx.fillStyle = '#000000';
-        for (let y = 0; y < height; y += 4) {
-          ctx.fillRect(0, y, width, 2);
+        const spacing = Math.max(2, Math.round(2 * (window.devicePixelRatio || 1)));
+        for (let y = 0; y < canvas.height; y += spacing * 2) {
+          ctx.fillRect(0, y, canvas.width, spacing);
         }
         ctx.globalAlpha = 1;
       }

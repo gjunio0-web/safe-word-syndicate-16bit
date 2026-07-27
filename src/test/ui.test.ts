@@ -3,6 +3,7 @@ import { createMenuDispatcher, REPEAT_DELAY_FRAMES } from '../hooks/useGamepadMe
 import { MenuState } from '../game/gamepad';
 import { advance, NEUTRAL, startEngine } from './helpers';
 import { BGM_TRACKS, BgmTrack, isBgmTrack, sound } from '../game/sound';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, fitViewport } from '../game/viewport';
 import { PLAYER_KICK_REACH } from '../game/constants';
 
 const idle: MenuState = {
@@ -198,5 +199,55 @@ describe('track slot typing', () => {
       'SACRED_METAL',
     ];
     expect([...fromList].sort()).toEqual([...declared].sort());
+  });
+});
+
+/**
+ * Canvas framing.
+ *
+ * The backing buffer is sized to the element, so the drawing has to be fitted
+ * to it in code. Deriving the scale from the width alone cropped the bottom of
+ * the scene on any container wider than 16:9 — the near edge of the street went
+ * off-screen and the fighters read as hovering.
+ */
+describe('canvas framing', () => {
+  it('never draws past the buffer, at any container shape', () => {
+    const shapes: Array<[number, number]> = [
+      [1600, 900],
+      [2359, 1134],
+      [1200, 900],
+      [800, 450],
+      [3440, 1440],
+      [390, 844],
+    ];
+
+    for (const [w, h] of shapes) {
+      const box = fitViewport(w, h);
+      expect(box.drawnWidth, `${w}x${h} overflowed horizontally`).toBeLessThanOrEqual(w + 0.01);
+      expect(box.drawnHeight, `${w}x${h} overflowed vertically`).toBeLessThanOrEqual(h + 0.01);
+    }
+  });
+
+  it('keeps the design aspect ratio whatever the container', () => {
+    for (const [w, h] of [[2359, 1134], [1200, 900]] as Array<[number, number]>) {
+      const box = fitViewport(w, h);
+      expect(box.drawnWidth / box.drawnHeight).toBeCloseTo(DESIGN_WIDTH / DESIGN_HEIGHT, 5);
+    }
+  });
+
+  it('centres the letterbox bars', () => {
+    const wide = fitViewport(2359, 1134);
+    expect(wide.offsetX).toBeGreaterThan(0);
+    expect(wide.offsetY).toBeCloseTo(0, 5);
+
+    const tall = fitViewport(1200, 900);
+    expect(tall.offsetY).toBeGreaterThan(0);
+    expect(tall.offsetX).toBeCloseTo(0, 5);
+  });
+
+  it('shows the whole scene on the reported screenshot shape', () => {
+    // 2359x1134 is where the bottom of the street was being cut off.
+    const box = fitViewport(2359, 1134);
+    expect(box.offsetY + box.drawnHeight).toBeLessThanOrEqual(1134 + 0.01);
   });
 });
