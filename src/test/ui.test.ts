@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMenuDispatcher, REPEAT_DELAY_FRAMES } from '../hooks/useGamepadMenu';
 import { MenuState } from '../game/gamepad';
 import { advance, NEUTRAL, startEngine } from './helpers';
-import { BGM_TRACKS, BgmTrack, isBgmTrack, sound } from '../game/sound';
+import { BGM_TRACK_IDS, BgmTrack, isBgmTrack, sound } from '../game/sound';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitViewport } from '../game/viewport';
 import { PLAYER_KICK_REACH } from '../game/constants';
 
@@ -173,7 +173,7 @@ describe('settings that used to do nothing', () => {
  */
 describe('track slot typing', () => {
   it('accepts every declared slot', () => {
-    for (const track of BGM_TRACKS) {
+    for (const track of BGM_TRACK_IDS) {
       expect(isBgmTrack(track)).toBe(true);
     }
   });
@@ -181,22 +181,27 @@ describe('track slot typing', () => {
   it('rejects a key that is not a slot', () => {
     // Keys come back from IndexedDB as whatever was stored, including slots
     // removed or renamed by a later build.
-    expect(isBgmTrack('STAGE2_BOSS')).toBe(false);
+    // NEON_BEAT is exactly this case: an alias of STAGE1 that nothing could ever
+    // reach, removed when the slots were unified.
+    expect(isBgmTrack('NEON_BEAT')).toBe(false);
     expect(isBgmTrack('')).toBe(false);
     expect(isBgmTrack('intro')).toBe(false);
   });
 
   it('covers the whole union, so the guard cannot drift from the type', () => {
-    const fromList: string[] = [...BGM_TRACKS];
-    // A slot added to BgmTrack but not to BGM_TRACKS would restore as unknown.
+    const fromList: string[] = [...BGM_TRACK_IDS];
+    // A slot added to BgmTrack but not to BGM_TRACK_IDS would restore as unknown.
     const declared: BgmTrack[] = [
       'INTRO',
       'CHAR_SELECT',
       'STAGE1',
       'STAGE1_BOSS',
-      'NEON_BEAT',
       'SUBURBAN_GRAY',
+      'STAGE2_BOSS',
       'SACRED_METAL',
+      'FINAL_BOSS',
+      'GAME_OVER',
+      'VICTORY',
     ];
     expect([...fromList].sort()).toEqual([...declared].sort());
   });

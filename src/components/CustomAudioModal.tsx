@@ -1,68 +1,32 @@
 import React, { useState } from 'react';
 import { Music, Upload, Play, Square, Check, RotateCcw, Volume2, X, Disc, Sparkles } from 'lucide-react';
 import { sound } from '../game/sound';
+import { BGM_TRACKS, BGM_TRACK_IDS, type BgmTrack } from '../game/bgmTracks';
 
 interface CustomAudioModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-interface TrackSlot {
-  id: 'INTRO' | 'CHAR_SELECT' | 'STAGE1' | 'STAGE1_BOSS';
-  title: string;
-  subtitle: string;
-  iconColor: string;
-  borderColor: string;
-}
 
-const TRACK_SLOTS: TrackSlot[] = [
-  {
-    id: 'INTRO',
-    title: '1. Title & Intro Screen',
-    subtitle: 'Main arcade title theme music',
-    iconColor: 'text-[#00ffff]',
-    borderColor: 'border-[#00ffff]',
-  },
-  {
-    id: 'CHAR_SELECT',
-    title: '2. Player Selection Screen',
-    subtitle: 'Character roster select screen background music',
-    iconColor: 'text-[#ff00ff]',
-    borderColor: 'border-[#ff00ff]',
-  },
-  {
-    id: 'STAGE1',
-    title: '3. Stage 1 Gameplay',
-    subtitle: 'Neon City street brawl stage music',
-    iconColor: 'text-[#ffff00]',
-    borderColor: 'border-[#ffff00]',
-  },
-  {
-    id: 'STAGE1_BOSS',
-    title: '4. Stage 1 Boss Fight',
-    subtitle: 'Apex Syndicate Mech boss fight anthem',
-    iconColor: 'text-red-500',
-    borderColor: 'border-red-500',
-  },
-];
+/**
+ * Rows come from BGM_TRACKS. This list used to be maintained by hand alongside
+ * three other copies elsewhere, and had drifted far enough that slot four still
+ * described an "Apex Syndicate Mech" boss this game never had.
+ */
+const TRACK_SLOTS = BGM_TRACK_IDS.map((id) => ({ id, ...BGM_TRACKS[id] }));
 
 export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onClose }) => {
   const [playingTrack, setPlayingTrack] = useState<string | null>(null);
   const [fileNames, setFileNames] = useState<Record<string, string>>({
-    INTRO: sound.getCustomTrackName('INTRO') || '',
-    CHAR_SELECT: sound.getCustomTrackName('CHAR_SELECT') || '',
-    STAGE1: sound.getCustomTrackName('STAGE1') || '',
-    STAGE1_BOSS: sound.getCustomTrackName('STAGE1_BOSS') || '',
+    ...Object.fromEntries(BGM_TRACK_IDS.map((id) => [id, sound.getCustomTrackName(id) || ''])),
   });
 
   React.useEffect(() => {
     if (isOpen) {
-      setFileNames({
-        INTRO: sound.getCustomTrackName('INTRO') || '',
-        CHAR_SELECT: sound.getCustomTrackName('CHAR_SELECT') || '',
-        STAGE1: sound.getCustomTrackName('STAGE1') || '',
-        STAGE1_BOSS: sound.getCustomTrackName('STAGE1_BOSS') || '',
-      });
+      setFileNames(
+        Object.fromEntries(BGM_TRACK_IDS.map((id) => [id, sound.getCustomTrackName(id) || '']))
+      );
     }
   }, [isOpen]);
 
@@ -80,7 +44,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
   // Typed as the slot union the component already declares. It was widened to
   // `string` here and cast back at the playBgm call, throwing away a type that
   // was two lines above.
-  const handleFileUpload = async (trackId: TrackSlot['id'], file: File) => {
+  const handleFileUpload = async (trackId: BgmTrack, file: File) => {
     if (!file) return;
     await sound.setCustomTrackBlob(trackId, file, file.name);
     setFileNames((prev) => ({ ...prev, [trackId]: file.name }));
@@ -92,10 +56,12 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
 
-    // Order: INTRO, CHAR_SELECT, STAGE1, STAGE1_BOSS
-    const slots: ('INTRO' | 'CHAR_SELECT' | 'STAGE1' | 'STAGE1_BOSS')[] = ['INTRO', 'CHAR_SELECT', 'STAGE1', 'STAGE1_BOSS'];
+    // Dropped files fill the slots in declaration order. Capped at the slot
+    // count rather than a leftover 4: BGM_TRACK_IDS grew from four tracks to
+    // ten, and a hardcoded 4 here silently dropped any file past the first.
+    const slots: BgmTrack[] = BGM_TRACK_IDS;
 
-    for (let index = 0; index < fileArray.slice(0, 4).length; index++) {
+    for (let index = 0; index < Math.min(fileArray.length, slots.length); index++) {
       const file = fileArray[index];
       const targetSlot = slots[index];
       if (file && targetSlot) {
@@ -111,7 +77,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     }
   };
 
-  const handleResetTrack = async (trackId: TrackSlot['id']) => {
+  const handleResetTrack = async (trackId: BgmTrack) => {
     await sound.resetCustomTrack(trackId);
     setFileNames((prev) => ({ ...prev, [trackId]: '' }));
     sound.stopBgm();
@@ -143,7 +109,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     }
   };
 
-  const handleTogglePlay = (trackId: TrackSlot['id']) => {
+  const handleTogglePlay = (trackId: BgmTrack) => {
     if (playingTrack === trackId) {
       sound.stopBgm();
       setPlayingTrack(null);
@@ -166,7 +132,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
               <h2 className="text-xl sm:text-2xl font-black text-white italic uppercase tracking-wider font-mono flex items-center gap-2">
                 ARCADE JUKEBOX <span className="text-[#00ffff] text-sm font-normal">MODAL</span>
               </h2>
-              <p className="text-xs text-zinc-400 font-mono">Upload your 4 custom audio tracks or use built-in 16-bit synths</p>
+              <p className="text-xs text-zinc-400 font-mono">Upload your {BGM_TRACK_IDS.length} custom audio tracks or use built-in 16-bit synths</p>
             </div>
           </div>
 
@@ -193,7 +159,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
             <Sparkles className="w-5 h-5 text-[#ff00ff] shrink-0" />
             <div>
               <span className="text-xs font-mono font-bold text-[#ff00ff] uppercase block">QUICK BULK IMPORT</span>
-              <span className="text-[11px] text-zinc-300 font-mono">Select or drop all 4 audio files at once (Intro, Selection, Stage 1, Boss)</span>
+              <span className="text-[11px] text-zinc-300 font-mono">Select or drop up to {BGM_TRACK_IDS.length} audio files at once, filled in slot order</span>
               {/* The picker this opens belongs to the operating system and takes
                   no gamepad input. Saying so beats a controller cursor that
                   reaches the button and then dead-ends. */}
@@ -204,7 +170,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
           </div>
 
           <label className="bg-[#ff00ff] hover:bg-[#d900d9] text-black text-xs font-mono font-black px-4 py-2 rounded-lg cursor-pointer uppercase transition-all shadow-[0_0_15px_rgba(255,0,255,0.4)] shrink-0 flex items-center gap-1.5">
-            <Upload className="w-4 h-4" /> BROWSE 4 FILES
+            <Upload className="w-4 h-4" /> BROWSE {BGM_TRACK_IDS.length} FILES
             <input
               type="file"
               multiple
@@ -229,13 +195,16 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
                 } rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all`}
               >
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div className={`p-2 rounded-lg bg-black/60 border ${slot.borderColor} shrink-0 mt-0.5`}>
-                    <Music className={`w-5 h-5 ${slot.iconColor}`} />
+                  <div
+                    className="p-2 rounded-lg bg-black/60 border shrink-0 mt-0.5"
+                    style={{ borderColor: slot.accent }}
+                  >
+                    <Music className="w-5 h-5" style={{ color: slot.accent }} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm sm:text-base font-black text-white font-mono uppercase tracking-wide truncate">
-                        {slot.title}
+                        {slot.label}
                       </h3>
                       {hasCustom ? (
                         <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 rounded flex items-center gap-1">
@@ -301,7 +270,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
 
         {/* Footer */}
         <div className="mt-4 pt-3 border-t border-[#00ffff]/20 flex justify-between items-center shrink-0">
-          <span className="text-[11px] text-zinc-400 font-mono">Supports .MP3, .WAV, .OGG, .M4A</span>
+          <span className="text-[11px] text-zinc-400 font-mono">Supports .MP3, .WAV, .OGG, .M4A, .FLAC, .AAC, .WEBM</span>
           <button
             onClick={onClose}
             className="bg-[#00ffff] text-black font-mono font-black text-xs px-5 py-2 rounded-lg hover:bg-[#00cccc] transition-all uppercase shadow-[0_0_15px_rgba(0,255,255,0.4)]"
