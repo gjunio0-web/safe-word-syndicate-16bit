@@ -311,6 +311,20 @@ function renderEnemyHealthBar(ctx: CanvasRenderingContext2D, entity: EntityState
  * Enemies keep the near-black outline on purpose: the heroes should be the
  * things that pop out of a crowd.
  */
+/**
+ * Stroke for anything drawn on top of the body.
+ *
+ * `HERO_OUTLINE` is set once before the character switch, so every stroke that
+ * follows inherits it — including the ones that trace shapes sitting inside the
+ * silhouette. A shirt drawn as its own shape has a top and a bottom edge, and
+ * both fall in the middle of the figure: they showed as two glowing bands
+ * across the chest. Same for the beard, the pec contours and the muzzle.
+ *
+ * The tint belongs to the parts that form the outer edge — limbs, head, boots,
+ * hair. Everything layered over them uses this instead.
+ */
+const DETAIL_STROKE = '#141118';
+
 const HERO_OUTLINE: Record<CharacterId, string> = {
   FEET_MASTER: '#e8a83e',  // Amber, from the specs glint and belt buckle
   FUN_MAKER: '#ff86e4',    // Hot pink, from the portrait's aura
@@ -356,7 +370,8 @@ function renderPlayerSprite(
   }
 
   // Crisp 16-Bit Arcade Dark Outline
-  ctx.strokeStyle = HERO_OUTLINE[charId] ?? '#090812';
+  const outline = HERO_OUTLINE[charId] ?? '#090812';
+  ctx.strokeStyle = outline;
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
@@ -462,6 +477,8 @@ function renderPlayerSprite(
       ctx.fillStyle = '#cbd5e1';
       ctx.fillRect(-3, -45, 8, 8);
 
+      ctx.strokeStyle = DETAIL_STROKE;
+
       // 3. FITTED BLACK T-SHIRT
       ctx.fillStyle = '#18181c';
       ctx.beginPath();
@@ -503,6 +520,8 @@ function renderPlayerSprite(
       ctx.lineTo(-3, -50);
       ctx.closePath();
       ctx.fill();
+
+      ctx.strokeStyle = outline;
 
       // 4. MUSCULAR ARMS & BLACK GRAPPLING GLOVES
       ctx.fillStyle = '#e8a87c'; // Tan skin
@@ -570,6 +589,8 @@ function renderPlayerSprite(
       ctx.beginPath();
       ctx.ellipse(-4, -102, 10, 4, -0.2, 0, Math.PI * 2);
       ctx.fill();
+
+      ctx.strokeStyle = DETAIL_STROKE;
 
       // Beard, sitting on the jaw instead of swallowing the head.
       // It used to be arc(0, -84, 14), which met the bottom edge of the
@@ -686,6 +707,8 @@ function renderPlayerSprite(
       ctx.save();
       ctx.translate(0, bodyY);
 
+      ctx.strokeStyle = DETAIL_STROKE;
+
       // 3. BARE MUSCULAR TORSO
       ctx.fillStyle = '#f5b082';
       ctx.beginPath();
@@ -728,6 +751,8 @@ function renderPlayerSprite(
       ctx.arc(0, -66, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+
+      ctx.strokeStyle = outline;
 
       // 4. MUSCULAR ARMS WITH CYAN WRIST CUFFS
       ctx.fillStyle = '#f5b082';
@@ -868,6 +893,8 @@ function renderPlayerSprite(
       ctx.save();
       ctx.translate(0, bodyY);
 
+      ctx.strokeStyle = DETAIL_STROKE;
+
       // 3. BIKER LEATHER JACKET WITH RED NEON PIPING
       ctx.fillStyle = '#18181e';
       ctx.beginPath();
@@ -918,6 +945,8 @@ function renderPlayerSprite(
         ctx.strokeRect(-28 - armSwing, -72, 14, 28);
         ctx.strokeRect(16 + armSwing, -72, 14, 28);
       }
+
+      ctx.strokeStyle = outline;
 
       // 5. MOTORCYCLE HELMET WITH RED VISOR (Un-obscured)
       ctx.fillStyle = '#141418';
@@ -1042,6 +1071,8 @@ function renderPlayerSprite(
         drawFlameMark(ctx, 21 + armSwing, -50, 11, '#ea580c', '#fbbf24');
       }
 
+      ctx.strokeStyle = outline;
+
       // 5. DOG MASK & FACIAL FEATURES (Clean Z-index layer order)
       ctx.fillStyle = '#4b5563';
       ctx.beginPath();
@@ -1061,6 +1092,8 @@ function renderPlayerSprite(
       ctx.lineTo(22, -116);
       ctx.lineTo(6, -102);
       ctx.fill();
+
+      ctx.strokeStyle = DETAIL_STROKE;
 
       // Snarling muzzle. Drawn along +x, which the facing flip at the top of
       // renderEntitySprite mirrors automatically.
