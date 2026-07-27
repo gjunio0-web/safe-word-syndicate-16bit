@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DialogueLine } from '../types';
 import { sound } from '../game/sound';
+import { useGamepadMenu } from '../hooks/useGamepadMenu';
 import { ArrowRight, MessageSquareQuote } from 'lucide-react';
 
 interface DialogueOverlayProps {
@@ -24,6 +25,7 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 'space' never matched here: that is an `e.code` value, not `e.key`.
       const isAdvanceKey = e.code === 'Space' || ['enter', ' ', 'j', 'k', 'z', 'x'].includes(e.key.toLowerCase());
 
       if (isAdvanceKey) {
@@ -35,10 +37,19 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [index, dialogue]);
 
+  // Gameplay's own gamepad handling only reads START (it toggles pause) while
+  // this overlay is up, so a controller had no way to advance the dialogue —
+  // the face buttons still went straight to the engine as combat input, which
+  // update() ignores while a dialogue is active. CONFIRM only: START stays
+  // reserved for pause, so a player can still back out mid-cutscene.
+  useGamepadMenu((action) => {
+    if (action === 'CONFIRM') handleNext();
+  });
+
   if (!line) return null;
 
   return (
-    <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-40 flex flex-col justify-end p-6 select-none">
+    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-40 flex flex-col justify-end p-6 select-none">
       {/* Cutscene Dialog Container */}
       <div className="bg-[#111] border-4 border-[#ff00ff] p-6 shadow-[0_0_30px_rgba(255,0,255,0.4)] max-w-2xl mx-auto w-full relative">
         {/* Speaker Name Tag */}

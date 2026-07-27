@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { CHARACTERS, ENEMIES } from '../game/characterData';
+import { CHARACTERS } from '../game/characterData';
+import { KEYBOARD_LAYOUT } from '../game/keyboard';
 import { BookOpen, X, Shield, Zap, Skull, Award } from 'lucide-react';
 
 interface LoreCodexProps {
@@ -10,7 +11,7 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
   const [tab, setTab] = useState<'HEROES' | 'ENEMIES' | 'BOSSES' | 'COMBOS'>('HEROES');
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none font-sans text-white">
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none font-sans text-white" data-gamepad-scope>
       <div className="bg-[#111] border-4 border-[#ff00ff] w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden shadow-[0_0_30px_rgba(255,0,255,0.4)]">
         {/* Top Header */}
         <div className="p-4 border-b-4 border-[#ff00ff] flex justify-between items-center bg-[#1a1a1a]">
@@ -165,6 +166,37 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
                 <span className="text-[#ff4e00] font-black uppercase block">SPECIAL POWER MOVE</span>
                 Press [L] when your Power Meter reaches at least 30% to trigger your character's signature devastation move!
               </div>
+
+              {/* The only place the controls are written down inside the game,
+                  and it documented player one alone. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                {([
+                  ['PLAYER 1', '#00ffff', KEYBOARD_LAYOUT.playerOne],
+                  ['PLAYER 2', '#ff00ff', KEYBOARD_LAYOUT.playerTwo],
+                ] as const).map(([title, colour, layout]) => (
+                  <div key={title} className="bg-[#111] p-4 border-2 border-[#333]">
+                    <span className="font-black uppercase block mb-2" style={{ color: colour }}>
+                      {title}
+                    </span>
+                    <dl className="text-xs font-mono space-y-1 text-gray-300">
+                      {Object.entries(layout).map(([action, keys]) => (
+                        <div key={action} className="flex justify-between gap-3">
+                          <dt className="uppercase text-gray-500">
+                            {action.replace(/([A-Z])/g, ' $1')}
+                          </dt>
+                          <dd className="text-right text-white">{keys}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-[11px] text-gray-500 font-mono">
+                Player two's keys are live in 2P CO-OP only. A connected controller
+                takes that slot instead, and the arrow keys stay with player one
+                in every other mode.
+              </p>
             </div>
           )}
         </div>

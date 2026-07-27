@@ -7,7 +7,7 @@ import { defineConfig, Plugin } from 'vite';
 const AUDIO_DIR = path.resolve(__dirname, 'public/audio');
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm'];
 
-/** Caminho público do manifesto. Idêntico em dev e em produção. */
+/** Public path of the manifest. Identical in dev and in production. */
 const AUDIO_MANIFEST_PATH = 'audio/manifest.json';
 
 function scanAudioFiles(): string[] {
@@ -23,16 +23,16 @@ function scanAudioFiles(): string[] {
 }
 
 /**
- * Expõe as trilhas de `public/audio/` para o cliente.
+ * Exposes the tracks in `public/audio/` to the client.
  *
- * A versão anterior servia essa lista por um endpoint (`/api/audio-files`)
- * criado em `configureServer` — ou seja, um middleware do dev server, que não
- * existe num build estático. Em produção o fetch dava 404, o jogo caía no
- * synth e os MP3 iam para o `dist` sem nunca tocar.
+ * The previous version served this list from an endpoint (`/api/audio-files`)
+ * created in `configureServer` — a dev-server middleware, which does not exist
+ * in a static build. In production the fetch returned 404, the game fell back
+ * to the synth, and the MP3s shipped to `dist` without ever playing.
  *
- * Agora a mesma URL responde nos dois ambientes: dinamicamente em dev (para
- * pegar arquivos recém-colocados na pasta sem reiniciar) e como asset estático
- * gerado no build.
+ * Now the same URL answers in both environments: served dynamically in dev (so
+ * files dropped into the folder are picked up without a restart) and emitted as
+ * a static asset at build time.
  */
 function audioManifestPlugin(): Plugin {
   return {

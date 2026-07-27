@@ -11,8 +11,78 @@ import {
   GameSettings,
 } from '../types';
 import { CHARACTERS, ENEMIES } from './characterData';
-import { maxCameraX, maxWaveTriggerX, WAVE_TRIGGER_LOOKAHEAD } from './constants';
+import {
+  maxCameraX,
+  maxWaveTriggerX,
+  WAVE_TRIGGER_LOOKAHEAD,
+  PLAYER_BODY_SEPARATION_X,
+  PLAYER_BODY_SEPARATION_Y,
+  ENEMY_BODY_SEPARATION_X,
+  ENEMY_BODY_SEPARATION_Y,
+  PLAYER_PUSH_SHARE,
+  ATTACKERS_BY_DIFFICULTY,
+  PLAYER_KICK_REACH,
+  ARENA_MIN_Y,
+  ARENA_MAX_Y,
+  ATTACKER_STANDOFF_X,
+  ATTACKER_STANDOFF_TOLERANCE,
+} from './constants';
 import { sound } from './sound';
+
+/**
+ * What the HUD actually shows, in display form.
+ *
+ * Every field is discrete: it changes only when the HUD would look different.
+ * That is what makes the equality check below meaningful — the React subtree
+ * re-renders when the numbers move, not once per frame.
+ */
+export interface HudFighter {
+  charId: CharacterId;
+  hp: number;
+  powerMeter: number;
+  comboHits: number;
+}
+
+export interface HudBoss {
+  enemyType: EnemyType;
+  hp: number;
+  maxHp: number;
+  shieldHp?: number;
+}
+
+export interface HudSnapshot {
+  p1: HudFighter | null;
+  p2: HudFighter | null;
+  boss: HudBoss | null;
+  showStageBanner: boolean;
+  showBossWarning: boolean;
+  bossWarningTitle: string;
+  isWaveActive: boolean;
+  currentWaveIndex: number;
+  stageCleared: boolean;
+}
+
+function sameFighter(a: HudFighter | null, b: HudFighter | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.charId === b.charId &&
+    a.hp === b.hp &&
+    a.powerMeter === b.powerMeter &&
+    a.comboHits === b.comboHits
+  );
+}
+
+function sameBoss(a: HudBoss | null, b: HudBoss | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.enemyType === b.enemyType &&
+    a.hp === b.hp &&
+    a.maxHp === b.maxHp &&
+    a.shieldHp === b.shieldHp
+  );
+}
 
 export class GameEngine {
   public entities: EntityState[] = [];
@@ -33,6 +103,12 @@ export class GameEngine {
   public bossWarningTitle: string = '';
   private _activeDialogue: import('../types').DialogueLine[] | null = null;
   private dialogueListeners: Set<() => void> = new Set();
+
+  private hudSnapshot: HudSnapshot;
+  private hudListeners: Set<() => void> = new Set();
+
+  /** Ids of the melee enemies currently allowed to engage. */
+  private attackSlots: Set<string> = new Set();
   private shownWaveDialogues: Set<number> = new Set();
 
   public player1: EntityState | null = null;
@@ -49,6 +125,15 @@ export class GameEngine {
   private frameCount: number = 0;
   private settings: GameSettings;
 
+  /**
+   * Dialogue currently on screen. Read-only: writing goes through
+   * `setActiveDialogue`, which notifies subscribers.
+   *
+   * This used to be a public mutable field. Since the engine lives outside the
+   * React cycle, clearing it did not unmount the overlay — it only disappeared
+   * when some unrelated state happened to change. That is why the FIGHT button
+   * responded solely to keys that also fed the game input.
+   */
   public get activeDialogue(): import('../types').DialogueLine[] | null {
     return this._activeDialogue;
   }
@@ -59,6 +144,81 @@ export class GameEngine {
     this.dialogueListeners.forEach((listener) => listener());
   }
 
+  /**
+   * Current HUD state. The returned object is referentially stable until
+   * something visible changes — `useSyncExternalStore` compares by identity and
+   * would loop forever on a freshly built object every call.
+   */
+  public getHudSnapshot(): HudSnapshot {
+    return this.hudSnapshot;
+  }
+
+  /** Subscribes to HUD changes. Returns the unsubscribe function. */
+  public subscribeHud(listener: () => void): () => void {
+    this.hudListeners.add(listener);
+    return () => {
+      this.hudListeners.delete(listener);
+    };
+  }
+
+  private buildHudSnapshot(): HudSnapshot {
+    const toFighter = (ent: EntityState | null): HudFighter | null =>
+      ent && ent.charId
+        ? {
+            charId: ent.charId,
+            hp: ent.hp,
+            // The only continuous value in the HUD: it regenerates every frame.
+            // Rounding to the percent actually rendered keeps the snapshot from
+            // changing 60 times a second for a sub-pixel difference.
+            powerMeter: Math.round(ent.powerMeter),
+            comboHits: ent.comboHits,
+          }
+        : null;
+
+    const bossEntity = this.entities.find((e) => e.enemyType?.startsWith('BOSS'));
+
+    return {
+      p1: toFighter(this.player1),
+      p2: toFighter(this.player2),
+      boss: bossEntity
+        ? {
+            enemyType: bossEntity.enemyType!,
+            hp: bossEntity.hp,
+            maxHp: bossEntity.maxHp,
+            shieldHp: bossEntity.shieldHp,
+          }
+        : null,
+      showStageBanner: this.stageStartBannerTimer > 0,
+      showBossWarning: this.bossWarningTimer > 0,
+      bossWarningTitle: this.bossWarningTitle,
+      isWaveActive: this.isWaveActive,
+      currentWaveIndex: this.currentWaveIndex,
+      stageCleared: this.stageCleared,
+    };
+  }
+
+  private notifyHud() {
+    const next = this.buildHudSnapshot();
+    const prev = this.hudSnapshot;
+
+    const unchanged =
+      sameFighter(prev.p1, next.p1) &&
+      sameFighter(prev.p2, next.p2) &&
+      sameBoss(prev.boss, next.boss) &&
+      prev.showStageBanner === next.showStageBanner &&
+      prev.showBossWarning === next.showBossWarning &&
+      prev.bossWarningTitle === next.bossWarningTitle &&
+      prev.isWaveActive === next.isWaveActive &&
+      prev.currentWaveIndex === next.currentWaveIndex &&
+      prev.stageCleared === next.stageCleared;
+
+    if (unchanged) return;
+
+    this.hudSnapshot = next;
+    this.hudListeners.forEach((listener) => listener());
+  }
+
+  /** Subscribes to dialogue changes. Returns the unsubscribe function. */
   public subscribeDialogue(listener: () => void): () => void {
     this.dialogueListeners.add(listener);
     return () => {
@@ -104,6 +264,8 @@ export class GameEngine {
     } else {
       sound.playBgm(stage.musicTrack);
     }
+
+    this.hudSnapshot = this.buildHudSnapshot();
   }
 
   private createPlayerEntity(
@@ -113,7 +275,6 @@ export class GameEngine {
     x: number,
     y: number
   ): EntityState {
-    const info = CHARACTERS[charId];
     return {
       id,
       isPlayer: true,
@@ -235,7 +396,7 @@ export class GameEngine {
     this.entities.forEach((ent) => {
       if (ent.isPlayer) {
         ent.x = Math.max(this.cameraX + 20, Math.min(this.cameraX + 760, ent.x));
-        ent.y = Math.max(220, Math.min(440, ent.y)); // Y depth bounds
+        ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y)); // Y depth bounds
       } else if (ent.hp > 0) {
         // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out
         const minX = this.cameraX - 30;
@@ -247,9 +408,13 @@ export class GameEngine {
           ent.x = maxX - 60;
           ent.vx = -4;
         }
-        ent.y = Math.max(220, Math.min(440, ent.y));
+        ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
       }
     });
+
+    // Grant attack slots before the AI runs, so each enemy knows this frame
+    // whether it is engaging or waiting.
+    this.updateAttackSlots();
 
     // Update Enemies & AI
     this.entities.forEach((ent) => {
@@ -268,7 +433,12 @@ export class GameEngine {
     this.updateParticles();
 
     // Remove dead non-boss enemies after animation
-    this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer < 60);
+    // Keep the corpse only while its death animation still has frames left.
+    // The condition used to be `actionTimer < 60`, which is always true for a
+    // corpse — death sets actionTimer to 18 and it counts down to 0 — so the
+    // filter preserved exactly what it was meant to discard. Bodies piled up
+    // in the arena and kept being drawn.
+    this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer > 0);
 
     // Check wave clear status
     const remainingEnemies = this.entities.filter((ent) => !ent.isPlayer && ent.hp > 0);
@@ -280,10 +450,58 @@ export class GameEngine {
         sound.playStageClear();
       }
     }
+
+    this.notifyHud();
   }
 
+  /**
+   * Wave trigger clamped to what the camera can actually reach.
+   *
+   * Production safety net: a badly designed stage loses its intended pacing but
+   * never locks up. In dev, `assertStagesAreCompletable` would have thrown long
+   * before execution got here.
+   */
   private effectiveTriggerX(wave: import('../types').WaveConfig): number {
     return Math.min(wave.triggerX, maxWaveTriggerX(this.stage.length));
+  }
+
+  /** Player the enemies are currently converging on. */
+  private currentTarget(): EntityState | null {
+    if (this.player1 && this.player1.hp > 0) return this.player1;
+    if (this.player2 && this.player2.hp > 0) return this.player2;
+    return null;
+  }
+
+  private isMelee(enemy: EntityState): boolean {
+    return enemy.enemyType !== 'CONVERSION_THERAPIST';
+  }
+
+  /**
+   * Hands out the attack slots, closest melee enemy first.
+   *
+   * Holders keep their slot while alive, so an engaged enemy is not swapped out
+   * mid-swing. Everyone else waits on the standoff ring in `updateEnemyAi`.
+   */
+  private updateAttackSlots() {
+    for (const id of this.attackSlots) {
+      const holder = this.entities.find((e) => e.id === id);
+      if (!holder || holder.hp <= 0) this.attackSlots.delete(id);
+    }
+
+    const free = ATTACKERS_BY_DIFFICULTY[this.settings.difficulty] - this.attackSlots.size;
+    if (free <= 0) return;
+
+    const target = this.currentTarget();
+    if (!target) return;
+
+    this.entities
+      .filter((e) => !e.isPlayer && e.hp > 0 && this.isMelee(e) && !this.attackSlots.has(e.id))
+      .sort(
+        (a, b) =>
+          Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y)
+      )
+      .slice(0, free)
+      .forEach((e) => this.attackSlots.add(e.id));
   }
 
   private updateWaveTriggers() {
@@ -302,10 +520,18 @@ export class GameEngine {
       // Spawn wave enemies
       wave.enemies.forEach((spawnGroup) => {
         for (let i = 0; i < spawnGroup.count; i++) {
-          const spawnX =
-            spawnGroup.spawnSide === 'LEFT'
-              ? this.cameraX - 40 - i * 30
-              : this.cameraX + 820 + i * 40;
+          // 'BOTH' used to fall through to the RIGHT branch, so every wave
+          // meant to surround the player arrived as a single-file queue from
+          // one side. Alternate instead, and count each side separately so the
+          // stagger offset does not gap.
+          const fromLeft =
+            spawnGroup.spawnSide === 'LEFT' ||
+            (spawnGroup.spawnSide === 'BOTH' && i % 2 === 0);
+          const indexOnSide = spawnGroup.spawnSide === 'BOTH' ? Math.floor(i / 2) : i;
+
+          const spawnX = fromLeft
+            ? this.cameraX - 40 - indexOnSide * 30
+            : this.cameraX + 820 + indexOnSide * 40;
           const spawnY = 240 + Math.random() * 160;
           this.spawnEnemy(spawnGroup.type, spawnX, spawnY);
         }
@@ -335,7 +561,10 @@ export class GameEngine {
 
     if (player.slowTimer > 0) player.slowTimer--;
     if (player.suppressedTimer > 0) player.suppressedTimer--;
-    if (player.invulnerableTimer > 0) player.invulnerableTimer--;
+    // invulnerableTimer is ticked in updateEntityPhysics, which runs for every
+    // entity. Decrementing it here too halved every invulnerability window.
+    // The physics one is the survivor because this method returns early while
+    // stunned, which would otherwise freeze the timer exactly when it matters.
 
     // Passive Power Meter Regeneration (+0.04 per frame = ~2.4%/sec)
     player.powerMeter = Math.min(100, player.powerMeter + 0.04);
@@ -537,31 +766,41 @@ export class GameEngine {
         const absDx = Math.abs(dx);
         const absDy = Math.abs(dy);
 
-        // Required physical body arm's-length spacing: 72px on X, 27px on Y
-        const minDx = 72;
-        const minDy = 27;
+        // Enemies crowd each other more tightly than they crowd the player.
+        // A single shared spacing put every attacker outside its own reach.
+        const betweenEnemies = !a.isPlayer && !b.isPlayer;
+        const minDx = betweenEnemies ? ENEMY_BODY_SEPARATION_X : PLAYER_BODY_SEPARATION_X;
+        const minDy = betweenEnemies ? ENEMY_BODY_SEPARATION_Y : PLAYER_BODY_SEPARATION_Y;
 
         if (absDx < minDx && absDy < minDy) {
-          const overlapX = minDx - absDx;
-          const pushX = overlapX * 0.5;
+          // Split the correction by weight instead of evenly. An even split
+          // meant each neighbouring enemy displaced the player once per frame,
+          // and a crowd halved their walking speed.
+          let aShare = 0.5;
+          if (a.isPlayer !== b.isPlayer) {
+            aShare = a.isPlayer ? PLAYER_PUSH_SHARE : 1 - PLAYER_PUSH_SHARE;
+          }
+          const bShare = 1 - aShare;
 
+          const overlapX = minDx - absDx;
           if (dx >= 0) {
-            a.x -= pushX;
-            b.x += pushX;
+            a.x -= overlapX * aShare;
+            b.x += overlapX * bShare;
           } else {
-            a.x += pushX;
-            b.x -= pushX;
+            a.x += overlapX * aShare;
+            b.x -= overlapX * bShare;
           }
 
           if (absDy < minDy) {
-            const overlapY = minDy - absDy;
-            const pushY = overlapY * 0.3;
+            // 0.6 of the vertical overlap, as before: a softer correction on
+            // this axis keeps fighters from snapping apart in depth.
+            const overlapY = (minDy - absDy) * 0.6;
             if (dy >= 0) {
-              a.y -= pushY;
-              b.y += pushY;
+              a.y -= overlapY * aShare;
+              b.y += overlapY * bShare;
             } else {
-              a.y += pushY;
-              b.y -= pushY;
+              a.y += overlapY * aShare;
+              b.y -= overlapY * bShare;
             }
           }
         }
@@ -621,7 +860,7 @@ export class GameEngine {
     const ky = player.y - player.z - 50;
     this.addParticle(kx, ky, 0, '#ffff00', undefined, 'SHOCKWAVE');
 
-    const reach = 135;
+    const reach = PLAYER_KICK_REACH;
     this.entities.forEach((target) => {
       if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 60) {
         const dx = target.x - player.x;
@@ -743,7 +982,12 @@ export class GameEngine {
 
     // Check Boss Sayonara Defeat Resolution
     if (target.enemyType === 'BOSS_MADAM_MIZYDIA' && target.hp <= 0) {
-      this.bossDefeated = true;
+      // Mizydia is the boss of stage 2 as well, where the fiction calls her a
+      // hologram. Without this gate, beating her there set bossDefeated and the
+      // campaign ended two stages early — the final stage was unreachable.
+      if (this.stage.isFinalStage) {
+        this.bossDefeated = true;
+      }
       // Free Sayonara!
       const sayonara = this.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
       if (sayonara) {
@@ -770,6 +1014,13 @@ export class GameEngine {
   }
 
   private updateEnemyAi(enemy: EntityState) {
+    // Phase describes the state of the fight, not what the boss is doing this
+    // frame, so it is computed before the early returns below — otherwise it
+    // would freeze for the whole duration of a cast.
+    if (enemy.enemyType === 'BOSS_MADAM_MIZYDIA') {
+      enemy.bossPhase = (enemy.shieldHp ?? 0) <= 0 && enemy.hp < enemy.maxHp * 0.5 ? 2 : 1;
+    }
+
     if (enemy.stunTimer > 0) {
       enemy.stunTimer--;
       enemy.vx = 0;
@@ -814,9 +1065,79 @@ export class GameEngine {
       return;
     }
 
+    if (enemy.enemyType === 'BOSS_MADAM_MIZYDIA') {
+      // The Matriarch is a caster, not a brawler.
+      //
+      // She fell into the generic melee branch with attackRange 250, so she
+      // stood a quarter of the screen away and "punched" — damage landed at
+      // 275px with nothing drawn between her and the player. Her own data says
+      // Status Quo Magic and Excommunication waves; this is that.
+      //
+      // `bossPhase` was written at spawn and never read anywhere. It now marks
+      // the turn of the fight: once the barrier is down and she is below half
+      // health, the censure comes in threes.
+      const enraged = enemy.bossPhase === 2;
+
+      const holdAt = info.attackRange * 0.8;
+      if (dist > holdAt + 40) {
+        enemy.vx = (dx > 0 ? 1 : -1) * info.speed;
+        enemy.action = 'WALK';
+      } else if (dist < holdAt - 60) {
+        enemy.vx = (dx > 0 ? -1 : 1) * info.speed * 0.7;
+        enemy.action = 'WALK';
+      } else {
+        enemy.vx = 0;
+        enemy.action = enemy.actionTimer > 0 ? enemy.action : 'IDLE';
+      }
+      enemy.vy = Math.abs(dy) > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.4 : 0;
+      enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
+
+      // The cast check used to ignore the holding band entirely: it only
+      // required `dist < attackRange`, so a wave could be cast from as close
+      // as point-blank while she was mid-retreat. At that range the hazard's
+      // ~48px hit radius already reaches the player, so it landed in a
+      // handful of frames — far below human reaction time, and effectively
+      // unavoidable for a player pressing the attack, which is the natural
+      // way to play a brawler. Requiring the same minimum distance her own
+      // positioning already tries to hold makes every cast a real, dodgeable
+      // projectile instead of an occasional instant hit.
+      const castChance = enraged ? 0.03 : 0.016;
+      if (
+        dist >= holdAt - 60 &&
+        dist < info.attackRange &&
+        enemy.actionTimer === 0 &&
+        Math.random() < castChance
+      ) {
+        enemy.action = 'PUNCH1';
+        enemy.actionTimer = 30;
+        enemy.vx = 0;
+        enemy.vy = 0;
+        sound.playBossAlarm();
+
+        // Excommunication wave. Phase two fans three of them.
+        const spread = enraged ? [-26, 0, 26] : [0];
+        for (const offset of spread) {
+          this.hazards.push({
+            id: 'censure_' + Math.random(),
+            type: 'LASER_CROSS',
+            x: enemy.x,
+            y: enemy.y + offset,
+            z: 34,
+            vx: dx > 0 ? 6.5 : -6.5,
+            vy: offset * 0.02,
+            timer: 90,
+            active: true,
+          });
+        }
+      }
+      return;
+    }
+
     if (enemy.enemyType === 'CONVERSION_THERAPIST') {
       // Ranged enemy: Throws Guilt Vials / Repression Darts
-      if (dist < 220 && Math.random() < 0.02 && enemy.actionTimer === 0) {
+      // Was hardcoded to 220 while characterData declares attackRange: 300 —
+      // two numbers for the same thing, one of them decorative.
+      if (dist < info.attackRange && Math.random() < 0.02 && enemy.actionTimer === 0) {
         enemy.action = 'PUNCH1';
         enemy.actionTimer = 30;
         enemy.vx = 0;
@@ -854,6 +1175,29 @@ export class GameEngine {
       // Melee AI (Purity Patrol, Trad-Wife Striker, Bosses)
       const idealRange = Math.max(75, info.attackRange);
 
+      // No attack slot: hold the standoff ring and wait for one to open.
+      // This is what keeps the crowd from shoving the committed attackers out
+      // of their own reach.
+      if (!this.attackSlots.has(enemy.id)) {
+        const desiredX = targetPlayer.x + (dx > 0 ? -ATTACKER_STANDOFF_X : ATTACKER_STANDOFF_X);
+        const gap = desiredX - enemy.x;
+
+        if (Math.abs(gap) > ATTACKER_STANDOFF_TOLERANCE) {
+          const stepVx = Math.sign(gap) * info.speed * 0.6;
+          const nextX = enemy.x + stepVx;
+          enemy.vx = nextX >= arenaMinX + 10 && nextX <= arenaMaxX - 10 ? stepVx : 0;
+          enemy.action = 'WALK';
+        } else {
+          enemy.vx = 0;
+          enemy.action = 'IDLE';
+        }
+
+        // Line up vertically while waiting, so taking a slot means committing
+        // immediately instead of spending it closing the gap.
+        enemy.vy = absDy > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.35 : 0;
+        return;
+      }
+
       if (absDx < 55) {
         // Too close! Step back slightly to maintain arm's length distance
         const backVx = (dx > 0 ? -1 : 1) * info.speed * 0.7;
@@ -866,8 +1210,34 @@ export class GameEngine {
         enemy.vy = absDy > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
         enemy.action = 'WALK';
       } else if (absDx > idealRange || absDy > 16) {
-        // Approach towards target
-        enemy.vx = (dx > 0 ? 1 : -1) * info.speed * 0.8;
+        // Approach towards target. Each axis moves only if IT is the one out
+        // of range — otherwise an enemy already at ideal X range keeps
+        // walking horizontally into the player just because Y is still
+        // misaligned, feeding the body-collision push a fresh overlap every
+        // frame and dragging the (unmoving) player across the arena.
+        //
+        // Also hold if a teammate already occupies the space ahead: walking
+        // into them doesn't get this enemy any closer (resolveBodyCollisions
+        // only refunds half the overlap per frame), but it does relay a
+        // steady shove through the teammate onto whoever is at the front of
+        // the queue — usually the player, dragging them across the arena
+        // with no way to stop it since they never even took a hit.
+        // resolveBodyCollisions rests touching entities at exactly
+        // ENEMY_BODY_SEPARATION_X apart, so a strict "<" here never
+        // triggers at that resting distance — add a few px of slack so
+        // "in contact" reliably reads as blocked instead of flickering.
+        const wantsAdvanceX = absDx > idealRange;
+        const blockedAhead =
+          wantsAdvanceX &&
+          this.entities.some(
+            (other) =>
+              other !== enemy &&
+              other.hp > 0 &&
+              (dx > 0 ? other.x > enemy.x : other.x < enemy.x) &&
+              Math.abs(other.x - enemy.x) < ENEMY_BODY_SEPARATION_X + 4 &&
+              Math.abs(other.y - enemy.y) < ENEMY_BODY_SEPARATION_Y + 4
+          );
+        enemy.vx = wantsAdvanceX && !blockedAhead ? (dx > 0 ? 1 : -1) * info.speed * 0.8 : 0;
         enemy.vy = absDy > 16 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
         enemy.action = 'WALK';
       } else {
@@ -924,6 +1294,12 @@ export class GameEngine {
   private updateEntityPhysics(ent: EntityState) {
     ent.x += ent.vx;
     ent.y += ent.vy;
+
+    // Clamped here, right after the position is integrated, rather than only
+    // at the top of the frame. Clamping before movement leaves every entity a
+    // full frame's velocity outside the band when the frame ends — about three
+    // pixels, which is what the render then draws.
+    ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
 
     // Apply smooth friction decay when in HURT/KNOCKDOWN state
     if (ent.action === 'HURT' || ent.action === 'KNOCKDOWN' || ent.action === 'RECOVERY') {
@@ -993,18 +1369,33 @@ export class GameEngine {
         return;
       }
 
-      // Hit detection with player ONLY when hazard is within the visible fighting arena
-      if (
-        this.player1 &&
-        hazard.x >= this.cameraX + 10 &&
-        hazard.x <= this.cameraX + 790 &&
-        Math.hypot(this.player1.x - hazard.x, this.player1.y - hazard.y) < 48
-      ) {
-        this.damageEntity(this.player1, 15, { isPlayer: false } as EntityState);
-        this.player1.slowTimer = 120;
-        this.player1.suppressedTimer = 180;
-        this.addParticle(this.player1.x, this.player1.y - 70, 0, '#a29bfe', 'GUILT VIAL SUPPRESSED!', 'TEXT');
-        hazard.active = false;
+      // Hit detection ONLY when the hazard is inside the visible arena.
+      //
+      // This used to name `this.player1` directly, so player two was immune to
+      // every projectile in the game. Harmless while P2 was an AI companion;
+      // once a second person could hold a controller it meant one player took
+      // ranged damage and the other did not.
+      const inArena = hazard.x >= this.cameraX + 10 && hazard.x <= this.cameraX + 790;
+      if (inArena) {
+        for (const target of [this.player1, this.player2]) {
+          if (!target || target.hp <= 0) continue;
+          if (Math.hypot(target.x - hazard.x, target.y - hazard.y) >= 48) continue;
+
+          const isCensure = hazard.type === 'LASER_CROSS';
+          this.damageEntity(target, isCensure ? 22 : 15, { isPlayer: false } as EntityState);
+          target.slowTimer = isCensure ? 90 : 120;
+          target.suppressedTimer = isCensure ? 240 : 180;
+          this.addParticle(
+            target.x,
+            target.y - 70,
+            0,
+            isCensure ? '#d63031' : '#a29bfe',
+            isCensure ? 'CENSURED!' : 'GUILT VIAL SUPPRESSED!',
+            'TEXT'
+          );
+          hazard.active = false;
+          break;
+        }
       }
     });
     this.hazards = this.hazards.filter((h) => h.timer > 0 && h.active);

@@ -12,12 +12,12 @@ export interface StageValidationIssue {
 }
 
 /**
- * Verifica se toda onda de uma fase é alcançável pela câmera.
+ * Checks that every wave in a stage is reachable by the camera.
  *
- * O motor dispara uma onda quando `cameraX >= triggerX - WAVE_TRIGGER_LOOKAHEAD`,
- * mas a câmera nunca passa de `stage.length - VIEWPORT_WIDTH`. Se o gatilho ficar
- * acima desse teto, a onda nunca acontece — e, como `stageCleared` só ocorre
- * depois que todas as ondas foram limpas, a fase se torna impossível de concluir.
+ * The engine fires a wave when `cameraX >= triggerX - WAVE_TRIGGER_LOOKAHEAD`,
+ * but the camera never goes past `stage.length - VIEWPORT_WIDTH`. A trigger
+ * above that ceiling never happens — and since `stageCleared` only occurs once
+ * every wave has been cleared, the stage becomes impossible to complete.
  */
 export function validateStage(stage: StageConfig): StageValidationIssue[] {
   const limit = maxWaveTriggerX(stage.length);
@@ -47,14 +47,27 @@ export function validateStages(stages: StageConfig[]): StageValidationIssue[] {
 }
 
 /**
- * Em desenvolvimento, estoura na carga do módulo. Falhar alto é intencional:
- * um softlock só aparece depois de vários minutos de jogo, então o erro
- * precisa acontecer antes de alguém abrir o jogo, não durante.
+ * Throws at module load in development. Failing loudly is deliberate: a
+ * softlock only shows up after several minutes of play, so the error has to
+ * surface before anyone opens the game, not during.
  *
- * Em produção não estoura — o motor limita o gatilho ao máximo alcançável,
- * então uma fase mal desenhada fica com o ritmo errado, mas continua jogável.
+ * It does not throw in production — the engine clamps the trigger to the
+ * reachable maximum, so a badly designed stage loses its intended pacing but
+ * stays playable.
  */
 export function assertStagesAreCompletable(stages: StageConfig[]): void {
+  // Exactly one stage ends the campaign. Zero means victory is unreachable;
+  // more than one means it fires early, which is precisely what happened when
+  // Madam Mizydia — the boss of two stages — was treated as the final boss
+  // wherever she appeared.
+  const finals = stages.filter((s) => s.isFinalStage);
+  if (finals.length !== 1) {
+    throw new Error(
+      `[stageData] expected exactly one stage flagged isFinalStage, found ${finals.length}` +
+        (finals.length ? `: ${finals.map((s) => s.id).join(', ')}` : '')
+    );
+  }
+
   const issues = validateStages(stages);
   if (issues.length === 0) return;
 

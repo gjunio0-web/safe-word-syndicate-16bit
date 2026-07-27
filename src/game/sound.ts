@@ -2,6 +2,35 @@
 
 import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from './audioStore';
 
+/**
+ * Backoff between manifest-fetch retries, in ms. A flaky first request used
+ * to leave the game silently stuck on the synth fallback for the rest of the
+ * session — nothing else ever re-triggers the fetch, so one dropped request
+ * on a bad connection was permanent until a full page reload.
+ */
+const MANIFEST_RETRY_DELAYS_MS = [500, 1500, 4000];
+
+export const BGM_TRACKS = [
+  'INTRO',
+  'CHAR_SELECT',
+  'STAGE1',
+  'STAGE1_BOSS',
+  'NEON_BEAT',
+  'SUBURBAN_GRAY',
+  'SACRED_METAL',
+] as const;
+
+/**
+ * Narrows a stored key to a track slot.
+ *
+ * Keys read back from IndexedDB are whatever happens to be there, so a slot
+ * renamed in a later build would otherwise be restored as a track that no
+ * longer exists. A cast would have hidden that; this drops it.
+ */
+export function isBgmTrack(value: string): value is BgmTrack {
+  return (BGM_TRACKS as readonly string[]).includes(value);
+}
+
 export type BgmTrack =
   | 'INTRO'
   | 'CHAR_SELECT'
@@ -17,11 +46,39 @@ class SoundEngine {
   public musicEnabled: boolean = true;
   public volume: number = 0.5;
 
+  /**
+   * Sets the master volume.
+   *
+   * `volume` was read all over the synth but nothing outside this class ever
+   * wrote to it, so the setting existed with no way to change it. Assigning the
+   * field alone is not enough either: a file track already playing keeps the
+   * volume it was created with, so the live element has to be updated too.
+   */
+  public setVolume(next: number) {
+    this.volume = Math.max(0, Math.min(1, next));
+    if (this.activeAudioElement) {
+      this.activeAudioElement.volume = this.volume;
+    }
+  }
+
   private bgmInterval: number | null = null;
   private bgmStep: number = 0;
-  private currentTrack: string | null = null;
+  /**
+   * Typed as the track union rather than `string`.
+   *
+   * These two fields were the origin of every `as any` in the audio code: the
+   * value flowing through them is always a BgmTrack, but the wide type forced a
+   * cast back at each of the six places they reached playBgm.
+   */
+  private currentTrack: BgmTrack | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private isAutoSuspended: boolean = false;
+
+  /**
+   * Autoplay policy: until the first user gesture, the browser refuses both
+   * `HTMLAudioElement.play()` and the AudioContext. Without tracking this, the
+   * track requested on page load failed silently and was never retried.
+   */
   private hasUserGesture: boolean = false;
   private unlockArmed: boolean = false;
   private unlockListeners: Set<() => void> = new Set();
@@ -39,10 +96,16 @@ class SoundEngine {
     }
   }
 
+  /** Has the browser released audio playback yet? */
   public isAudioUnlocked(): boolean {
     return this.hasUserGesture;
   }
 
+  /**
+   * Notifies changes to the lock state. Built for `useSyncExternalStore`: the
+   * UI has to react to state that lives outside the React cycle.
+   * Returns the unsubscribe function.
+   */
   public subscribeUnlock(listener: () => void): () => void {
     this.unlockListeners.add(listener);
     return () => {
@@ -56,6 +119,10 @@ class SoundEngine {
     this.unlockListeners.forEach((listener) => listener());
   }
 
+  /**
+   * Waits for the first user gesture to unlock audio and resume the pending
+   * track. Idempotent: re-arming after a block does not duplicate listeners.
+   */
   private armUnlock() {
     if (typeof window === 'undefined' || this.unlockArmed) return;
     this.unlockArmed = true;
@@ -67,7 +134,10 @@ class SoundEngine {
       this.unlockArmed = false;
       this.initCtx();
 
-      const pending = this.lastRequestedTrack as BgmTrack | null;
+      const pending = this.lastRequestedTrack;
+
+      // Must precede playback: `playBgm` bails out early while the gesture
+      // flag is unset.
       this.setUserGesture(true);
 
       if (pending && this.musicEnabled) {
@@ -75,54 +145,70 @@ class SoundEngine {
       }
     };
 
+    // Capture phase: runs before the application's own handlers, so the gesture
+    // that changes screens already finds audio unlocked.
     events.forEach((evt) => window.addEventListener(evt, unlock, true));
+  }
+
+  /**
+   * Fetches and validates the audio manifest, retrying on failure with
+   * backoff (`MANIFEST_RETRY_DELAYS_MS`). Returns null once retries are
+   * exhausted — the caller falls back to the synth, same as before.
+   */
+  private async fetchAudioManifest(attempt: number = 0): Promise<{ files: string[] } | null> {
+    try {
+      const res = await fetch('/audio/manifest.json');
+      if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
+      const data = await res.json();
+      if (!data || !Array.isArray(data.files)) throw new Error('malformed manifest');
+      return data;
+    } catch {
+      if (attempt >= MANIFEST_RETRY_DELAYS_MS.length) return null;
+      await new Promise((resolve) => setTimeout(resolve, MANIFEST_RETRY_DELAYS_MS[attempt]));
+      return this.fetchAudioManifest(attempt + 1);
+    }
   }
 
   private async restorePersistedTracks() {
     try {
-      // 1. Trilhas colocadas em public/audio/, publicadas via manifesto estático
+      // 1. Tracks placed in public/audio/, published through the static manifest
       if (typeof window !== 'undefined') {
-        fetch('/audio/manifest.json')
-          .then((res) => {
-            if (res.ok) return res.json();
-            return null;
-          })
-          .then((data) => {
-            if (data && Array.isArray(data.files) && data.files.length > 0) {
-              const files: string[] = data.files;
+        this.fetchAudioManifest().then((data) => {
+          if (data && data.files.length > 0) {
+            const files: string[] = data.files;
 
-              // Helper to find file by keyword
-              const findFile = (keywords: string[]) =>
-                files.find((f) => keywords.some((kw) => f.toLowerCase().includes(kw)));
+            // Helper to find file by keyword
+            const findFile = (keywords: string[]) =>
+              files.find((f) => keywords.some((kw) => f.toLowerCase().includes(kw)));
 
-              const introFile = findFile(['intro', 'title', 'main', 'theme', '01']) || files[0];
-              const selectFile = findFile(['select', 'char', 'roster', 'menu', '02']) || files[1] || files[0];
-              const stage1File = findFile(['stage1', 'stage_1', 'street', 'city', 'brawl', '03']) || files[2] || files[0];
-              const bossFile = findFile(['boss', 'mech', 'apex', 'fight', '04']) || files[3] || files[0];
+            const introFile = findFile(['intro', 'title', 'main', 'theme', '01']) || files[0];
+            const selectFile = findFile(['select', 'char', 'roster', 'menu', '02']) || files[1] || files[0];
+            const stage1File = findFile(['stage1', 'stage_1', 'street', 'city', 'brawl', '03']) || files[2] || files[0];
+            const bossFile = findFile(['boss', 'mech', 'apex', 'fight', '04']) || files[3] || files[0];
 
-              if (introFile && !this.customTrackNames['INTRO']) {
-                this.syncTrackAliases('INTRO', `/audio/${introFile}`, introFile);
-              }
-              if (selectFile && !this.customTrackNames['CHAR_SELECT']) {
-                this.syncTrackAliases('CHAR_SELECT', `/audio/${selectFile}`, selectFile);
-              }
-              if (stage1File && !this.customTrackNames['STAGE1']) {
-                this.syncTrackAliases('STAGE1', `/audio/${stage1File}`, stage1File);
-              }
-              if (bossFile && !this.customTrackNames['STAGE1_BOSS']) {
-                this.syncTrackAliases('STAGE1_BOSS', `/audio/${bossFile}`, bossFile);
-              }
-
-              this.refreshActiveTrack();
+            if (introFile && !this.customTrackNames['INTRO']) {
+              this.syncTrackAliases('INTRO', `/audio/${introFile}`, introFile);
             }
-          })
-          .catch(() => {});
+            if (selectFile && !this.customTrackNames['CHAR_SELECT']) {
+              this.syncTrackAliases('CHAR_SELECT', `/audio/${selectFile}`, selectFile);
+            }
+            if (stage1File && !this.customTrackNames['STAGE1']) {
+              this.syncTrackAliases('STAGE1', `/audio/${stage1File}`, stage1File);
+            }
+            if (bossFile && !this.customTrackNames['STAGE1_BOSS']) {
+              this.syncTrackAliases('STAGE1_BOSS', `/audio/${bossFile}`, bossFile);
+            }
+
+            this.refreshActiveTrack();
+          }
+        });
       }
 
       // 2. Check IndexedDB in browser for files uploaded via Jukebox Modal
       const persisted = await loadAudioTrackBlobs();
       let restoredCount = 0;
       Object.entries(persisted).forEach(([trackId, data]) => {
+        if (!isBgmTrack(trackId)) return;
         this.syncTrackAliases(trackId, data.url, data.name);
         restoredCount++;
       });
@@ -136,11 +222,11 @@ class SoundEngine {
   }
 
   /**
-   * Troca para o arquivo real se a faixa ativa acabou de ganhar um.
+   * Switches to the real file if the active track has just gained one.
    *
-   * A restauração é assíncrona e quase sempre termina depois que a tela de
-   * título já pediu `playBgm('INTRO')` — sem isso, o synth continua tocando
-   * até a próxima troca de tela e o arquivo do usuário nunca é ouvido.
+   * Restoration is asynchronous and almost always finishes after the title
+   * screen has already called `playBgm('INTRO')` — without this the synth keeps
+   * playing until the next screen change and the user's file is never heard.
    */
   private refreshActiveTrack() {
     if (!this.musicEnabled) return;
@@ -148,10 +234,10 @@ class SoundEngine {
     const active = this.currentTrack || this.lastRequestedTrack;
     if (!active || !this.customTrackUrls[active]) return;
 
-    // Já está tocando um arquivo: não interromper.
+    // A file is already playing: do not interrupt it.
     if (this.activeAudioElement && !this.activeAudioElement.paused) return;
 
-    this.playBgm(active as BgmTrack, true);
+    this.playBgm(active, true);
   }
 
   private handleVisibilityOrFocusChange() {
@@ -233,10 +319,10 @@ class SoundEngine {
     return (relativeX - 0.5) * 1.5; // -0.75 to +0.75
   }
 
-  private lastRequestedTrack: string | null = null;
+  private lastRequestedTrack: BgmTrack | null = null;
   private synthBgmGain: GainNode | null = null;
 
-  public setEnabled(sound: boolean, music: boolean, currentTrack?: string) {
+  public setEnabled(sound: boolean, music: boolean, currentTrack?: BgmTrack) {
     this.enabled = sound;
     const wasMusicEnabled = this.musicEnabled;
     this.musicEnabled = music;
@@ -248,7 +334,7 @@ class SoundEngine {
     if (!music) {
       this.pauseBgm();
     } else if (music) {
-      const trackToPlay = (currentTrack || this.currentTrack || this.lastRequestedTrack || 'INTRO') as any;
+      const trackToPlay = currentTrack || this.currentTrack || this.lastRequestedTrack || 'INTRO';
       if (!wasMusicEnabled || !this.activeAudioElement || this.activeAudioElement.paused) {
         this.playBgm(trackToPlay, true);
       }
@@ -662,7 +748,7 @@ class SoundEngine {
 
   private customTrackNames: Record<string, string> = {};
 
-  private syncTrackAliases(track: string, url: string, name?: string) {
+  private syncTrackAliases(track: BgmTrack, url: string, name?: string) {
     if (url) {
       this.customTrackUrls[track] = url;
     } else {
@@ -693,14 +779,14 @@ class SoundEngine {
     }
   }
 
-  public setCustomTrackUrl(track: string, url: string, name?: string) {
+  public setCustomTrackUrl(track: BgmTrack, url: string, name?: string) {
     this.syncTrackAliases(track, url, name);
     if (this.currentTrack === track || this.lastRequestedTrack === track) {
-      this.playBgm(track as any, true);
+      this.playBgm(track, true);
     }
   }
 
-  public async setCustomTrackBlob(track: string, file: Blob | File, name: string) {
+  public async setCustomTrackBlob(track: BgmTrack, file: Blob | File, name: string) {
     const objectUrl = URL.createObjectURL(file);
     this.syncTrackAliases(track, objectUrl, name);
     await saveAudioTrackBlob(track, file, name);
@@ -710,18 +796,18 @@ class SoundEngine {
       (track === 'STAGE1' && (this.currentTrack === 'NEON_BEAT' || this.lastRequestedTrack === 'NEON_BEAT')) ||
       (track === 'STAGE1_BOSS' && (this.currentTrack === 'SACRED_METAL' || this.lastRequestedTrack === 'SACRED_METAL'))
     ) {
-      this.playBgm((this.currentTrack || track) as any, true);
+      this.playBgm(this.currentTrack || track, true);
     }
   }
 
-  public async resetCustomTrack(track: string) {
+  public async resetCustomTrack(track: BgmTrack) {
     delete this.customTrackNames[track];
     delete this.customTrackUrls[track];
     this.syncTrackAliases(track, '', '');
     await removeAudioTrackBlob(track);
     if (this.currentTrack === track || this.lastRequestedTrack === track) {
       this.stopBgm();
-      this.playSynthBgm(track as any);
+      this.playSynthBgm(track);
     }
   }
 
@@ -749,10 +835,9 @@ class SoundEngine {
       return;
     }
 
-    if (!this.hasUserGesture) {
-      this.armUnlock();
-      return;
-    }
+    // Do not bail out optimistically: Chrome grants autoplay to sites the user
+    // has engaged with before. Attempt playback and only defer if the browser
+    // actually refuses — bailing here means the permission can never be used.
 
     // Guard: Avoid restarting if this track is ALREADY playing actively
     if (!forceRestart && this.currentTrack === track) {

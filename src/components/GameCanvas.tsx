@@ -1,19 +1,29 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { GameEngine } from '../game/engine';
 import { renderStageBackground } from '../game/stageData';
+import { subscribeGamepadConnection, connectedGamepadCount } from '../game/gamepad';
 import { renderEntitySprite } from '../game/spriteRenderer';
-import { CHARACTERS } from '../game/characterData';
+import { CHARACTERS, ENEMIES } from '../game/characterData';
+import { ATTACKER_STANDOFF_X, PLAYER_KICK_REACH } from '../game/constants';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, fitViewport } from '../game/viewport';
 
 interface GameCanvasProps {
   engine: GameEngine;
   crtFilter: boolean;
+  showHitboxes?: boolean;
 }
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => {
+// Stable across renders: useSyncExternalStore resubscribes when handed
+// freshly created functions.
+const subscribeGamepads = (onChange: () => void) => subscribeGamepadConnection(onChange);
+const getGamepadCount = () => connectedGamepadCount();
+
+export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showHitboxes = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     let animationFrameId: number;
+
 
     const render = () => {
       const canvas = canvasRef.current;
@@ -21,12 +31,53 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const width = canvas.width;
-      const height = canvas.height;
+      // Canvas backing-buffer resolution vs. CSS display size.
+      //
+      // The buffer used to be fixed at 800x450 and left for the browser to
+      // scale up to fill however large the element was displayed —
+      // `object-contain` plus a CSS width/height of 100%. On a small preview
+      // window that scale is close to 1:1 and nothing looks wrong; on an
+      // actual monitor it can be 3x or more, and upscaling a low-resolution
+      // bitmap with `image-rendering: pixelated` is exactly the kind of
+      // scaling that produces inconsistent, sometimes much harsher-looking
+      // banding than the same content drawn at native resolution — reported
+      // repeatedly against the CRT scanlines specifically, since they're the
+      // one thing in the frame that's a fine repeating pattern to begin with.
+      // Sizing the backing buffer to the element's actual CSS size times
+      // devicePixelRatio, and scaling every draw call to match via
+      // ctx.setTransform, means the browser never has to stretch a
+      // low-resolution bitmap at all — every pixel is drawn at the resolution
+      // it's actually displayed at, on any screen.
+      const dpr = window.devicePixelRatio || 1;
+      const cssWidth = canvas.clientWidth || DESIGN_WIDTH;
+      const cssHeight = canvas.clientHeight || DESIGN_HEIGHT;
+      const targetBufferWidth = Math.round(cssWidth * dpr);
+      const targetBufferHeight = Math.round(cssHeight * dpr);
+      if (canvas.width !== targetBufferWidth || canvas.height !== targetBufferHeight) {
+        canvas.width = targetBufferWidth;
+        canvas.height = targetBufferHeight;
+      }
 
-      ctx.clearRect(0, 0, width, height);
+      const width = DESIGN_WIDTH;
+      const height = DESIGN_HEIGHT;
+
+      // Maps the fixed design space onto however large the buffer actually
+      // is, so every draw call below keeps using design-space coordinates.
+      const { scale, offsetX, offsetY } = fitViewport(canvas.width, canvas.height);
+
+      // Clear the whole buffer, not just the design area: the letterbox bars
+      // sit outside it and would otherwise keep the previous frame.
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
 
       // 1. Render Parallax Stage Background
+      // Hard edges are the point of the art. Without this the browser smooths
+      // every scaled draw, softening exactly the outlines and emissives the
+      // sprite work spent its effort on.
+      ctx.imageSmoothingEnabled = false;
+
       renderStageBackground(ctx, engine.stage.bgType, engine.cameraX, width, height);
 
       // 2. Render Ground Item Pickups
@@ -53,6 +104,79 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         ctx.restore();
       });
 
+      // 2b. Render Hazards
+      //
+      // These were created and simulated by the engine but never drawn: the
+      // Conversion Therapist's guilt vials crossed the screen invisibly and the
+      // player lost health to nothing at all.
+      engine.hazards.forEach((hazard) => {
+        if (!hazard.active) return;
+        const hx = hazard.x - engine.cameraX;
+
+        ctx.save();
+
+        // Ground shadow, so the arc reads as height rather than distance.
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.ellipse(hx, hazard.y, 9, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.translate(hx, hazard.y - hazard.z);
+
+        // Motion trail behind the direction of travel.
+        const dir = hazard.vx >= 0 ? -1 : 1;
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = hazard.type === 'LASER_CROSS' ? '#d63031' : '#a855f7';
+        for (let t = 1; t <= 3; t++) {
+          ctx.globalAlpha = 0.35 / t;
+          ctx.beginPath();
+          ctx.arc(dir * t * 9, 0, 5 - t, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        if (hazard.type === 'LASER_CROSS') {
+          // Excommunication wave: a crimson cross, the boss's censure made
+          // visible. She used to land this damage with nothing on screen.
+          ctx.rotate(Date.now() / 200);
+          ctx.fillStyle = '#d63031';
+          ctx.fillRect(-3.5, -14, 7, 28);
+          ctx.fillRect(-11, -3.5, 22, 7);
+          ctx.strokeStyle = '#ff7675';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-3.5, -14, 7, 28);
+          ctx.strokeRect(-11, -3.5, 22, 7);
+
+          ctx.globalAlpha = 0.35;
+          ctx.fillStyle = '#ff7675';
+          ctx.beginPath();
+          ctx.arc(0, 0, 16, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Vial: glass body, glowing contents, cork.
+          ctx.rotate(Date.now() / 90);
+          ctx.fillStyle = '#22d3ee';
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#0e7490';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.fillStyle = '#a855f7';
+          ctx.beginPath();
+          ctx.arc(0, 1.5, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#78350f';
+          ctx.fillRect(-2.5, -10, 5, 4);
+        }
+
+        ctx.restore();
+      });
+
       // 3. Render Shadows & Entity Sprites (Sorted by Y-depth for 2.5D layering)
       const sortedEntities = [...engine.entities].sort((a, b) => a.y - b.y);
 
@@ -60,17 +184,91 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         const renderX = entity.x - engine.cameraX;
         const renderY = entity.y - entity.z; // Y depth minus Z jump vertical height
 
-        // Ground Oval Shadow
+        // Ground shadow. Stays on the ground plane at entity.y and shrinks as
+        // the fighter rises, which is what sells the jump in a 2.5D brawler.
+        const shadowScale = Math.max(0.2, 1 - entity.z / 180);
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.beginPath();
-        ctx.ellipse(renderX, entity.y, entity.width / 1.8, entity.width / 3.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+          renderX,
+          entity.y,
+          (entity.width / 1.8) * shadowScale,
+          (entity.width / 3.5) * shadowScale,
+          0,
+          0,
+          Math.PI * 2
+        );
         ctx.fill();
         ctx.restore();
 
         // Sprite
         renderEntitySprite(ctx, entity, renderX, renderY);
       });
+
+      // 3b. Hitbox overlay
+      //
+      // `showHitboxes` was declared in GameSettings and read nowhere, so the
+      // setting could not do anything at all. It draws what is otherwise
+      // invisible: body boxes, the reach each fighter actually attacks with,
+      // and the standoff ring enemies hold while waiting for an attack slot.
+      if (showHitboxes) {
+        ctx.save();
+        ctx.lineWidth = 1;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+
+        for (const entity of engine.entities) {
+          if (entity.hp <= 0) continue;
+          const ex = entity.x - engine.cameraX;
+          const top = entity.y - entity.z - entity.height;
+
+          ctx.strokeStyle = entity.isPlayer ? '#00ff88' : '#ff5555';
+          ctx.strokeRect(ex - entity.width / 2, top, entity.width, entity.height);
+
+          // Feet marker: the depth position collisions and sorting actually use
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.fillRect(ex - 2, entity.y - 2, 4, 4);
+
+          // Reach. Enemies declare attackRange in their data; heroes do not —
+          // their punch and kick reach are constants inside the engine, so the
+          // wider of the two is what the overlay shows.
+          const reach = entity.isPlayer
+            ? PLAYER_KICK_REACH
+            : entity.enemyType
+              ? ENEMIES[entity.enemyType].attackRange
+              : 0;
+          if (reach > 0) {
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.ellipse(ex, entity.y, reach, reach / 3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(`${Math.round(entity.hp)} ${entity.action}`, ex, top - 4);
+        }
+
+        // Standoff ring, around whichever player the enemies converge on
+        const target = engine.player1 && engine.player1.hp > 0 ? engine.player1 : engine.player2;
+        if (target && target.hp > 0) {
+          const tx = target.x - engine.cameraX;
+          ctx.strokeStyle = '#ffff00';
+          ctx.globalAlpha = 0.4;
+          ctx.setLineDash([6, 6]);
+          for (const side of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(tx + side * ATTACKER_STANDOFF_X, target.y - 120);
+            ctx.lineTo(tx + side * ATTACKER_STANDOFF_X, target.y + 20);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+      }
 
       // 4. Render Particle Effects & Floating Combat Text
       engine.particles.forEach((p) => {
@@ -81,7 +279,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
 
         if (p.type === 'TEXT' && p.text) {
           ctx.fillStyle = p.color;
-          ctx.font = 'black 16px monospace';
+          // 'black' is not a valid weight in the CSS font shorthand, so the
+          // whole assignment was discarded and damage numbers fell back to the
+          // canvas default of 10px sans-serif.
+          ctx.font = '900 16px monospace';
           ctx.shadowColor = '#000000';
           ctx.shadowBlur = 4;
           ctx.fillText(p.text, px - 12, py);
@@ -94,6 +295,39 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         ctx.restore();
       });
 
+      // 5. CRT Scanlines
+      //
+      // This used to be a separate CSS overlay div with a fixed 4-CSS-pixel
+      // repeat. That size has no relationship to how large the canvas is
+      // actually displayed — `object-contain` scales the 800x450 bitmap up to
+      // fill whatever the container measures, and on a large screen that scale
+      // can be 3x or more. The sprite pixels grow with that scale; the CSS
+      // overlay's stripes did not, so at high scale several scanlines fell
+      // inside a single sprite pixel and read as solid dark bands across
+      // character art instead of a faint texture. Drawing the lines here
+      // instead, in the same 800x450 space the sprites are drawn in, means
+      // they scale together at any display size.
+      if (crtFilter) {
+        // One device pixel, always.
+        //
+        // Two earlier versions of this were too coarse. Drawing in design space
+        // multiplied the line by the display scale. Scaling it by
+        // devicePixelRatio instead kept its physical thickness constant, which
+        // sounds right but is not: the reference a scanline has to stay under
+        // is the game pixel, not the millimetre. On a 1.5x display that gave a
+        // three-pixel bar while a design pixel measured 2.29 — a texture
+        // coarser than the art it sits on reads as banding, which is what it
+        // looked like. One device pixel is finer than a design pixel at every
+        // scale the game is ever displayed at.
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#000000';
+        for (let y = 0; y < canvas.height; y += 3) {
+          ctx.fillRect(0, y, canvas.width, 1);
+        }
+        ctx.globalAlpha = 1;
+      }
+
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -102,11 +336,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [engine]);
+  }, [engine, crtFilter, showHitboxes]);
 
-  const p1 = engine.player1;
-  const p2 = engine.player2;
-  const boss = engine.entities.find((e) => e.enemyType?.startsWith('BOSS'));
+  // The engine mutates outside the React cycle, so reading its fields straight
+  // from the JSX left the HUD frozen: it only refreshed when some unrelated
+  // state happened to change — a keypress, a pause. Standing still while taking
+  // damage left the health bar stuck. Subscribing fixes that at the source.
+  const subscribeHud = useCallback((onChange: () => void) => engine.subscribeHud(onChange), [engine]);
+  const getHudSnapshot = useCallback(() => engine.getHudSnapshot(), [engine]);
+  const hud = useSyncExternalStore(subscribeHud, getHudSnapshot, getHudSnapshot);
+
+  const { p1, p2, boss } = hud;
+
+  const gamepadCount = useSyncExternalStore(subscribeGamepads, getGamepadCount, getGamepadCount);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
@@ -115,21 +357,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         ref={canvasRef}
         width={800}
         height={450}
-        className="w-full h-full object-contain image-rendering-pixelated"
+        className="w-full h-full object-contain [image-rendering:pixelated]"
       />
 
-      {/* Retro Arcade CRT Scanline & Curved Glass Shader Overlay */}
+      {/* Retro Arcade CRT Curved Glass Shader Overlay.
+          The scanlines used to be a second layer here — a CSS gradient with a
+          fixed 4-CSS-pixel repeat that did not scale with the canvas, so on a
+          large display it cut multiple lines through a single sprite pixel
+          instead of one faint line per pixel row. They are drawn inside the
+          canvas now, in step 5 of the render loop above, so they scale with
+          the art at any display size. The vignette stays CSS: it is a smooth
+          gradient with no fine repeating pattern, so scale doesn't distort it. */}
       {crtFilter && (
         <>
-          {/* Scanline Grid */}
-          <div
-            className="absolute inset-0 pointer-events-none z-20"
-            style={{
-              background:
-                'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))',
-              backgroundSize: '100% 4px, 6px 100%',
-            }}
-          />
           {/* CRT Glass Curved Vignette & Phosphor Corner Reflection */}
           <div
             className="absolute inset-0 pointer-events-none z-25 rounded-[12px]"
@@ -264,7 +504,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
       </div>
 
       {/* Stage Start Banner Overlay */}
-      {engine.stageStartBannerTimer > 0 && (
+      {hud.showStageBanner && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30 font-mono select-none px-4">
           <div className="bg-black/90 border-y-4 border-[#ff00ff] py-6 px-10 shadow-[0_0_50px_rgba(255,0,255,0.7)] flex flex-col items-center text-center animate-pulse backdrop-blur-md max-w-xl w-full">
             <span className="text-[#00ffff] text-xs font-black tracking-widest uppercase mb-1">
@@ -284,20 +524,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
       )}
 
       {/* Boss Warning Banner Overlay */}
-      {engine.bossWarningTimer > 0 && (
+      {hud.showBossWarning && (
         <div className="absolute top-1/3 left-0 right-0 pointer-events-none z-30 font-mono select-none flex justify-center px-2">
           <div className="w-full bg-gradient-to-r from-red-950 via-red-600 to-red-950 border-y-4 border-amber-400 py-3 text-center shadow-[0_0_40px_rgba(255,0,0,0.8)] animate-pulse">
             <span className="text-white font-black text-sm md:text-lg tracking-widest uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-              {engine.bossWarningTitle || '⚠️ WARNING: ENEMY SURGE ENCOUNTER ⚠️'}
+              {hud.bossWarningTitle || '⚠️ WARNING: ENEMY SURGE ENCOUNTER ⚠️'}
             </span>
           </div>
         </div>
       )}
 
       {/* Arcade "GO! ➔" Navigation Prompt when wave is cleared */}
-      {!engine.isWaveActive &&
-        engine.currentWaveIndex < engine.stage.waves.length &&
-        !engine.stageCleared && (
+      {!hud.isWaveActive &&
+        hud.currentWaveIndex < engine.stage.waves.length &&
+        !hud.stageCleared && (
           <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none z-30 font-mono select-none flex flex-col items-end gap-1.5 animate-bounce">
             <div className="bg-gradient-to-r from-[#ff00ff] via-[#00ffff] to-[#ffff00] text-black font-black text-sm md:text-base px-4 py-2 rounded-xl border-2 border-white shadow-[0_0_25px_rgba(0,255,255,0.9)] flex items-center gap-2">
               <span className="tracking-widest">GO!</span>
@@ -305,10 +545,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
               <span className="text-xl">➔</span>
             </div>
             <div className="bg-black/90 border border-[#00ffff] px-2.5 py-1 rounded-md text-[10px] font-bold text-[#ffff00] shadow-md">
-              MARCH FORWARD → (SECTOR {engine.currentWaveIndex + 1}/{engine.stage.waves.length})
+              MARCH FORWARD → (SECTOR {hud.currentWaveIndex + 1}/{engine.stage.waves.length})
             </div>
           </div>
         )}
+
+      {/* Gamepad connection badge */}
+      {/* Sat in the bottom-right corner, where the on-screen D-pad covers it and
+          nobody looks. Moved under the health bars, which is where a player
+          checks whether their controller registered. */}
+      {gamepadCount > 0 && (
+        <div className="absolute top-24 left-4 pointer-events-none z-30 bg-black/85 border-2 border-[#00ffff] px-2.5 py-1 rounded-lg text-xs font-mono font-black text-[#00ffff] shadow-[0_0_12px_rgba(0,255,255,0.5)]">
+          🎮 {gamepadCount === 1 ? 'PAD 1' : `PAD 1-${gamepadCount}`}
+        </div>
+      )}
 
       {/* Boss Health Bar Display */}
       {boss && (

@@ -10,6 +10,11 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "noEmit": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
     "paths": {
       "@/*": ["./*"]
     }

@@ -66,13 +66,25 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     }
   }, [isOpen]);
 
+  // The banner is dashed-bordered, says "drop all 4 audio files" and calls
+  // itself a drag and drop area, but nothing ever listened for a drop: the only
+  // working path was the file picker button beside it.
+  //
+  // Declared above the early return below: every hook here must run on every
+  // render regardless of `isOpen`, or React sees a different hook count
+  // between the closed and open renders and throws.
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   if (!isOpen) return null;
 
-  const handleFileUpload = async (trackId: string, file: File) => {
+  // Typed as the slot union the component already declares. It was widened to
+  // `string` here and cast back at the playBgm call, throwing away a type that
+  // was two lines above.
+  const handleFileUpload = async (trackId: TrackSlot['id'], file: File) => {
     if (!file) return;
     await sound.setCustomTrackBlob(trackId, file, file.name);
     setFileNames((prev) => ({ ...prev, [trackId]: file.name }));
-    sound.playBgm(trackId as any);
+    sound.playBgm(trackId);
     setPlayingTrack(trackId);
   };
 
@@ -99,25 +111,50 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     }
   };
 
-  const handleResetTrack = async (trackId: string) => {
+  const handleResetTrack = async (trackId: TrackSlot['id']) => {
     await sound.resetCustomTrack(trackId);
     setFileNames((prev) => ({ ...prev, [trackId]: '' }));
     sound.stopBgm();
     setPlayingTrack(null);
   };
 
-  const handleTogglePlay = (trackId: string) => {
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    // Fires for children too, so only react when the pointer leaves the banner.
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDraggingOver(false);
+
+    const audio = Array.from(event.dataTransfer.files).filter(
+      (file) =>
+        file.type.startsWith('audio/') ||
+        /\.(mp3|wav|ogg|m4a|flac|aac|webm)$/i.test(file.name)
+    );
+    if (audio.length > 0) {
+      handleBatchUpload(audio);
+    }
+  };
+
+  const handleTogglePlay = (trackId: TrackSlot['id']) => {
     if (playingTrack === trackId) {
       sound.stopBgm();
       setPlayingTrack(null);
     } else {
-      sound.playBgm(trackId as any);
+      sound.playBgm(trackId);
       setPlayingTrack(trackId);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn" data-gamepad-scope>
       <div className="bg-[#0e071b] border-2 sm:border-4 border-[#00ffff] rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-[0_0_50px_rgba(0,255,255,0.4)] flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header Bar */}
         <div className="flex items-center justify-between pb-3 border-b border-[#00ffff]/30 mb-4 shrink-0">
@@ -142,12 +179,27 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Bulk Drag and Drop Banner */}
-        <div className="mb-4 p-3.5 bg-[#1b0d36] border-2 border-dashed border-[#ff00ff]/60 rounded-xl text-center flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`mb-4 p-3.5 border-2 border-dashed rounded-xl text-center flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 transition-colors ${
+            isDraggingOver
+              ? 'bg-[#2d1155] border-[#ff00ff]'
+              : 'bg-[#1b0d36] border-[#ff00ff]/60'
+          }`}
+        >
           <div className="flex items-center gap-2 text-left">
             <Sparkles className="w-5 h-5 text-[#ff00ff] shrink-0" />
             <div>
               <span className="text-xs font-mono font-bold text-[#ff00ff] uppercase block">QUICK BULK IMPORT</span>
               <span className="text-[11px] text-zinc-300 font-mono">Select or drop all 4 audio files at once (Intro, Selection, Stage 1, Boss)</span>
+              {/* The picker this opens belongs to the operating system and takes
+                  no gamepad input. Saying so beats a controller cursor that
+                  reaches the button and then dead-ends. */}
+              <span className="block text-[10px] text-amber-400 font-mono mt-0.5 uppercase tracking-wider">
+                ⌨ Mouse or touch required — file picker ignores gamepads
+              </span>
             </div>
           </div>
 

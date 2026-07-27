@@ -1,4 +1,4 @@
-import { StageConfig, DialogueLine } from '../types';
+import { StageConfig } from '../types';
 import { assertStagesAreCompletable } from './stageValidation';
 
 export const STAGES: StageConfig[] = [
@@ -151,6 +151,7 @@ export const STAGES: StageConfig[] = [
   },
   {
     id: 3,
+    isFinalStage: true,
     name: 'FINAL STAGE: MEGA-CHURCH CORPORATE HQ',
     subtitle: 'Dismantle the Global Broadcasting Signal',
     location: 'Pinnacle Tower & Executive Boardroom',
@@ -209,8 +210,8 @@ export const STAGES: StageConfig[] = [
   },
 ];
 
-// Falha na carga do módulo, em dev, se alguma onda ficar fora do alcance da câmera.
-// Em produção o motor limita o gatilho e a fase continua jogável.
+// Fails at module load, in dev, if any wave falls outside the camera's reach.
+// In production the engine clamps the trigger and the stage stays playable.
 if (import.meta.env.DEV) {
   assertStagesAreCompletable(STAGES);
 }

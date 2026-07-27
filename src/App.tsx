@@ -3,18 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useReducer, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
   GameMode,
   PlayerInput,
   GameSettings,
+  DialogueLine,
 } from './types';
 import { STAGES } from './game/stageData';
 import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
+import { AttractMode } from './components/AttractMode';
+import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
+import { resolveKeyBinding } from './game/keyboard';
+import { useGamepadMenu } from './hooks/useGamepadMenu';
+import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
@@ -23,13 +29,30 @@ import { GameHeader } from './components/GameHeader';
 import { LoreCodex } from './components/LoreCodex';
 import { CustomAudioModal } from './components/CustomAudioModal';
 import { sound } from './game/sound';
-import { Play, BookOpen, Shield, Flame, RotateCcw, Award, Disc } from 'lucide-react';
+import { Play, BookOpen, Award, Disc } from 'lucide-react';
 
+// Kept module-level: useSyncExternalStore resubscribes on every render if the
+// accessors are recreated.
 const subscribeAudioUnlock = (onChange: () => void) => sound.subscribeUnlock(onChange);
 const getAudioUnlocked = () => sound.isAudioUnlocked();
 
+/** Idle time on the title screen before the cabinet returns to attract mode. */
+const IDLE_RETURN_MS = 45_000;
+
+const NEUTRAL_INPUT: PlayerInput = {
+  left: false,
+  right: false,
+  up: false,
+  down: false,
+  punch: false,
+  kick: false,
+  special: false,
+  jump: false,
+  grab: false,
+};
+
 export default function App() {
-  const [screen, setScreen] = useState<GameScreen>('TITLE');
+  const [screen, setScreen] = useState<GameScreen>('ATTRACT');
   const [currentStageIdx, setCurrentStageIdx] = useState(0);
 
   const [p1Char, setP1Char] = useState<CharacterId>('FEET_MASTER');
@@ -46,7 +69,13 @@ export default function App() {
   });
 
   const audioUnlocked = useSyncExternalStore(subscribeAudioUnlock, getAudioUnlocked, getAudioUnlocked);
-  const [, forceRender] = useReducer((n: number) => n + 1, 0);
+
+  // Engine instance counter. engineRef is a ref, so replacing it neither
+  // triggers a render nor re-runs effects. Restarting the current stage leaves
+  // both `screen` and `currentStageIdx` untouched, so without this the
+  // subscription below would stay attached to the discarded engine.
+  const [engineVersion, setEngineVersion] = useState(0);
+  const [activeDialogue, setActiveDialogue] = useState<DialogueLine[] | null>(null);
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
@@ -55,20 +84,21 @@ export default function App() {
   const engineRef = useRef<GameEngine | null>(null);
 
   // Keyboard controls state
-  const [inputP1, setInputP1] = useState<PlayerInput>({
-    left: false,
-    right: false,
-    up: false,
-    down: false,
-    punch: false,
-    kick: false,
-    special: false,
-    jump: false,
-    grab: false,
-  });
+  const [inputP1, setInputP1] = useState<PlayerInput>(NEUTRAL_INPUT);
+  const [inputP2, setInputP2] = useState<PlayerInput>(NEUTRAL_INPUT);
 
   // Handle Keyboard Listener
   useEffect(() => {
+    // One dispatch for press and release, so a binding can never exist on one
+    // side and be missing from the other.
+    const applyKey = (e: KeyboardEvent, held: boolean) => {
+      const binding = resolveKeyBinding(e.code, e.key, gameModeRef.current === 'COOP');
+      if (!binding) return;
+
+      const setter = binding.player === 1 ? setInputP1 : setInputP2;
+      setter((prev) => ({ ...prev, [binding.field]: held }));
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       sound.initCtx(); // Unlock web audio context on keyboard interaction
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
@@ -79,40 +109,33 @@ export default function App() {
         return;
       }
 
-      if (['arrowup', 'w'].includes(k)) setInputP1((prev) => ({ ...prev, up: true }));
-      if (['arrowdown', 's'].includes(k)) setInputP1((prev) => ({ ...prev, down: true }));
-      if (['arrowleft', 'a'].includes(k)) setInputP1((prev) => ({ ...prev, left: true }));
-      if (['arrowright', 'd'].includes(k)) setInputP1((prev) => ({ ...prev, right: true }));
-      if (k === 'j') setInputP1((prev) => ({ ...prev, punch: true }));
-      if (k === 'k') setInputP1((prev) => ({ ...prev, kick: true }));
-      if (['l', 'e', 'f', 'u'].includes(k)) setInputP1((prev) => ({ ...prev, special: true }));
-      if (e.code === 'Space') setInputP1((prev) => ({ ...prev, jump: true }));
+      // Suppress the browser's own handling of the game keys, but only while a
+      // match is actually running. The arrows scroll the page and Space
+      // activates whatever button holds focus — both belong to the document,
+      // not to a game using those keys to move and jump.
+      //
+      // Scoped rather than global on purpose: on every other screen those same
+      // defaults are the keyboard menu navigation. Tab to a button and press
+      // Space is browser behaviour this game relies on and does not reimplement,
+      // so suppressing it everywhere would leave the menus unreachable without
+      // a mouse.
+      if (screenRef.current === 'GAMEPLAY' && !isPausedRef.current) {
+        const isGameKey =
+          e.code === 'Space' ||
+          ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k);
+        if (isGameKey) e.preventDefault();
+      }
+
+      applyKey(e, true);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (['arrowup', 'w'].includes(k)) setInputP1((prev) => ({ ...prev, up: false }));
-      if (['arrowdown', 's'].includes(k)) setInputP1((prev) => ({ ...prev, down: false }));
-      if (['arrowleft', 'a'].includes(k)) setInputP1((prev) => ({ ...prev, left: false }));
-      if (['arrowright', 'd'].includes(k)) setInputP1((prev) => ({ ...prev, right: false }));
-      if (k === 'j') setInputP1((prev) => ({ ...prev, punch: false }));
-      if (k === 'k') setInputP1((prev) => ({ ...prev, kick: false }));
-      if (['l', 'e', 'f', 'u'].includes(k)) setInputP1((prev) => ({ ...prev, special: false }));
-      if (e.code === 'Space') setInputP1((prev) => ({ ...prev, jump: false }));
+      applyKey(e, false);
     };
 
     const handleBlur = () => {
-      setInputP1({
-        left: false,
-        right: false,
-        up: false,
-        down: false,
-        punch: false,
-        kick: false,
-        special: false,
-        jump: false,
-        grab: false,
-      });
+      setInputP1(NEUTRAL_INPUT);
+      setInputP2(NEUTRAL_INPUT);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -124,6 +147,54 @@ export default function App() {
       window.removeEventListener('blur', handleBlur);
     };
   }, []);
+
+  // Mirror the engine's dialogue into React state. The engine lives outside the
+  // React cycle, so clearing the field there does not unmount the overlay.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      setActiveDialogue(null);
+      return;
+    }
+    setActiveDialogue(engine.activeDialogue);
+    return engine.subscribeDialogue(() => setActiveDialogue(engine.activeDialogue));
+  }, [engineVersion]);
+
+  // An abandoned cabinet goes back to attracting. Without this the attract
+  // sequence would only ever be seen once per session.
+  useEffect(() => {
+    if (screen !== 'TITLE') return;
+
+    let timerId = 0;
+    const arm = () => {
+      window.clearTimeout(timerId);
+      timerId = window.setTimeout(() => setScreen('ATTRACT'), IDLE_RETURN_MS);
+    };
+
+    arm();
+    window.addEventListener('pointerdown', arm);
+    window.addEventListener('keydown', arm);
+    return () => {
+      window.clearTimeout(timerId);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [screen]);
+
+  // Release every controller slot whenever the game comes back to a menu.
+  //
+  // Assignments are already cleared when a match starts, but a slot held by a
+  // controller that was switched off mid-session survived until then. Clearing
+  // on the way out as well means returning to the title is enough to start
+  // over: whatever is switched on and pressed next claims a slot fresh.
+  useEffect(() => {
+    if (screen === 'TITLE' || screen === 'ATTRACT') {
+      resetPadAssignments();
+    }
+  }, [screen]);
+
+  // Modals change the navigable set; drop stale focus when that happens.
+  useMenuFocusReset(`${screen}:${isPaused}`, screen !== 'GAMEPLAY' || isPaused);
 
   const gameRootRef = useRef<HTMLDivElement>(null);
 
@@ -145,7 +216,11 @@ export default function App() {
 
   // Manage Screen Background Music (Intro, Char Select)
   useEffect(() => {
-    if (screen === 'TITLE') {
+    if (screen === 'ATTRACT' || screen === 'TITLE') {
+      // Asking for the theme on ATTRACT costs nothing while audio is still
+      // locked: playBgm arms the unlock and stays silent. Once a coin has been
+      // inserted earlier in the session, the same call brings the music back —
+      // so the first attract loop is silent and later ones are not.
       sound.playBgm('INTRO');
     } else if (screen === 'CHAR_SELECT') {
       sound.playBgm('CHAR_SELECT');
@@ -153,9 +228,30 @@ export default function App() {
   }, [screen]);
 
   const inputRef = useRef<PlayerInput>(inputP1);
+  const inputP2Ref = useRef<PlayerInput>(inputP2);
+  // The key handler is installed once, so it reads the current mode through a
+  // ref rather than closing over a value from the render it was created in.
+  const gameModeRef = useRef<GameMode>(gameMode);
+  // The key handler is installed once and runs on every screen, so it reads the
+  // current one through a ref to know when the game keys are in play.
+  const screenRef = useRef<GameScreen>(screen);
+  const isPausedRef = useRef<boolean>(isPaused);
   useEffect(() => {
     inputRef.current = inputP1;
   }, [inputP1]);
+
+  useEffect(() => {
+    inputP2Ref.current = inputP2;
+  }, [inputP2]);
+
+  useEffect(() => {
+    gameModeRef.current = gameMode;
+  }, [gameMode]);
+
+  useEffect(() => {
+    screenRef.current = screen;
+    isPausedRef.current = isPaused;
+  }, [screen, isPaused]);
 
   // Main Gameplay Update Loop using requestAnimationFrame for smooth 60fps execution
   useEffect(() => {
@@ -176,7 +272,26 @@ export default function App() {
         if (engineRef.current) {
           // Pause physics updates if active dialogue overlay is open
           if (!engineRef.current.activeDialogue) {
-            engineRef.current.update(inputRef.current);
+            // Polled here rather than in React state: the Gamepad API reports
+            // no button events, so reading it through setState would re-render
+            // the tree every frame.
+            // Assignment is stable across frames and keyed by the browser's
+            // pad index, so a device announcing itself late or briefly idling
+            // no longer swaps which fighter each person is driving.
+            const pads = readPlayerPads(gameMode === 'COOP');
+
+            // In co-op, player two is always a person: the keyboard half plus
+            // whichever controller holds that slot. Passing an input object
+            // rather than undefined is what stops the engine falling through to
+            // the AI companion — which is the difference between "2P CO-OP" and
+            // "1P + AI BUDDY", and until now the two modes played identically
+            // whenever a second controller was missing.
+            const coop = gameMode === 'COOP';
+            const p2Input = coop
+              ? mergeInputs(inputP2Ref.current, pads.p2)
+              : (pads.p2 ?? undefined);
+
+            engineRef.current.update(mergeInputs(inputRef.current, pads.p1), p2Input);
           }
 
           if (engineRef.current.stageCleared) {
@@ -192,22 +307,41 @@ export default function App() {
 
     animFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [screen, isPaused]);
+  }, [screen, isPaused, gameMode]);
 
-  const startStage = (stageIdx: number, p1Override?: CharacterId, p2Override?: CharacterId) => {
+  const startStage = (
+    stageIdx: number,
+    p1Override?: CharacterId,
+    p2Override?: CharacterId,
+    settingsOverride?: GameSettings
+  ) => {
     const p1 = p1Override ?? p1Char;
     const p2 = p2Override !== undefined ? p2Override : p2Char;
     const stage = STAGES[stageIdx];
-    engineRef.current = new GameEngine(stage, p1, p2, settings);
+    engineRef.current = new GameEngine(stage, p1, p2, settingsOverride ?? settings);
+    // Slots are not inherited between matches: co-op and solo assign them
+    // differently, and a stale assignment would survive the mode change.
+    resetPadAssignments();
+    setEngineVersion((v) => v + 1);
     setCurrentStageIdx(stageIdx);
     setScreen('GAMEPLAY');
   };
 
-  const handleSelectFighter = (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => {
+  const handleSelectFighter = (
+    p1: CharacterId,
+    p2?: CharacterId,
+    mode?: GameMode,
+    difficulty?: GameSettings['difficulty']
+  ) => {
     setP1Char(p1);
     setP2Char(p2);
     if (mode) setGameMode(mode);
-    startStage(0, p1, p2);
+    // setSettings is async, so startStage can't read the new difficulty back
+    // out of `settings` in the same call — pass the resolved object directly
+    // and let the state update catch up for the stages after this one.
+    const nextSettings = difficulty ? { ...settings, difficulty } : settings;
+    if (difficulty) setSettings(nextSettings);
+    startStage(0, p1, p2, nextSettings);
   };
 
   const handleNextStage = () => {
@@ -218,8 +352,69 @@ export default function App() {
     }
   };
 
+  // Inserting the coin and starting the match are separate actions, as on a
+  // cabinet. The coin leaves attract mode; START begins the match.
+  const handleInsertCoin = () => {
+    sound.playCoin();
+    setScreen('TITLE');
+  };
+
+  const handleStartBrawl = () => {
+    sound.playStart();
+    setScreen('CHAR_SELECT');
+  };
+
+  // Gamepad navigation for every screen except CHAR_SELECT, which owns its own
+  // cursor and handles it internally.
+  useGamepadMenu(
+    (action) => {
+      if (screen === 'ATTRACT') {
+        // Every button is the coin slot here, matching keyboard and touch.
+        handleInsertCoin();
+        return;
+      }
+      if (screen === 'TITLE') {
+        // START always begins the match; the rest walks the buttons, so the
+        // jukebox and the codex are reachable with a controller.
+        if (action === 'START') return handleStartBrawl();
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') handleStartBrawl();
+        return;
+      }
+      if (screen === 'GAMEPLAY') {
+        // Only START pauses. The face buttons are live gameplay input — until
+        // the pause modal is up, when the generic navigation takes over so its
+        // buttons can be reached.
+        if (action === 'START') {
+          setIsPaused((prev) => !prev);
+          return;
+        }
+        if (isPaused) applyMenuNavigation(action);
+        return;
+      }
+      if (screen === 'STAGE_CLEAR') {
+        if (action === 'START') return handleNextStage();
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') handleNextStage();
+        return;
+      }
+      if (screen === 'GAME_OVER') {
+        if (action === 'START') return startStage(currentStageIdx);
+        if (action === 'BACK') return setScreen('TITLE');
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') startStage(currentStageIdx);
+        return;
+      }
+      if (screen === 'VICTORY') {
+        if (action === 'START' || action === 'BACK') return setScreen('TITLE');
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') setScreen('TITLE');
+      }
+    },
+    screen !== 'CHAR_SELECT'
+  );
+
   return (
     <div className="relative w-screen h-screen bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
+      {/* 0. ATTRACT MODE */}
+      {screen === 'ATTRACT' && <AttractMode onInsertCoin={handleInsertCoin} />}
+
       {/* 1. TITLE SCREEN */}
       {screen === 'TITLE' && (
         <div className="relative w-full h-full bg-[#0a0a0a] flex flex-col justify-between p-8 text-white text-center border-[12px] border-[#ff00ff]/10">
@@ -231,11 +426,12 @@ export default function App() {
             </div>
             <div className="text-right">
               <div className="text-xs font-mono text-gray-400">VS ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS</div>
-              <div
-                className={`text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
+              <button
+                onClick={handleStartBrawl}
+                className={`bg-transparent border-0 p-0 cursor-pointer text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
               >
-                {audioUnlocked ? 'INSERT COIN [99]' : 'INSERT COIN ► PRESS ANY KEY'}
-              </div>
+                CREDIT 99 ► PRESS START
+              </button>
             </div>
           </div>
 
@@ -255,10 +451,7 @@ export default function App() {
           {/* Actions */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3 max-w-lg mx-auto w-full pb-4">
             <button
-              onClick={() => {
-                sound.playPunch();
-                setScreen('CHAR_SELECT');
-              }}
+              onClick={handleStartBrawl}
               className="w-full sm:flex-1 py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Play className="w-5 h-5 fill-current" /> START BRAWL
@@ -293,14 +486,15 @@ export default function App() {
       )}
 
       {/* 3. DIALOGUE OVERLAY */}
-      {engineRef.current?.activeDialogue && (
+      {screen === 'GAMEPLAY' && activeDialogue && (
         <DialogueOverlay
-          dialogue={engineRef.current.activeDialogue}
+          dialogue={activeDialogue}
           onComplete={() => {
-            if (engineRef.current) {
-              engineRef.current.setActiveDialogue(null);
-            }
-            forceRender();
+            engineRef.current?.setActiveDialogue(null);
+            // The key that dismisses the dialogue (space, J, K) also feeds the
+            // game input. Without clearing it the player jumps or punches on
+            // the first frame after the overlay closes.
+            setInputP1(NEUTRAL_INPUT);
           }}
         />
       )}
@@ -324,7 +518,11 @@ export default function App() {
           />
 
           <div className="relative flex-1 w-full h-full">
-            <GameCanvas engine={engineRef.current} crtFilter={settings.crtFilter} />
+            <GameCanvas
+              engine={engineRef.current}
+              crtFilter={settings.crtFilter}
+              showHitboxes={settings.showHitboxes}
+            />
 
             <OnScreenControls
               input={inputP1}

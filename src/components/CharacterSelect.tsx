@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { CharacterId, GameMode } from '../types';
+import { useGamepadMenu } from '../hooks/useGamepadMenu';
+import { CharacterId, GameMode, GameSettings } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { Zap, Shield, Flame, Crosshair, Users, Bot, UserCheck, Play, User, CheckCircle2 } from 'lucide-react';
+import { Flame, Crosshair, Users, Bot, UserCheck, Play, User, Gauge } from 'lucide-react';
 import { sound } from '../game/sound';
 
+type Difficulty = GameSettings['difficulty'];
+
+const DIFFICULTIES: { id: Difficulty; label: string }[] = [
+  { id: 'EASY', label: 'EASY' },
+  { id: 'NORMAL', label: 'NORMAL' },
+  { id: 'PUNK_HARD', label: 'PUNK HARD' },
+];
+
 interface CharacterSelectProps {
-  onSelect: (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => void;
+  onSelect: (p1: CharacterId, p2?: CharacterId, mode?: GameMode, difficulty?: Difficulty) => void;
   onBack: () => void;
 }
 
@@ -14,6 +23,7 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
   const [selectedP2, setSelectedP2] = useState<CharacterId | null>(null);
   const [mode, setMode] = useState<GameMode>('SINGLE');
   const [activeSlot, setActiveSlot] = useState<'P1' | 'P2'>('P1');
+  const [difficulty, setDifficulty] = useState<Difficulty>('NORMAL');
 
   const charColors: Record<CharacterId, { border: string; text: string; shadow: string; bar: string }> = {
     FEET_MASTER: {
@@ -64,6 +74,66 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, activeSlot, selectedP1, selectedP2]);
 
+  // Gamepad navigation. There is no separate cursor: moving the stick changes
+  // the active slot's selection directly, mirroring how the number keys work.
+  // Every axis on this screen is spoken for, so the assignment is declared in
+  // one place rather than grown a case at a time:
+  //
+  //   left / right   roster
+  //   up / down      game mode — previously unreachable with a controller
+  //   LB / RB        active player slot, the keyboard's Tab
+  //   A / Start      begin
+  //   B              back
+  //
+  // Slot switching moved off the vertical axis because mode has three values
+  // and slot has two: cycling the longer list deserves the stick, and the
+  // binary toggle fits a button.
+  const MODE_ORDER: GameMode[] = ['SINGLE', 'AI_COMPANION', 'COOP'];
+
+  useGamepadMenu((action) => {
+    if (action === 'LEFT' || action === 'RIGHT') {
+      const current = activeSlot === 'P1' ? selectedP1 : selectedP2;
+      const at = charList.findIndex((c) => c.id === current);
+      const step = action === 'RIGHT' ? 1 : -1;
+      const next = charList[(at + step + charList.length) % charList.length];
+      if (next) selectCharacterForActiveSlot(next.id);
+      return;
+    }
+    if (action === 'UP' || action === 'DOWN') {
+      const at = MODE_ORDER.indexOf(mode);
+      const step = action === 'DOWN' ? 1 : -1;
+      const next = MODE_ORDER[(at + step + MODE_ORDER.length) % MODE_ORDER.length];
+      setMode(next);
+      // Leaving a two-player mode must not strand the cursor on P2, nor leave
+      // a stale P2 highlight on the roster card (SINGLE mode has no P2) —
+      // mirrors what the "1P SOLO" button already does.
+      if (next === 'SINGLE') {
+        setActiveSlot('P1');
+        setSelectedP2(null);
+      }
+      sound.playSelect();
+      return;
+    }
+    if (action === 'TOGGLE') {
+      if (mode !== 'SINGLE') {
+        setActiveSlot((prev) => (prev === 'P1' ? 'P2' : 'P1'));
+        sound.playSelect();
+      }
+      return;
+    }
+    if (action === 'CONFIRM' || action === 'START') handleStart();
+    if (action === 'BACK') {
+      // Picking P1 auto-advances to P2/AI, which reads as a step forward —
+      // BACK should undo that step before it leaves the whole screen.
+      if (mode !== 'SINGLE' && activeSlot === 'P2') {
+        setActiveSlot('P1');
+        sound.playSelect();
+      } else {
+        onBack();
+      }
+    }
+  });
+
   const selectCharacterForActiveSlot = (charId: CharacterId) => {
     sound.playPunch();
     if (mode === 'SINGLE') {
@@ -81,7 +151,7 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
 
   const handleStart = () => {
     sound.playStageClear();
-    onSelect(selectedP1, selectedP2 || undefined, mode);
+    onSelect(selectedP1, selectedP2 || undefined, mode, difficulty);
   };
 
   return (
@@ -142,6 +212,36 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
           </div>
         </div>
       </header>
+
+      {/* Difficulty Selector */}
+      <div className="mt-3 bg-[#141414] border-2 border-[#333] p-2 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 text-[10px] sm:text-xs font-mono text-zinc-400">
+          <Gauge className="w-3.5 h-3.5 text-[#ffff00]" />
+          <span className="text-[#ffff00] font-bold">DIFFICULTY:</span>
+        </div>
+        <div className="flex bg-[#111] p-1 border-2 border-[#333] gap-1 w-full sm:w-auto justify-center">
+          {DIFFICULTIES.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => {
+                sound.playPunch();
+                setDifficulty(d.id);
+              }}
+              className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                difficulty === d.id
+                  ? d.id === 'EASY'
+                    ? 'bg-[#34c759] text-black shadow-md'
+                    : d.id === 'PUNK_HARD'
+                    ? 'bg-[#ff3b30] text-black shadow-md'
+                    : 'bg-[#00ffff] text-black shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Active Selection Target Tabs (Only shown in 2P / AI companion modes) */}
       {mode !== 'SINGLE' && (

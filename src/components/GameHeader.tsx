@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameSettings } from '../types';
-import { Volume2, VolumeX, Tv, BookOpen, Pause, Play, Disc, Home, RotateCcw } from 'lucide-react';
+import { Volume2, VolumeX, Tv, BookOpen, Pause, Play, Disc, Home, RotateCcw, Crosshair } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface GameHeaderProps {
@@ -37,6 +37,15 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
   const toggleCrt = () => {
     onUpdateSettings({ crtFilter: !settings.crtFilter });
+  };
+
+  const toggleHitboxes = () => {
+    onUpdateSettings({ showHitboxes: !settings.showHitboxes });
+  };
+
+  const changeVolume = (next: number) => {
+    onUpdateSettings({ volume: next });
+    sound.setVolume(next);
   };
 
   return (
@@ -99,6 +108,54 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             )}
           </button>
 
+          {/* Volume. The setting existed with no control anywhere, so only the
+              mute button ever did anything. Hidden on narrow screens, where the
+              header is already tight.
+
+              App's global keydown handler ignores every key while an <input>
+              has focus, so leaving this slider focused after use silently
+              disabled every game control — movement, pause, attacks — until
+              the player happened to click elsewhere. Blurring on change
+              handles a drag or an arrow-key nudge; blurring on mouse-up/touch-
+              end also covers a plain click that leaves the value unchanged,
+              which fires no change event at all. None of these interrupt an
+              in-progress drag, since the browser tracks that by pointer
+              capture, not by DOM focus. tabIndex={-1} closes the remaining
+              gap — landing here via Tab alone, with no click or drag to
+              trigger any of the above — the same tradeoff the audio modal's
+              file picker already makes for mouse/touch-only controls. */}
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(settings.volume * 100)}
+            onChange={(e) => {
+              changeVolume(Number(e.target.value) / 100);
+              e.currentTarget.blur();
+            }}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            tabIndex={-1}
+            disabled={!settings.soundEnabled}
+            title={`Volume: ${Math.round(settings.volume * 100)}%`}
+            aria-label="Volume"
+            className="hidden sm:block w-20 accent-[#00ffff] disabled:opacity-30 cursor-pointer"
+          />
+
+          {/* Hitbox overlay. Debug aid for attack ranges and for the standoff
+              ring enemies hold while waiting for an attack slot. */}
+          <button
+            onClick={toggleHitboxes}
+            className={`p-2 border-2 transition-colors ${
+              settings.showHitboxes
+                ? 'bg-[#00ff88]/20 border-[#00ff88] text-[#00ff88]'
+                : 'bg-[#111] border-[#333] text-zinc-500'
+            }`}
+            title="Toggle Hitbox Overlay"
+          >
+            <Crosshair className="w-4 h-4" />
+          </button>
+
           {/* CRT Scanlines Toggle */}
           <button
             onClick={toggleCrt}
@@ -125,7 +182,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
       {/* Pause Menu Modal Overlay */}
       {isPaused && (
-        <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none">
+        <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none" data-gamepad-scope>
           <div className="bg-[#111] border-4 border-[#ffff00] p-6 max-w-sm w-full text-center space-y-5 shadow-[0_0_40px_rgba(255,255,0,0.4)]">
             <h2 className="text-3xl font-black italic text-[#ffff00] tracking-tighter uppercase">
               GAME PAUSED

@@ -29,7 +29,7 @@ export const StageClearScreen: React.FC<StageClearScreenProps> = ({
   };
 
   return (
-    <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-40 flex items-center justify-center p-6 text-white font-sans select-none">
+    <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-40 flex items-center justify-center p-6 text-white font-sans select-none" data-gamepad-scope>
       <div className="bg-[#111] border-4 border-[#00ffff] p-6 max-w-md w-full shadow-[0_0_30px_rgba(0,255,255,0.4)] text-center space-y-6">
         {/* Title Header */}
         <div>
