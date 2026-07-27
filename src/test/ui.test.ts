@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMenuDispatcher, REPEAT_DELAY_FRAMES } from '../hooks/useGamepadMenu';
 import { MenuState } from '../game/gamepad';
 import { advance, NEUTRAL, startEngine } from './helpers';
-import { sound } from '../game/sound';
+import { BGM_TRACKS, BgmTrack, isBgmTrack, sound } from '../game/sound';
 import { PLAYER_KICK_REACH } from '../game/constants';
 
 const idle: MenuState = {
@@ -162,5 +162,41 @@ describe('settings that used to do nothing', () => {
   it('shares one reach constant between the engine and the hitbox overlay', () => {
     // The overlay drew a guessed number before; both now read the same source.
     expect(PLAYER_KICK_REACH).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Track slots were typed as `string` in the sound engine, so every call site
+ * had to cast back — six `as any` in the audio path, each one a place where a
+ * renamed slot would have compiled and failed silently at runtime.
+ */
+describe('track slot typing', () => {
+  it('accepts every declared slot', () => {
+    for (const track of BGM_TRACKS) {
+      expect(isBgmTrack(track)).toBe(true);
+    }
+  });
+
+  it('rejects a key that is not a slot', () => {
+    // Keys come back from IndexedDB as whatever was stored, including slots
+    // removed or renamed by a later build.
+    expect(isBgmTrack('STAGE2_BOSS')).toBe(false);
+    expect(isBgmTrack('')).toBe(false);
+    expect(isBgmTrack('intro')).toBe(false);
+  });
+
+  it('covers the whole union, so the guard cannot drift from the type', () => {
+    const fromList: string[] = [...BGM_TRACKS];
+    // A slot added to BgmTrack but not to BGM_TRACKS would restore as unknown.
+    const declared: BgmTrack[] = [
+      'INTRO',
+      'CHAR_SELECT',
+      'STAGE1',
+      'STAGE1_BOSS',
+      'NEON_BEAT',
+      'SUBURBAN_GRAY',
+      'SACRED_METAL',
+    ];
+    expect([...fromList].sort()).toEqual([...declared].sort());
   });
 });

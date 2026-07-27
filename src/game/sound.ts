@@ -10,6 +10,27 @@ import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from '.
  */
 const MANIFEST_RETRY_DELAYS_MS = [500, 1500, 4000];
 
+export const BGM_TRACKS = [
+  'INTRO',
+  'CHAR_SELECT',
+  'STAGE1',
+  'STAGE1_BOSS',
+  'NEON_BEAT',
+  'SUBURBAN_GRAY',
+  'SACRED_METAL',
+] as const;
+
+/**
+ * Narrows a stored key to a track slot.
+ *
+ * Keys read back from IndexedDB are whatever happens to be there, so a slot
+ * renamed in a later build would otherwise be restored as a track that no
+ * longer exists. A cast would have hidden that; this drops it.
+ */
+export function isBgmTrack(value: string): value is BgmTrack {
+  return (BGM_TRACKS as readonly string[]).includes(value);
+}
+
 export type BgmTrack =
   | 'INTRO'
   | 'CHAR_SELECT'
@@ -42,7 +63,14 @@ class SoundEngine {
 
   private bgmInterval: number | null = null;
   private bgmStep: number = 0;
-  private currentTrack: string | null = null;
+  /**
+   * Typed as the track union rather than `string`.
+   *
+   * These two fields were the origin of every `as any` in the audio code: the
+   * value flowing through them is always a BgmTrack, but the wide type forced a
+   * cast back at each of the six places they reached playBgm.
+   */
+  private currentTrack: BgmTrack | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private isAutoSuspended: boolean = false;
 
@@ -106,7 +134,7 @@ class SoundEngine {
       this.unlockArmed = false;
       this.initCtx();
 
-      const pending = this.lastRequestedTrack as BgmTrack | null;
+      const pending = this.lastRequestedTrack;
 
       // Must precede playback: `playBgm` bails out early while the gesture
       // flag is unset.
@@ -180,6 +208,7 @@ class SoundEngine {
       const persisted = await loadAudioTrackBlobs();
       let restoredCount = 0;
       Object.entries(persisted).forEach(([trackId, data]) => {
+        if (!isBgmTrack(trackId)) return;
         this.syncTrackAliases(trackId, data.url, data.name);
         restoredCount++;
       });
@@ -208,7 +237,7 @@ class SoundEngine {
     // A file is already playing: do not interrupt it.
     if (this.activeAudioElement && !this.activeAudioElement.paused) return;
 
-    this.playBgm(active as BgmTrack, true);
+    this.playBgm(active, true);
   }
 
   private handleVisibilityOrFocusChange() {
@@ -290,10 +319,10 @@ class SoundEngine {
     return (relativeX - 0.5) * 1.5; // -0.75 to +0.75
   }
 
-  private lastRequestedTrack: string | null = null;
+  private lastRequestedTrack: BgmTrack | null = null;
   private synthBgmGain: GainNode | null = null;
 
-  public setEnabled(sound: boolean, music: boolean, currentTrack?: string) {
+  public setEnabled(sound: boolean, music: boolean, currentTrack?: BgmTrack) {
     this.enabled = sound;
     const wasMusicEnabled = this.musicEnabled;
     this.musicEnabled = music;
@@ -305,7 +334,7 @@ class SoundEngine {
     if (!music) {
       this.pauseBgm();
     } else if (music) {
-      const trackToPlay = (currentTrack || this.currentTrack || this.lastRequestedTrack || 'INTRO') as any;
+      const trackToPlay = currentTrack || this.currentTrack || this.lastRequestedTrack || 'INTRO';
       if (!wasMusicEnabled || !this.activeAudioElement || this.activeAudioElement.paused) {
         this.playBgm(trackToPlay, true);
       }
@@ -719,7 +748,7 @@ class SoundEngine {
 
   private customTrackNames: Record<string, string> = {};
 
-  private syncTrackAliases(track: string, url: string, name?: string) {
+  private syncTrackAliases(track: BgmTrack, url: string, name?: string) {
     if (url) {
       this.customTrackUrls[track] = url;
     } else {
@@ -750,14 +779,14 @@ class SoundEngine {
     }
   }
 
-  public setCustomTrackUrl(track: string, url: string, name?: string) {
+  public setCustomTrackUrl(track: BgmTrack, url: string, name?: string) {
     this.syncTrackAliases(track, url, name);
     if (this.currentTrack === track || this.lastRequestedTrack === track) {
-      this.playBgm(track as any, true);
+      this.playBgm(track, true);
     }
   }
 
-  public async setCustomTrackBlob(track: string, file: Blob | File, name: string) {
+  public async setCustomTrackBlob(track: BgmTrack, file: Blob | File, name: string) {
     const objectUrl = URL.createObjectURL(file);
     this.syncTrackAliases(track, objectUrl, name);
     await saveAudioTrackBlob(track, file, name);
@@ -767,18 +796,18 @@ class SoundEngine {
       (track === 'STAGE1' && (this.currentTrack === 'NEON_BEAT' || this.lastRequestedTrack === 'NEON_BEAT')) ||
       (track === 'STAGE1_BOSS' && (this.currentTrack === 'SACRED_METAL' || this.lastRequestedTrack === 'SACRED_METAL'))
     ) {
-      this.playBgm((this.currentTrack || track) as any, true);
+      this.playBgm(this.currentTrack || track, true);
     }
   }
 
-  public async resetCustomTrack(track: string) {
+  public async resetCustomTrack(track: BgmTrack) {
     delete this.customTrackNames[track];
     delete this.customTrackUrls[track];
     this.syncTrackAliases(track, '', '');
     await removeAudioTrackBlob(track);
     if (this.currentTrack === track || this.lastRequestedTrack === track) {
       this.stopBgm();
-      this.playSynthBgm(track as any);
+      this.playSynthBgm(track);
     }
   }
 

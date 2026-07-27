@@ -66,13 +66,25 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     }
   }, [isOpen]);
 
+  // The banner is dashed-bordered, says "drop all 4 audio files" and calls
+  // itself a drag and drop area, but nothing ever listened for a drop: the only
+  // working path was the file picker button beside it.
+  //
+  // Declared above the early return below: every hook here must run on every
+  // render regardless of `isOpen`, or React sees a different hook count
+  // between the closed and open renders and throws.
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   if (!isOpen) return null;
 
-  const handleFileUpload = async (trackId: string, file: File) => {
+  // Typed as the slot union the component already declares. It was widened to
+  // `string` here and cast back at the playBgm call, throwing away a type that
+  // was two lines above.
+  const handleFileUpload = async (trackId: TrackSlot['id'], file: File) => {
     if (!file) return;
     await sound.setCustomTrackBlob(trackId, file, file.name);
     setFileNames((prev) => ({ ...prev, [trackId]: file.name }));
-    sound.playBgm(trackId as any);
+    sound.playBgm(trackId);
     setPlayingTrack(trackId);
   };
 
@@ -99,19 +111,44 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     }
   };
 
-  const handleResetTrack = async (trackId: string) => {
+  const handleResetTrack = async (trackId: TrackSlot['id']) => {
     await sound.resetCustomTrack(trackId);
     setFileNames((prev) => ({ ...prev, [trackId]: '' }));
     sound.stopBgm();
     setPlayingTrack(null);
   };
 
-  const handleTogglePlay = (trackId: string) => {
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    // Fires for children too, so only react when the pointer leaves the banner.
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDraggingOver(false);
+
+    const audio = Array.from(event.dataTransfer.files).filter(
+      (file) =>
+        file.type.startsWith('audio/') ||
+        /\.(mp3|wav|ogg|m4a|flac|aac|webm)$/i.test(file.name)
+    );
+    if (audio.length > 0) {
+      handleBatchUpload(audio);
+    }
+  };
+
+  const handleTogglePlay = (trackId: TrackSlot['id']) => {
     if (playingTrack === trackId) {
       sound.stopBgm();
       setPlayingTrack(null);
     } else {
-      sound.playBgm(trackId as any);
+      sound.playBgm(trackId);
       setPlayingTrack(trackId);
     }
   };
@@ -142,7 +179,16 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Bulk Drag and Drop Banner */}
-        <div className="mb-4 p-3.5 bg-[#1b0d36] border-2 border-dashed border-[#ff00ff]/60 rounded-xl text-center flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`mb-4 p-3.5 border-2 border-dashed rounded-xl text-center flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 transition-colors ${
+            isDraggingOver
+              ? 'bg-[#2d1155] border-[#ff00ff]'
+              : 'bg-[#1b0d36] border-[#ff00ff]/60'
+          }`}
+        >
           <div className="flex items-center gap-2 text-left">
             <Sparkles className="w-5 h-5 text-[#ff00ff] shrink-0" />
             <div>
