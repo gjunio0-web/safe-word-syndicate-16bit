@@ -292,12 +292,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
       {/* Retro Arcade CRT Scanline & Curved Glass Shader Overlay */}
       {crtFilter && (
         <>
-          {/* Scanline Grid */}
+          {/* Scanline Grid.
+              Opacity used to be 0.35 — with the canvas rendering blurred (the
+              pixelated image-rendering class was dead), that softened into a
+              faint texture. Now that sprites render crisp, the same value read
+              as opaque black bars cutting across character art. Lowered to
+              read as a classic CRT sheen instead of stripes on top of it. */}
           <div
             className="absolute inset-0 pointer-events-none z-20"
             style={{
               background:
-                'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))',
+                'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.12) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))',
               backgroundSize: '100% 4px, 6px 100%',
             }}
           />
