@@ -18,6 +18,7 @@ import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
 import { AttractMode } from './components/AttractMode';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
+import { resolveKeyBinding } from './game/keyboard';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
@@ -84,9 +85,20 @@ export default function App() {
 
   // Keyboard controls state
   const [inputP1, setInputP1] = useState<PlayerInput>(NEUTRAL_INPUT);
+  const [inputP2, setInputP2] = useState<PlayerInput>(NEUTRAL_INPUT);
 
   // Handle Keyboard Listener
   useEffect(() => {
+    // One dispatch for press and release, so a binding can never exist on one
+    // side and be missing from the other.
+    const applyKey = (e: KeyboardEvent, held: boolean) => {
+      const binding = resolveKeyBinding(e.code, e.key, gameModeRef.current === 'COOP');
+      if (!binding) return;
+
+      const setter = binding.player === 1 ? setInputP1 : setInputP2;
+      setter((prev) => ({ ...prev, [binding.field]: held }));
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       sound.initCtx(); // Unlock web audio context on keyboard interaction
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
@@ -97,30 +109,16 @@ export default function App() {
         return;
       }
 
-      if (['arrowup', 'w'].includes(k)) setInputP1((prev) => ({ ...prev, up: true }));
-      if (['arrowdown', 's'].includes(k)) setInputP1((prev) => ({ ...prev, down: true }));
-      if (['arrowleft', 'a'].includes(k)) setInputP1((prev) => ({ ...prev, left: true }));
-      if (['arrowright', 'd'].includes(k)) setInputP1((prev) => ({ ...prev, right: true }));
-      if (k === 'j') setInputP1((prev) => ({ ...prev, punch: true }));
-      if (k === 'k') setInputP1((prev) => ({ ...prev, kick: true }));
-      if (['l', 'e', 'f', 'u'].includes(k)) setInputP1((prev) => ({ ...prev, special: true }));
-      if (e.code === 'Space') setInputP1((prev) => ({ ...prev, jump: true }));
+      applyKey(e, true);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (['arrowup', 'w'].includes(k)) setInputP1((prev) => ({ ...prev, up: false }));
-      if (['arrowdown', 's'].includes(k)) setInputP1((prev) => ({ ...prev, down: false }));
-      if (['arrowleft', 'a'].includes(k)) setInputP1((prev) => ({ ...prev, left: false }));
-      if (['arrowright', 'd'].includes(k)) setInputP1((prev) => ({ ...prev, right: false }));
-      if (k === 'j') setInputP1((prev) => ({ ...prev, punch: false }));
-      if (k === 'k') setInputP1((prev) => ({ ...prev, kick: false }));
-      if (['l', 'e', 'f', 'u'].includes(k)) setInputP1((prev) => ({ ...prev, special: false }));
-      if (e.code === 'Space') setInputP1((prev) => ({ ...prev, jump: false }));
+      applyKey(e, false);
     };
 
     const handleBlur = () => {
       setInputP1(NEUTRAL_INPUT);
+      setInputP2(NEUTRAL_INPUT);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -213,9 +211,21 @@ export default function App() {
   }, [screen]);
 
   const inputRef = useRef<PlayerInput>(inputP1);
+  const inputP2Ref = useRef<PlayerInput>(inputP2);
+  // The key handler is installed once, so it reads the current mode through a
+  // ref rather than closing over a value from the render it was created in.
+  const gameModeRef = useRef<GameMode>(gameMode);
   useEffect(() => {
     inputRef.current = inputP1;
   }, [inputP1]);
+
+  useEffect(() => {
+    inputP2Ref.current = inputP2;
+  }, [inputP2]);
+
+  useEffect(() => {
+    gameModeRef.current = gameMode;
+  }, [gameMode]);
 
   // Main Gameplay Update Loop using requestAnimationFrame for smooth 60fps execution
   useEffect(() => {
@@ -244,10 +254,18 @@ export default function App() {
             // no longer swaps which fighter each person is driving.
             const pads = readPlayerPads(gameMode === 'COOP');
 
-            engineRef.current.update(
-              mergeInputs(inputRef.current, pads.p1),
-              pads.p2 ?? undefined
-            );
+            // In co-op, player two is always a person: the keyboard half plus
+            // whichever controller holds that slot. Passing an input object
+            // rather than undefined is what stops the engine falling through to
+            // the AI companion — which is the difference between "2P CO-OP" and
+            // "1P + AI BUDDY", and until now the two modes played identically
+            // whenever a second controller was missing.
+            const coop = gameMode === 'COOP';
+            const p2Input = coop
+              ? mergeInputs(inputP2Ref.current, pads.p2)
+              : (pads.p2 ?? undefined);
+
+            engineRef.current.update(mergeInputs(inputRef.current, pads.p1), p2Input);
           }
 
           if (engineRef.current.stageCleared) {
