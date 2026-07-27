@@ -1,3 +1,4 @@
+import type { BgmTrack } from './game/bgmTracks';
 export type GameScreen =
   | 'ATTRACT'
   | 'TITLE'
@@ -147,7 +148,14 @@ export interface StageConfig {
   bgType: 'STAGE_1_NEON' | 'STAGE_2_SUBURB' | 'STAGE_3_CHURCH';
   length: number; // World width in pixels
   waves: WaveConfig[];
-  musicTrack: 'NEON_BEAT' | 'SUBURBAN_GRAY' | 'SACRED_METAL';
+  /** Gameplay music for this stage. */
+  musicTrack: BgmTrack;
+  /**
+   * Music for this stage's boss wave. Every boss in the game used to play
+   * STAGE1_BOSS, a name left over from when stage one was the only stage, so
+   * Sayonara in the alley and the two-boss finale in the tower sounded identical.
+   */
+  bossTrack: BgmTrack;
   /**
    * Marks the stage that ends the campaign. Madam Mizydia is the boss of two
    * stages, so "Mizydia died" cannot mean "the game is won" on its own.

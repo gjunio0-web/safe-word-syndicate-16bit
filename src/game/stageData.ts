@@ -9,7 +9,8 @@ export const STAGES: StageConfig[] = [
     location: 'Downtown Queer Nightlife Quarter',
     bgType: 'STAGE_1_NEON',
     length: 2600,
-    musicTrack: 'NEON_BEAT',
+    musicTrack: 'STAGE1',
+    bossTrack: 'STAGE1_BOSS',
     waves: [
       {
         triggerX: 200,
@@ -90,6 +91,7 @@ export const STAGES: StageConfig[] = [
     bgType: 'STAGE_2_SUBURB',
     length: 2700,
     musicTrack: 'SUBURBAN_GRAY',
+    bossTrack: 'STAGE2_BOSS',
     waves: [
       {
         triggerX: 200,
@@ -158,6 +160,7 @@ export const STAGES: StageConfig[] = [
     bgType: 'STAGE_3_CHURCH',
     length: 2000,
     musicTrack: 'SACRED_METAL',
+    bossTrack: 'FINAL_BOSS',
     waves: [
       {
         triggerX: 200,

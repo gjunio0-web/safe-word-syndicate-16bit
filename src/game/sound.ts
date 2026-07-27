@@ -1,5 +1,10 @@
 // Web Audio API 16-Bit FM & PCM Chiptune Synthesizer Engine
 
+import { BGM_TRACKS, BGM_TRACK_IDS, matchTrackByFilename, type BgmTrack } from './bgmTracks';
+
+export type { BgmTrack };
+export { BGM_TRACK_IDS };
+
 import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from './audioStore';
 
 /**
@@ -10,15 +15,6 @@ import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from '.
  */
 const MANIFEST_RETRY_DELAYS_MS = [500, 1500, 4000];
 
-export const BGM_TRACKS = [
-  'INTRO',
-  'CHAR_SELECT',
-  'STAGE1',
-  'STAGE1_BOSS',
-  'NEON_BEAT',
-  'SUBURBAN_GRAY',
-  'SACRED_METAL',
-] as const;
 
 /**
  * Narrows a stored key to a track slot.
@@ -28,17 +24,10 @@ export const BGM_TRACKS = [
  * longer exists. A cast would have hidden that; this drops it.
  */
 export function isBgmTrack(value: string): value is BgmTrack {
-  return (BGM_TRACKS as readonly string[]).includes(value);
+  return (BGM_TRACK_IDS as readonly string[]).includes(value);
 }
 
-export type BgmTrack =
-  | 'INTRO'
-  | 'CHAR_SELECT'
-  | 'STAGE1'
-  | 'STAGE1_BOSS'
-  | 'NEON_BEAT'
-  | 'SUBURBAN_GRAY'
-  | 'SACRED_METAL';
+
 
 class SoundEngine {
   private ctx: AudioContext | null = null;
@@ -177,26 +166,16 @@ class SoundEngine {
           if (data && data.files.length > 0) {
             const files: string[] = data.files;
 
-            // Helper to find file by keyword
-            const findFile = (keywords: string[]) =>
-              files.find((f) => keywords.some((kw) => f.toLowerCase().includes(kw)));
-
-            const introFile = findFile(['intro', 'title', 'main', 'theme', '01']) || files[0];
-            const selectFile = findFile(['select', 'char', 'roster', 'menu', '02']) || files[1] || files[0];
-            const stage1File = findFile(['stage1', 'stage_1', 'street', 'city', 'brawl', '03']) || files[2] || files[0];
-            const bossFile = findFile(['boss', 'mech', 'apex', 'fight', '04']) || files[3] || files[0];
-
-            if (introFile && !this.customTrackNames['INTRO']) {
-              this.syncTrackAliases('INTRO', `/audio/${introFile}`, introFile);
-            }
-            if (selectFile && !this.customTrackNames['CHAR_SELECT']) {
-              this.syncTrackAliases('CHAR_SELECT', `/audio/${selectFile}`, selectFile);
-            }
-            if (stage1File && !this.customTrackNames['STAGE1']) {
-              this.syncTrackAliases('STAGE1', `/audio/${stage1File}`, stage1File);
-            }
-            if (bossFile && !this.customTrackNames['STAGE1_BOSS']) {
-              this.syncTrackAliases('STAGE1_BOSS', `/audio/${bossFile}`, bossFile);
+            // Each file claims the slot its name matches, and nothing else. The
+            // previous version fell back to position — files[0] became the title
+            // theme, files[3] the boss — so the ten-track soundtrack landed
+            // alphabetically: the title screen played the stage one theme and six
+            // tracks never loaded at all.
+            for (const file of files) {
+              const slot = matchTrackByFilename(file);
+              if (slot && !this.customTrackNames[slot]) {
+                this.syncTrackAliases(slot, `/audio/${file}`, file);
+              }
             }
 
             this.refreshActiveTrack();
@@ -760,23 +739,9 @@ class SoundEngine {
       else delete this.customTrackNames[track];
     }
 
-    const aliasMap: Record<string, string> = {
-      STAGE1: 'NEON_BEAT',
-      NEON_BEAT: 'STAGE1',
-      STAGE1_BOSS: 'SACRED_METAL',
-      SACRED_METAL: 'STAGE1_BOSS',
-    };
-
-    const targetAlias = aliasMap[track];
-    if (targetAlias) {
-      if (url) {
-        this.customTrackUrls[targetAlias] = url;
-      } else {
-        delete this.customTrackUrls[targetAlias];
-      }
-      if (name) this.customTrackNames[targetAlias] = name;
-      else if (name === '') delete this.customTrackNames[targetAlias];
-    }
+    // STAGE1 used to alias NEON_BEAT and STAGE1_BOSS used to alias SACRED_METAL,
+    // which meant the Mega-Church stage could never have its own music: uploading
+    // a boss track overwrote it. Every slot stands alone now.
   }
 
   public setCustomTrackUrl(track: BgmTrack, url: string, name?: string) {
@@ -790,12 +755,7 @@ class SoundEngine {
     const objectUrl = URL.createObjectURL(file);
     this.syncTrackAliases(track, objectUrl, name);
     await saveAudioTrackBlob(track, file, name);
-    if (
-      this.currentTrack === track ||
-      this.lastRequestedTrack === track ||
-      (track === 'STAGE1' && (this.currentTrack === 'NEON_BEAT' || this.lastRequestedTrack === 'NEON_BEAT')) ||
-      (track === 'STAGE1_BOSS' && (this.currentTrack === 'SACRED_METAL' || this.lastRequestedTrack === 'SACRED_METAL'))
-    ) {
+    if (this.currentTrack === track || this.lastRequestedTrack === track) {
       this.playBgm(this.currentTrack || track, true);
     }
   }
@@ -931,27 +891,31 @@ class SoundEngine {
     let chordNotes: number[] = [];
     let speedMs = 180;
 
-    if (theme === 'INTRO') {
+    // The recipe is declared per slot, so a new track never falls through the
+    // chain into silence — it borrows the closest built-in until a file exists.
+    const recipe = BGM_TRACKS[theme as BgmTrack]?.synth ?? 'STAGE';
+
+    if (recipe === 'INTRO') {
       bassNotes = [87.31, 87.31, 110, 87.31, 98, 87.31, 110, 130.81];
       leadNotes = [349.23, 0, 440, 523.25, 659.25, 523.25, 440, 392];
       chordNotes = [174.61, 220, 261.63, 174.61, 220, 261.63, 293.66, 220];
       speedMs = 210;
-    } else if (theme === 'CHAR_SELECT') {
+    } else if (recipe === 'CHAR_SELECT') {
       bassNotes = [110, 130.81, 146.83, 110, 164.81, 146.83, 130.81, 110];
       leadNotes = [523.25, 587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 440];
       chordNotes = [220, 261.63, 293.66, 329.63, 293.66, 261.63, 220, 196];
       speedMs = 140;
-    } else if (theme === 'STAGE1' || theme === 'NEON_BEAT') {
+    } else if (recipe === 'STAGE') {
       bassNotes = [110, 110, 146.83, 110, 130.81, 110, 164.81, 146.83];
       leadNotes = [440, 523.25, 659.25, 587.33, 659.25, 783.99, 659.25, 523.25];
       chordNotes = [220, 261.63, 329.63, 293.66, 329.63, 392, 329.63, 261.63];
       speedMs = 135;
-    } else if (theme === 'STAGE1_BOSS' || theme === 'SACRED_METAL') {
+    } else if (recipe === 'BOSS') {
       bassNotes = [73.42, 73.42, 82.41, 73.42, 87.31, 82.41, 98, 87.31];
       leadNotes = [293.66, 349.23, 392, 440, 523.25, 440, 392, 349.23];
       chordNotes = [146.83, 174.61, 196, 220, 261.63, 220, 196, 174.61];
       speedMs = 115;
-    } else if (theme === 'SUBURBAN_GRAY') {
+    } else if (recipe === 'SUBURB') {
       bassNotes = [98, 98, 123.47, 98, 110, 98, 130.81, 98];
       leadNotes = [392, 440, 392, 0, 493.88, 440, 392, 329.63];
       chordNotes = [196, 220, 246.94, 196, 220, 246.94, 261.63, 220];

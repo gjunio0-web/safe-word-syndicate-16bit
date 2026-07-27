@@ -214,7 +214,11 @@ export default function App() {
     focusContainer();
   }, [screen]);
 
-  // Manage Screen Background Music (Intro, Char Select)
+  // Screen background music.
+  //
+  // GAME_OVER and VICTORY had no branch here, and stopBgm only ran when the
+  // player clicked away — so the boss theme kept hammering underneath the defeat
+  // screen while they decided whether to continue.
   useEffect(() => {
     if (screen === 'ATTRACT' || screen === 'TITLE') {
       // Asking for the theme on ATTRACT costs nothing while audio is still
@@ -224,6 +228,10 @@ export default function App() {
       sound.playBgm('INTRO');
     } else if (screen === 'CHAR_SELECT') {
       sound.playBgm('CHAR_SELECT');
+    } else if (screen === 'GAME_OVER') {
+      sound.playBgm('GAME_OVER');
+    } else if (screen === 'VICTORY') {
+      sound.playBgm('VICTORY');
     }
   }, [screen]);
 

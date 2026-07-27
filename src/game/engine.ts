@@ -258,12 +258,10 @@ export class GameEngine {
       this.entities.push(this.player2);
     }
 
-    // Trigger stage background music
-    if (stage.id === 1) {
-      sound.playBgm('STAGE1');
-    } else {
-      sound.playBgm(stage.musicTrack);
-    }
+    // Stage one used to be special-cased here because its declared musicTrack,
+    // NEON_BEAT, was an alias nothing could reach. The stage now names its own
+    // track like the other two.
+    sound.playBgm(stage.musicTrack);
 
     this.hudSnapshot = this.buildHudSnapshot();
   }
@@ -543,7 +541,7 @@ export class GameEngine {
       if (hasBoss || isFinalWave) {
         sound.playBossAlarm();
         if (hasBoss) {
-          sound.playBgm('STAGE1_BOSS');
+          sound.playBgm(this.stage.bossTrack);
           this.bossWarningTitle = '⚠️ BOSS ENCOUNTER: DESTROY THE PURITY LEADERS ⚠️';
         } else {
           this.bossWarningTitle = '⚠️ WARNING: HEAVY ENEMY SURGE ⚠️';
