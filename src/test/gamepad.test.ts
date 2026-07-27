@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  connectedGamepadCount,
   mapGamepadToInput,
   mergeInputs,
   readPlayerPads,
   resetPadAssignments,
+  subscribeGamepadConnection,
 } from '../game/gamepad';
 import { NEUTRAL } from './helpers';
 
@@ -139,5 +141,56 @@ describe('player assignment', () => {
 
     const pads = readPlayerPads(false);
     expect(pads.p1).not.toBeNull();
+  });
+});
+
+/**
+ * `gamepaddisconnected` does not reliably fire — a Bluetooth pad going out of
+ * range in particular often updates `Gamepad.connected` without the browser
+ * ever dispatching the event. The connection badge relied on that event
+ * alone, so it kept reporting a pad as connected indefinitely after a silent
+ * disconnect, while input handling elsewhere (which polls every frame) had
+ * already stopped reading it. subscribeGamepadConnection now falls back to
+ * polling the count itself.
+ */
+describe('connection change detection', () => {
+  it('notifies on a silent disconnect that never fires the browser event', () => {
+    vi.useFakeTimers();
+    try {
+      connect([pad({ index: 0 })]);
+      expect(connectedGamepadCount()).toBe(1);
+
+      let notifications = 0;
+      const unsubscribe = subscribeGamepadConnection(() => {
+        notifications++;
+      });
+
+      // Gamepad goes away with no 'gamepaddisconnected' event -- only the
+      // polling fallback can catch this.
+      connect([]);
+      vi.advanceTimersByTime(100);
+
+      expect(connectedGamepadCount()).toBe(0);
+      expect(notifications).toBeGreaterThan(0);
+
+      unsubscribe();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops polling once the last listener unsubscribes', () => {
+    vi.useFakeTimers();
+    try {
+      connect([pad({ index: 0 })]);
+      const unsubscribe = subscribeGamepadConnection(() => {});
+      unsubscribe();
+
+      // No pending timers left running in the background after the last
+      // unsubscribe -- a leaked poll loop would keep scheduling one.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

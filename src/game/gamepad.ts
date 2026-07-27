@@ -201,6 +201,30 @@ export function connectedGamepadCount(): number {
 
 const connectionListeners: Set<() => void> = new Set();
 let listenersInstalled = false;
+let lastKnownCount = -1;
+let pollFrameId = 0;
+
+/**
+ * Falls back to polling `connectedGamepadCount()` every frame and notifying on
+ * a change, rather than trusting `gamepaddisconnected` alone.
+ *
+ * That event is unreliable across browsers and controllers — a Bluetooth pad
+ * going out of range in particular often updates `Gamepad.connected` on the
+ * object `getGamepads()` returns without the DOM event ever firing. The badge
+ * relied solely on the event, so it kept reporting a pad as connected
+ * indefinitely after the physical disconnect: input handling elsewhere
+ * already polls every frame and stopped reading the dead pad correctly, so
+ * only this badge — the thing telling the player what the game currently
+ * sees — was wrong.
+ */
+function pollConnectionCount() {
+  const count = connectedGamepadCount();
+  if (count !== lastKnownCount) {
+    lastKnownCount = count;
+    connectionListeners.forEach((listener) => listener());
+  }
+  pollFrameId = requestAnimationFrame(pollConnectionCount);
+}
 
 function installConnectionListeners() {
   if (listenersInstalled || typeof window === 'undefined') return;
@@ -223,8 +247,16 @@ function installConnectionListeners() {
 export function subscribeGamepadConnection(listener: () => void): () => void {
   installConnectionListeners();
   connectionListeners.add(listener);
+  if (connectionListeners.size === 1 && typeof window !== 'undefined') {
+    lastKnownCount = connectedGamepadCount();
+    pollFrameId = requestAnimationFrame(pollConnectionCount);
+  }
   return () => {
     connectionListeners.delete(listener);
+    if (connectionListeners.size === 0) {
+      cancelAnimationFrame(pollFrameId);
+      pollFrameId = 0;
+    }
   };
 }
 

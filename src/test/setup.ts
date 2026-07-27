@@ -103,3 +103,21 @@ Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
   value: () => Promise.reject(new Error('no network in tests')),
 });
+
+/**
+ * gamepad.ts polls the connection count on a raw `requestAnimationFrame` (a
+ * bare global reference, not `window.requestAnimationFrame`), as a fallback
+ * for the unreliable `gamepaddisconnected` event. A timer-based stand-in is
+ * enough to exercise that fallback under a fake timer without a real
+ * animation loop.
+ */
+Object.defineProperty(globalThis, 'requestAnimationFrame', {
+  configurable: true,
+  writable: true,
+  value: (cb: FrameRequestCallback) => setTimeout(() => cb(0), 16) as unknown as number,
+});
+Object.defineProperty(globalThis, 'cancelAnimationFrame', {
+  configurable: true,
+  writable: true,
+  value: (id: number) => clearTimeout(id),
+});

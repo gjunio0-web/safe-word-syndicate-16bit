@@ -23,14 +23,55 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
   useEffect(() => {
     let animationFrameId: number;
 
+    // Design resolution every draw call below is written against — cameraX,
+    // arena bounds and spawn positions in engine.ts all assume an 800-wide
+    // viewport. Kept as fixed logical constants rather than reading
+    // canvas.width/height directly, now that those hold the scaled backing
+    // buffer size instead.
+    const DESIGN_WIDTH = 800;
+    const DESIGN_HEIGHT = 450;
+
     const render = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const width = canvas.width;
-      const height = canvas.height;
+      // Canvas backing-buffer resolution vs. CSS display size.
+      //
+      // The buffer used to be fixed at 800x450 and left for the browser to
+      // scale up to fill however large the element was displayed —
+      // `object-contain` plus a CSS width/height of 100%. On a small preview
+      // window that scale is close to 1:1 and nothing looks wrong; on an
+      // actual monitor it can be 3x or more, and upscaling a low-resolution
+      // bitmap with `image-rendering: pixelated` is exactly the kind of
+      // scaling that produces inconsistent, sometimes much harsher-looking
+      // banding than the same content drawn at native resolution — reported
+      // repeatedly against the CRT scanlines specifically, since they're the
+      // one thing in the frame that's a fine repeating pattern to begin with.
+      // Sizing the backing buffer to the element's actual CSS size times
+      // devicePixelRatio, and scaling every draw call to match via
+      // ctx.setTransform, means the browser never has to stretch a
+      // low-resolution bitmap at all — every pixel is drawn at the resolution
+      // it's actually displayed at, on any screen.
+      const dpr = window.devicePixelRatio || 1;
+      const cssWidth = canvas.clientWidth || DESIGN_WIDTH;
+      const cssHeight = canvas.clientHeight || DESIGN_HEIGHT;
+      const targetBufferWidth = Math.round(cssWidth * dpr);
+      const targetBufferHeight = Math.round(cssHeight * dpr);
+      if (canvas.width !== targetBufferWidth || canvas.height !== targetBufferHeight) {
+        canvas.width = targetBufferWidth;
+        canvas.height = targetBufferHeight;
+      }
+
+      const width = DESIGN_WIDTH;
+      const height = DESIGN_HEIGHT;
+
+      // Maps the fixed 800x450 design space onto however large the buffer
+      // actually is, so every existing draw call below keeps using design-
+      // space coordinates unmodified.
+      const scale = canvas.width / DESIGN_WIDTH;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
       ctx.clearRect(0, 0, width, height);
 
