@@ -17,6 +17,7 @@ import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
 import { AttractMode } from './components/AttractMode';
+import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { resolveKeyBinding } from './game/keyboard';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
@@ -220,6 +221,12 @@ export default function App() {
   // player clicked away — so the boss theme kept hammering underneath the defeat
   // screen while they decided whether to continue.
   useEffect(() => {
+    if (screen === 'INTRO') {
+      // The sequence plays its own track through the shared AudioContext; the
+      // screen theme would sit on top of it at a different tempo.
+      sound.stopBgm();
+      return;
+    }
     if (screen === 'ATTRACT' || screen === 'TITLE') {
       // Asking for the theme on ATTRACT costs nothing while audio is still
       // locked: playBgm arms the unlock and stays silent. Once a coin has been
@@ -364,7 +371,10 @@ export default function App() {
   // cabinet. The coin leaves attract mode; START begins the match.
   const handleInsertCoin = () => {
     sound.playCoin();
-    setScreen('TITLE');
+    // The coin is the user gesture that unlocks audio, which is why the intro
+    // sits here rather than ahead of it: run before the gesture and the browser
+    // refuses to start the track, and the whole sequence plays silent.
+    setScreen('INTRO');
   };
 
   const handleStartBrawl = () => {
@@ -422,6 +432,9 @@ export default function App() {
     <div className="relative w-screen h-screen bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
       {/* 0. ATTRACT MODE */}
       {screen === 'ATTRACT' && <AttractMode onInsertCoin={handleInsertCoin} />}
+
+      {/* 0.5 INTRO SEQUENCE */}
+      {screen === 'INTRO' && <IntroSequence onComplete={() => setScreen('TITLE')} />}
 
       {/* 1. TITLE SCREEN */}
       {screen === 'TITLE' && (

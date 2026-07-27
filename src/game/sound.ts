@@ -255,6 +255,15 @@ class SoundEngine {
     }
   }
 
+  /**
+   * The intro sequence drives its animation off the audio clock rather than off
+   * timers, so it needs the same AudioContext the rest of the game plays through.
+   * A second context would run on its own clock and drift against this one.
+   */
+  public getContext(): AudioContext | null {
+    return this.ctx;
+  }
+
   public initCtx() {
     this.isAutoSuspended = false;
     if (!this.ctx) {

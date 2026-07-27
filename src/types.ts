@@ -1,6 +1,7 @@
 import type { BgmTrack } from './game/bgmTracks';
 export type GameScreen =
   | 'ATTRACT'
+  | 'INTRO'
   | 'TITLE'
   | 'CHAR_SELECT'
   | 'DIALOGUE'
