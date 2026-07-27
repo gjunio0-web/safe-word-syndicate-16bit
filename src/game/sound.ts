@@ -25,6 +25,21 @@ class SoundEngine {
   public musicEnabled: boolean = true;
   public volume: number = 0.5;
 
+  /**
+   * Sets the master volume.
+   *
+   * `volume` was read all over the synth but nothing outside this class ever
+   * wrote to it, so the setting existed with no way to change it. Assigning the
+   * field alone is not enough either: a file track already playing keeps the
+   * volume it was created with, so the live element has to be updated too.
+   */
+  public setVolume(next: number) {
+    this.volume = Math.max(0, Math.min(1, next));
+    if (this.activeAudioElement) {
+      this.activeAudioElement.volume = this.volume;
+    }
+  }
+
   private bgmInterval: number | null = null;
   private bgmStep: number = 0;
   private currentTrack: string | null = null;

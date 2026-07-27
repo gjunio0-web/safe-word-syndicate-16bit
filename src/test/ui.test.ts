@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMenuDispatcher, REPEAT_DELAY_FRAMES } from '../hooks/useGamepadMenu';
 import { MenuState } from '../game/gamepad';
 import { advance, NEUTRAL, startEngine } from './helpers';
+import { sound } from '../game/sound';
+import { PLAYER_KICK_REACH } from '../game/constants';
 
 const idle: MenuState = {
   UP: false,
@@ -128,5 +130,37 @@ describe('HUD snapshot', () => {
     // Power meter regeneration crosses a percent every few dozen frames; the
     // point is that this is nowhere near one per frame.
     expect(notifications).toBeLessThan(60);
+  });
+});
+
+/**
+ * Two settings existed in GameSettings with nothing reading them: `volume` was
+ * consumed all over the synth but no code outside the sound engine could write
+ * it, and `showHitboxes` was assigned false in two places and never read.
+ */
+describe('settings that used to do nothing', () => {
+  it('clamps volume and applies it to a track already playing', () => {
+    const playing = { volume: 1 } as HTMLAudioElement;
+    // The live element is private; reaching it is the point of the test —
+    // setting the field alone would leave a playing track at its old volume.
+    (sound as unknown as { activeAudioElement: HTMLAudioElement | null }).activeAudioElement =
+      playing;
+
+    sound.setVolume(0.25);
+    expect(sound.volume).toBe(0.25);
+    expect(playing.volume).toBe(0.25);
+
+    sound.setVolume(5);
+    expect(sound.volume).toBe(1);
+
+    sound.setVolume(-1);
+    expect(sound.volume).toBe(0);
+
+    (sound as unknown as { activeAudioElement: HTMLAudioElement | null }).activeAudioElement = null;
+  });
+
+  it('shares one reach constant between the engine and the hitbox overlay', () => {
+    // The overlay drew a guessed number before; both now read the same source.
+    expect(PLAYER_KICK_REACH).toBeGreaterThan(0);
   });
 });

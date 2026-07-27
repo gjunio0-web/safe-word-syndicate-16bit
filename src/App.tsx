@@ -462,7 +462,11 @@ export default function App() {
           />
 
           <div className="relative flex-1 w-full h-full">
-            <GameCanvas engine={engineRef.current} crtFilter={settings.crtFilter} />
+            <GameCanvas
+              engine={engineRef.current}
+              crtFilter={settings.crtFilter}
+              showHitboxes={settings.showHitboxes}
+            />
 
             <OnScreenControls
               input={inputP1}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameSettings } from '../types';
-import { Volume2, VolumeX, Tv, BookOpen, Pause, Play, Disc, Home, RotateCcw } from 'lucide-react';
+import { Volume2, VolumeX, Tv, BookOpen, Pause, Play, Disc, Home, RotateCcw, Crosshair } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface GameHeaderProps {
@@ -37,6 +37,15 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
   const toggleCrt = () => {
     onUpdateSettings({ crtFilter: !settings.crtFilter });
+  };
+
+  const toggleHitboxes = () => {
+    onUpdateSettings({ showHitboxes: !settings.showHitboxes });
+  };
+
+  const changeVolume = (next: number) => {
+    onUpdateSettings({ volume: next });
+    sound.setVolume(next);
   };
 
   return (
@@ -97,6 +106,35 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             ) : (
               <VolumeX className="w-4 h-4 text-[#ff00ff]" />
             )}
+          </button>
+
+          {/* Volume. The setting existed with no control anywhere, so only the
+              mute button ever did anything. Hidden on narrow screens, where the
+              header is already tight. */}
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(settings.volume * 100)}
+            onChange={(e) => changeVolume(Number(e.target.value) / 100)}
+            disabled={!settings.soundEnabled}
+            title={`Volume: ${Math.round(settings.volume * 100)}%`}
+            aria-label="Volume"
+            className="hidden sm:block w-20 accent-[#00ffff] disabled:opacity-30 cursor-pointer"
+          />
+
+          {/* Hitbox overlay. Debug aid for attack ranges and for the standoff
+              ring enemies hold while waiting for an attack slot. */}
+          <button
+            onClick={toggleHitboxes}
+            className={`p-2 border-2 transition-colors ${
+              settings.showHitboxes
+                ? 'bg-[#00ff88]/20 border-[#00ff88] text-[#00ff88]'
+                : 'bg-[#111] border-[#333] text-zinc-500'
+            }`}
+            title="Toggle Hitbox Overlay"
+          >
+            <Crosshair className="w-4 h-4" />
           </button>
 
           {/* CRT Scanlines Toggle */}

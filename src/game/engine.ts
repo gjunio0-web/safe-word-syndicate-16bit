@@ -21,6 +21,7 @@ import {
   ENEMY_BODY_SEPARATION_Y,
   PLAYER_PUSH_SHARE,
   ATTACKERS_BY_DIFFICULTY,
+  PLAYER_KICK_REACH,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
 } from './constants';
@@ -857,7 +858,7 @@ export class GameEngine {
     const ky = player.y - player.z - 50;
     this.addParticle(kx, ky, 0, '#ffff00', undefined, 'SHOCKWAVE');
 
-    const reach = 135;
+    const reach = PLAYER_KICK_REACH;
     this.entities.forEach((target) => {
       if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 60) {
         const dx = target.x - player.x;

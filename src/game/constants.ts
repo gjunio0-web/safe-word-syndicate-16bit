@@ -106,3 +106,12 @@ export const ATTACKER_STANDOFF_TOLERANCE = 30;
  * yields. A small non-zero share keeps contact readable without dragging.
  */
 export const PLAYER_PUSH_SHARE = 0.15;
+
+/**
+ * Reach of a player kick, the longer of the two melee attacks.
+ *
+ * Heroes have no `attackRange` in their data — unlike enemies, their reach is a
+ * constant inside the engine. Named here so the hitbox overlay can draw the
+ * same number the combat code uses instead of guessing one.
+ */
+export const PLAYER_KICK_REACH = 135;

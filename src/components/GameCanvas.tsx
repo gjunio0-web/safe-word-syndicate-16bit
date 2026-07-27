@@ -3,11 +3,13 @@ import { GameEngine } from '../game/engine';
 import { renderStageBackground } from '../game/stageData';
 import { subscribeGamepadConnection, connectedGamepadCount } from '../game/gamepad';
 import { renderEntitySprite } from '../game/spriteRenderer';
-import { CHARACTERS } from '../game/characterData';
+import { CHARACTERS, ENEMIES } from '../game/characterData';
+import { ATTACKER_STANDOFF_X, PLAYER_KICK_REACH } from '../game/constants';
 
 interface GameCanvasProps {
   engine: GameEngine;
   crtFilter: boolean;
+  showHitboxes?: boolean;
 }
 
 // Stable across renders: useSyncExternalStore resubscribes when handed
@@ -15,7 +17,7 @@ interface GameCanvasProps {
 const subscribeGamepads = (onChange: () => void) => subscribeGamepadConnection(onChange);
 const getGamepadCount = () => connectedGamepadCount();
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => {
+export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showHitboxes = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -165,6 +167,70 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter }) => 
         // Sprite
         renderEntitySprite(ctx, entity, renderX, renderY);
       });
+
+      // 3b. Hitbox overlay
+      //
+      // `showHitboxes` was declared in GameSettings and read nowhere, so the
+      // setting could not do anything at all. It draws what is otherwise
+      // invisible: body boxes, the reach each fighter actually attacks with,
+      // and the standoff ring enemies hold while waiting for an attack slot.
+      if (showHitboxes) {
+        ctx.save();
+        ctx.lineWidth = 1;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+
+        for (const entity of engine.entities) {
+          if (entity.hp <= 0) continue;
+          const ex = entity.x - engine.cameraX;
+          const top = entity.y - entity.z - entity.height;
+
+          ctx.strokeStyle = entity.isPlayer ? '#00ff88' : '#ff5555';
+          ctx.strokeRect(ex - entity.width / 2, top, entity.width, entity.height);
+
+          // Feet marker: the depth position collisions and sorting actually use
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.fillRect(ex - 2, entity.y - 2, 4, 4);
+
+          // Reach. Enemies declare attackRange in their data; heroes do not —
+          // their punch and kick reach are constants inside the engine, so the
+          // wider of the two is what the overlay shows.
+          const reach = entity.isPlayer
+            ? PLAYER_KICK_REACH
+            : entity.enemyType
+              ? ENEMIES[entity.enemyType].attackRange
+              : 0;
+          if (reach > 0) {
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.ellipse(ex, entity.y, reach, reach / 3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(`${Math.round(entity.hp)} ${entity.action}`, ex, top - 4);
+        }
+
+        // Standoff ring, around whichever player the enemies converge on
+        const target = engine.player1 && engine.player1.hp > 0 ? engine.player1 : engine.player2;
+        if (target && target.hp > 0) {
+          const tx = target.x - engine.cameraX;
+          ctx.strokeStyle = '#ffff00';
+          ctx.globalAlpha = 0.4;
+          ctx.setLineDash([6, 6]);
+          for (const side of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(tx + side * ATTACKER_STANDOFF_X, target.y - 120);
+            ctx.lineTo(tx + side * ATTACKER_STANDOFF_X, target.y + 20);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+      }
 
       // 4. Render Particle Effects & Floating Combat Text
       engine.particles.forEach((p) => {
