@@ -83,6 +83,20 @@ Object.defineProperty(globalThis, 'document', {
   value: { hidden: false, visibilityState: 'visible', addEventListener: noop },
 });
 
+/**
+ * The sprite renderer preloads portraits at module load, guarded only by
+ * `typeof window !== 'undefined'` — and the stub window above satisfies that.
+ * `complete: false` keeps the cut-in from trying to draw an image that has no
+ * pixels behind it.
+ */
+class StubImage {
+  src = '';
+  complete = false;
+  width = 0;
+  height = 0;
+}
+
+Object.defineProperty(globalThis, 'Image', { configurable: true, value: StubImage });
 Object.defineProperty(globalThis, 'Audio', { configurable: true, value: StubAudio });
 Object.defineProperty(globalThis, 'indexedDB', { configurable: true, value: undefined });
 Object.defineProperty(globalThis, 'fetch', {

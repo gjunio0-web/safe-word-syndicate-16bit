@@ -1,6 +1,6 @@
 import { GameEngine } from '../game/engine';
 import { STAGES } from '../game/stageData';
-import { CharacterId, EnemyType, PlayerInput } from '../types';
+import { CharacterId, EnemyType, EntityState, PlayerInput } from '../types';
 
 /** Every input released. */
 export const NEUTRAL: PlayerInput = {
@@ -62,3 +62,47 @@ export function countAttackFrames(engine: GameEngine, frames: number): number {
   }
   return total;
 }
+
+/**
+ * A fighter in a chosen pose, for renderer tests.
+ *
+ * Kept here rather than in each test file so the shape only has to track
+ * EntityState in one place.
+ */
+export function spriteEntity(over: Partial<EntityState> = {}): EntityState {
+  return {
+    id: 'e',
+    isPlayer: false,
+    x: 0,
+    y: 0,
+    z: 0,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    hp: 100,
+    maxHp: 100,
+    action: 'IDLE',
+    actionFrame: 0,
+    actionTimer: 0,
+    facing: 'RIGHT',
+    width: 60,
+    height: 90,
+    invulnerableTimer: 0,
+    stunTimer: 0,
+    comboHits: 0,
+    comboTimer: 0,
+    powerMeter: 50,
+    slowTimer: 0,
+    suppressedTimer: 0,
+    canDoubleJump: true,
+    aiState: 'PATROL',
+    aiTimer: 0,
+    ...over,
+  };
+}
+
+export const spriteHero = (charId: CharacterId, over: Partial<EntityState> = {}) =>
+  spriteEntity({ isPlayer: true, playerNum: 1, charId, ...over });
+
+export const spriteEnemy = (enemyType: EnemyType, over: Partial<EntityState> = {}) =>
+  spriteEntity({ enemyType, ...over });
