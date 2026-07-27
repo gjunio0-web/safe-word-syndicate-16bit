@@ -1089,8 +1089,22 @@ export class GameEngine {
       enemy.vy = Math.abs(dy) > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.4 : 0;
       enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
 
+      // The cast check used to ignore the holding band entirely: it only
+      // required `dist < attackRange`, so a wave could be cast from as close
+      // as point-blank while she was mid-retreat. At that range the hazard's
+      // ~48px hit radius already reaches the player, so it landed in a
+      // handful of frames — far below human reaction time, and effectively
+      // unavoidable for a player pressing the attack, which is the natural
+      // way to play a brawler. Requiring the same minimum distance her own
+      // positioning already tries to hold makes every cast a real, dodgeable
+      // projectile instead of an occasional instant hit.
       const castChance = enraged ? 0.03 : 0.016;
-      if (dist < info.attackRange && enemy.actionTimer === 0 && Math.random() < castChance) {
+      if (
+        dist >= holdAt - 60 &&
+        dist < info.attackRange &&
+        enemy.actionTimer === 0 &&
+        Math.random() < castChance
+      ) {
         enemy.action = 'PUNCH1';
         enemy.actionTimer = 30;
         enemy.vx = 0;

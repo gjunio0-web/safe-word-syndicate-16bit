@@ -11,6 +11,7 @@ import {
 } from './helpers';
 import { STAGES } from '../game/stageData';
 import { GameEngine } from '../game/engine';
+import { ENEMIES } from '../game/characterData';
 
 describe('combat', () => {
   /**
@@ -289,6 +290,44 @@ describe('ranged attacks', () => {
       threw = engine.hazards.length > 0;
     }
     expect(threw).toBe(true);
+  });
+
+  /**
+   * The cast check only required `dist < attackRange`, ignoring the holding
+   * band the rest of her AI uses to keep distance. That let her fire an
+   * Excommunication wave from point-blank range, where the ~48px hit radius
+   * meant a handful of frames of travel — far under human reaction time and
+   * effectively an instant, unavoidable hit against a player pressing the
+   * attack, the natural way to play a brawler.
+   */
+  it('never casts the excommunication wave from point-blank range', () => {
+    const engine = withBoss();
+    const player = engine.player1!;
+    const minCastDist = ENEMIES.BOSS_MADAM_MIZYDIA.attackRange * 0.8 - 60;
+    const castDistances: number[] = [];
+
+    for (let i = 0; i < 3600; i++) {
+      const boss = livingEnemies(engine)[0];
+      const hazardsBefore = engine.hazards.length;
+      if (!boss) break;
+
+      // Sweep the player through a wide, continuously changing range of
+      // distances, including point-blank, so casts get sampled everywhere a
+      // real fight could put the player relative to her.
+      const t = i % 240;
+      const target = 20 + (t < 120 ? t : 240 - t) * 3;
+      const dist = Math.abs(boss.x - player.x);
+      engine.update(input(dist < target ? { left: true } : { right: true }));
+
+      if (engine.hazards.length > hazardsBefore) {
+        castDistances.push(Math.hypot(boss.x - player.x, boss.y - player.y));
+      }
+    }
+
+    expect(castDistances.length).toBeGreaterThan(0);
+    for (const d of castDistances) {
+      expect(d).toBeGreaterThanOrEqual(minCastDist);
+    }
   });
 });
 
