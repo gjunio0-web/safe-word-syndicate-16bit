@@ -74,6 +74,20 @@ export const ENEMY_BODY_SEPARATION_Y = 14;
  */
 export const MAX_SIMULTANEOUS_ATTACKERS = 2;
 
+/**
+ * Attacker cap per difficulty.
+ *
+ * `difficulty` was written into the engine at construction and never read, so
+ * the setting did nothing at all. The attack-slot system gave it something
+ * honest to mean: how many enemies may engage at once is exactly the dial that
+ * separates a manageable fight from an overwhelming one.
+ */
+export const ATTACKERS_BY_DIFFICULTY: Record<'EASY' | 'NORMAL' | 'PUNK_HARD', number> = {
+  EASY: 1,
+  NORMAL: MAX_SIMULTANEOUS_ATTACKERS,
+  PUNK_HARD: 3,
+};
+
 /** Horizontal distance kept by melee enemies waiting for an attack slot. */
 export const ATTACKER_STANDOFF_X = 190;
 

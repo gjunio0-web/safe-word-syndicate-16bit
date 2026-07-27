@@ -1,4 +1,4 @@
-import { StageConfig, DialogueLine } from '../types';
+import { StageConfig } from '../types';
 import { assertStagesAreCompletable } from './stageValidation';
 
 export const STAGES: StageConfig[] = [

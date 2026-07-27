@@ -20,7 +20,7 @@ import {
   ENEMY_BODY_SEPARATION_X,
   ENEMY_BODY_SEPARATION_Y,
   PLAYER_PUSH_SHARE,
-  MAX_SIMULTANEOUS_ATTACKERS,
+  ATTACKERS_BY_DIFFICULTY,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
 } from './constants';
@@ -272,7 +272,6 @@ export class GameEngine {
     x: number,
     y: number
   ): EntityState {
-    const info = CHARACTERS[charId];
     return {
       id,
       isPlayer: true,
@@ -486,7 +485,7 @@ export class GameEngine {
       if (!holder || holder.hp <= 0) this.attackSlots.delete(id);
     }
 
-    const free = MAX_SIMULTANEOUS_ATTACKERS - this.attackSlots.size;
+    const free = ATTACKERS_BY_DIFFICULTY[this.settings.difficulty] - this.attackSlots.size;
     if (free <= 0) return;
 
     const target = this.currentTarget();

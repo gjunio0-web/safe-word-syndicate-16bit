@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
@@ -28,7 +28,7 @@ import { GameHeader } from './components/GameHeader';
 import { LoreCodex } from './components/LoreCodex';
 import { CustomAudioModal } from './components/CustomAudioModal';
 import { sound } from './game/sound';
-import { Play, BookOpen, Shield, Flame, RotateCcw, Award, Disc } from 'lucide-react';
+import { Play, BookOpen, Award, Disc } from 'lucide-react';
 
 // Kept module-level: useSyncExternalStore resubscribes on every render if the
 // accessors are recreated.

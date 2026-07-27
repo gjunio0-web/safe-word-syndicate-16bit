@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGamepadMenu } from '../hooks/useGamepadMenu';
 import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { Zap, Shield, Flame, Crosshair, Users, Bot, UserCheck, Play, User, CheckCircle2 } from 'lucide-react';
+import { Flame, Crosshair, Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface CharacterSelectProps {

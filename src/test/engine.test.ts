@@ -10,6 +10,7 @@ import {
   startEngine,
 } from './helpers';
 import { STAGES } from '../game/stageData';
+import { GameEngine } from '../game/engine';
 
 describe('combat', () => {
   /**
@@ -288,5 +289,51 @@ describe('ranged attacks', () => {
       threw = engine.hazards.length > 0;
     }
     expect(threw).toBe(true);
+  });
+});
+
+/**
+ * `difficulty` was stored on the engine and never read: every setting played
+ * identically. The attack-slot cap gave it a real meaning.
+ */
+describe('difficulty', () => {
+  const engagedAt = (difficulty: 'EASY' | 'NORMAL' | 'PUNK_HARD') => {
+    const engine = new GameEngine(STAGES[0], 'FEET_MASTER', undefined, {
+      soundEnabled: false,
+      musicEnabled: false,
+      difficulty,
+      showHitboxes: false,
+      crtFilter: false,
+      volume: 0,
+    });
+    engine.setActiveDialogue(null);
+    advance(engine, 60);
+    stageEnemies(engine, [
+      { type: 'PURITY_PATROL', dx: 150, dy: -40 },
+      { type: 'PURITY_PATROL', dx: 170, dy: 0 },
+      { type: 'PURITY_PATROL', dx: 150, dy: 40 },
+      { type: 'PURITY_PATROL', dx: 190, dy: 20 },
+    ]);
+
+    // Peak number of enemies inside striking distance at any one moment.
+    let peak = 0;
+    for (let i = 0; i < 900; i++) {
+      engine.update(NEUTRAL);
+      const close = livingEnemies(engine).filter(
+        (e) => Math.abs(e.x - engine.player1!.x) < 110
+      ).length;
+      peak = Math.max(peak, close);
+    }
+    return peak;
+  };
+
+  it('sends fewer attackers on EASY than on PUNK_HARD', () => {
+    expect(engagedAt('EASY')).toBeLessThan(engagedAt('PUNK_HARD'));
+  });
+
+  it('leaves NORMAL between the two', () => {
+    const normal = engagedAt('NORMAL');
+    expect(normal).toBeGreaterThanOrEqual(engagedAt('EASY'));
+    expect(normal).toBeLessThanOrEqual(engagedAt('PUNK_HARD'));
   });
 });

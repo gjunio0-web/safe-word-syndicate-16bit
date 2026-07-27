@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CHARACTERS, ENEMIES } from '../game/characterData';
+import { CHARACTERS } from '../game/characterData';
 import { BookOpen, X, Shield, Zap, Skull, Award } from 'lucide-react';
 
 interface LoreCodexProps {
