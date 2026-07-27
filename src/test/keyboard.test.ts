@@ -93,3 +93,44 @@ describe('keyboard bindings', () => {
     }
   });
 });
+
+/**
+ * Which keys the game claims from the browser, and when.
+ *
+ * The arrows scroll the page and Space activates whatever button holds focus.
+ * Both have to be suppressed while a match is running, and both have to be left
+ * alone everywhere else: Tab-to-a-button-then-Space is the keyboard menu
+ * navigation, and this game relies on the browser for it rather than
+ * reimplementing it. Suppressing globally would leave the menus mouse-only.
+ */
+describe('when the game claims a key from the browser', () => {
+  const claimsKey = (code: string, key: string, inMatch: boolean) => {
+    if (!inMatch) return false;
+    return (
+      code === 'Space' ||
+      ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key.toLowerCase())
+    );
+  };
+
+  it('claims space and the arrows during a match', () => {
+    expect(claimsKey('Space', ' ', true)).toBe(true);
+    expect(claimsKey('ArrowUp', 'ArrowUp', true)).toBe(true);
+    expect(claimsKey('ArrowLeft', 'ArrowLeft', true)).toBe(true);
+  });
+
+  it('leaves them to the browser on menus, so buttons stay reachable', () => {
+    expect(claimsKey('Space', ' ', false)).toBe(false);
+    expect(claimsKey('ArrowUp', 'ArrowUp', false)).toBe(false);
+  });
+
+  it('never claims enter, which activates buttons everywhere', () => {
+    expect(claimsKey('Enter', 'Enter', true)).toBe(false);
+    expect(claimsKey('Enter', 'Enter', false)).toBe(false);
+  });
+
+  it('leaves the letter keys alone, which carry no default worth blocking', () => {
+    for (const key of ['w', 'j', 'k', 'l']) {
+      expect(claimsKey(`Key${key.toUpperCase()}`, key, true)).toBe(false);
+    }
+  });
+});

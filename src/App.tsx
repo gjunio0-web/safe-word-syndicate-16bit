@@ -109,6 +109,23 @@ export default function App() {
         return;
       }
 
+      // Suppress the browser's own handling of the game keys, but only while a
+      // match is actually running. The arrows scroll the page and Space
+      // activates whatever button holds focus — both belong to the document,
+      // not to a game using those keys to move and jump.
+      //
+      // Scoped rather than global on purpose: on every other screen those same
+      // defaults are the keyboard menu navigation. Tab to a button and press
+      // Space is browser behaviour this game relies on and does not reimplement,
+      // so suppressing it everywhere would leave the menus unreachable without
+      // a mouse.
+      if (screenRef.current === 'GAMEPLAY' && !isPausedRef.current) {
+        const isGameKey =
+          e.code === 'Space' ||
+          ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k);
+        if (isGameKey) e.preventDefault();
+      }
+
       applyKey(e, true);
     };
 
@@ -177,7 +194,7 @@ export default function App() {
   }, [screen]);
 
   // Modals change the navigable set; drop stale focus when that happens.
-  useMenuFocusReset(`${screen}:${isPaused}`);
+  useMenuFocusReset(`${screen}:${isPaused}`, screen !== 'GAMEPLAY' || isPaused);
 
   const gameRootRef = useRef<HTMLDivElement>(null);
 
@@ -215,6 +232,10 @@ export default function App() {
   // The key handler is installed once, so it reads the current mode through a
   // ref rather than closing over a value from the render it was created in.
   const gameModeRef = useRef<GameMode>(gameMode);
+  // The key handler is installed once and runs on every screen, so it reads the
+  // current one through a ref to know when the game keys are in play.
+  const screenRef = useRef<GameScreen>(screen);
+  const isPausedRef = useRef<boolean>(isPaused);
   useEffect(() => {
     inputRef.current = inputP1;
   }, [inputP1]);
@@ -226,6 +247,11 @@ export default function App() {
   useEffect(() => {
     gameModeRef.current = gameMode;
   }, [gameMode]);
+
+  useEffect(() => {
+    screenRef.current = screen;
+    isPausedRef.current = isPaused;
+  }, [screen, isPaused]);
 
   // Main Gameplay Update Loop using requestAnimationFrame for smooth 60fps execution
   useEffect(() => {

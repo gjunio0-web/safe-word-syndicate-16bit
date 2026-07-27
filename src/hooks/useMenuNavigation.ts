@@ -137,10 +137,24 @@ export function applyMenuNavigation(action: MenuAction): boolean {
  * all. Pre-focusing removes that dead first press while keeping the same
  * safeguard: nothing activates until the player actually presses confirm.
  */
-export function useMenuFocusReset(scopeKey: unknown) {
+export function useMenuFocusReset(scopeKey: unknown, enabled: boolean = true) {
   const previous = useRef<unknown>(null);
 
   useEffect(() => {
+    // Never while the game is running.
+    //
+    // Focus exists here to drive menu navigation, and gameplay has no menu —
+    // but it does have the header buttons, and during play the navigable scope
+    // is the whole document, so the first focusable element is RESET. Browsers
+    // activate a focused button on Space, so pre-focusing it meant that
+    // jumping also returned the player to the title screen.
+    if (!enabled) {
+      previous.current = scopeKey;
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active !== document.body) active.blur();
+      return;
+    }
+
     if (previous.current === scopeKey) return;
     previous.current = scopeKey;
 
