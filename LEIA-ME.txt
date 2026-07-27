@@ -1,0 +1,55 @@
+SWS — TRILHA SONORA COMPLETA (11 faixas)
+
+Extraia este pacote na RAIZ do repositorio. A estrutura interna ja coloca cada
+arquivo no lugar certo.
+
+  public/audio/                 as 10 faixas do sistema de BGM
+  public/assets/intro/          a faixa da animacao de abertura
+
+ANTES DE EXTRAIR, apague os quatro MP3 antigos:
+
+  public/audio/intro.mp3
+  public/audio/char_select.mp3
+  public/audio/stage1.mp3
+  public/audio/stage1_boss.mp3
+
+Se ficarem, disputam os mesmos slots com os OGG novos e quem vence depende da
+ordem em que o manifesto lista a pasta.
+
+---------------------------------------------------------------------------
+AS 10 FAIXAS DE BGM                                        slot | duracao
+---------------------------------------------------------------------------
+01  Last Coin Standing        Ficha e titulo         INTRO         | 30,7s
+02  Night Shift Access        Selecao de personagem  CHAR_SELECT   | 30,7s
+03  Concrete Insurrection     Fase I                 STAGE1        | 30,7s
+04  Iron Verdict              Chefe I - Sayonara     STAGE1_BOSS   | 30,7s
+05  Cul-de-Sac Clockwork      Fase II                SUBURBAN_GRAY | 58,2s
+07  Sector Nine Siege         Chefe II - holograma   STAGE2_BOSS   | 69,3s
+06  Liturgy of Iron           Fase III               SACRED_METAL  | 50,0s
+08  Iron Sacrament            Chefe final            FINAL_BOSS    | 48,0s
+09  The Gray Perimeter        Derrota                GAME_OVER     | 27,8s
+10  Running Toward The Sun    Encerramento           VICTORY       | 44,0s
+
+A FAIXA DA ABERTURA                                              | 59,1s
+    intro_theme.ogg   Nao e BGM. O componente IntroSequence a carrega direto
+                      e faz o loop voltar ao drop, aos 44,308s, em vez de ao
+                      inicio -- por isso ela nao fica em public/audio/.
+
+---------------------------------------------------------------------------
+POR QUE OGG E NAO MP3
+
+Todas tocam com loop = true. O MP3 guarda o preenchimento do codificador dentro
+do arquivo, cerca de 25ms de silencio na cabeca e ate 26ms na cauda, e esse
+silencio toca a cada volta. Vorbis nao tem esse preenchimento.
+
+As seis faixas novas vinham com fade-in e fade-out apesar do briefing pedir o
+contrario. Nelas as duas pontas foram cortadas em linha de compasso, entao
+comecam e terminam em energia cheia. As quatro antigas nao tinham fade: nelas
+so o preenchimento foi removido, e a musica esta integral.
+
+---------------------------------------------------------------------------
+COMO O JOGO ENCONTRA CADA ARQUIVO
+
+Pelo nome. Cada slot em src/game/bgmTracks.ts declara palavras-chave, e o
+arquivo reivindica o slot cuja palavra-chave mais longa aparecer no seu nome.
+Os nomes acima ja casam. Renomeando, mantenha alguma das palavras do slot.
