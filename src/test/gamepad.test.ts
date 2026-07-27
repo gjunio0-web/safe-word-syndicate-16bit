@@ -10,7 +10,14 @@ import {
 import { NEUTRAL } from './helpers';
 
 /** A standard-mapping pad with every control at rest. */
-function pad(over: { index?: number; buttons?: Record<number, boolean | number>; axes?: number[] } = {}) {
+function pad(
+  over: {
+    index?: number;
+    buttons?: Record<number, boolean | number>;
+    axes?: number[];
+    timestamp?: number;
+  } = {}
+) {
   const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false }));
   for (const [index, state] of Object.entries(over.buttons ?? {})) {
     buttons[Number(index)] =
@@ -22,6 +29,7 @@ function pad(over: { index?: number; buttons?: Record<number, boolean | number>;
     index: over.index ?? 0,
     connected: true,
     mapping: 'standard',
+    timestamp: over.timestamp ?? 0,
     buttons,
     axes: over.axes ?? [0, 0],
   } as unknown as Gamepad;
@@ -192,5 +200,84 @@ describe('connection change detection', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * A wireless controller that is switched off — rather than unpaired — often
+ * stays in `navigator.getGamepads()` with `connected` still true. The slot it
+ * held was never released, so a replacement pad plugged in afterwards could
+ * not reach the fighter that pad had been driving.
+ */
+describe('recovering a slot from a dead controller', () => {
+  /** Advances enough frames for a pad with a frozen timestamp to go stale. */
+  const idle = (frames: number, coop = true) => {
+    for (let i = 0; i < frames; i++) readPlayerPads(coop);
+  };
+
+  it('hands the slot to a pad being used when the holder has gone quiet', () => {
+    const dead = pad({ index: 0, timestamp: 100 });
+    connect([dead]);
+    readPlayerPads(true);
+
+    // Switched off: still listed, still "connected", timestamp frozen.
+    idle(200);
+
+    // A replacement is plugged in and the player presses a button.
+    connect([dead, pad({ index: 1, timestamp: 500, buttons: { 0: true } })]);
+    const pads = readPlayerPads(true);
+
+    expect(pads.p2).not.toBeNull();
+    expect(pads.p2!.jump).toBe(true);
+  });
+
+  it('leaves a resting controller alone when nothing is competing for it', () => {
+    // Firefox only advances `timestamp` on state change, so an untouched live
+    // pad looks exactly like a dead one. It must not lose its slot for that.
+    connect([pad({ index: 0, timestamp: 100 })]);
+    readPlayerPads(true);
+    idle(400);
+
+    connect([pad({ index: 0, timestamp: 100, buttons: { 2: true } })]);
+    const pads = readPlayerPads(true);
+    expect(pads.p2).not.toBeNull();
+    expect(pads.p2!.punch).toBe(true);
+  });
+
+  it('does not steal a slot from a holder that is still reporting', () => {
+    let tick = 100;
+    connect([pad({ index: 0, timestamp: tick })]);
+    readPlayerPads(true);
+
+    // Holder keeps refreshing; a second pad is pressed but must not take over.
+    for (let i = 0; i < 200; i++) {
+      tick++;
+      connect([pad({ index: 0, timestamp: tick }), pad({ index: 1, timestamp: 1, buttons: { 0: true } })]);
+      readPlayerPads(true);
+    }
+
+    const pads = readPlayerPads(true);
+    expect(pads.p2).not.toBeNull();
+    expect(pads.p2!.jump).toBe(false);
+    // The live second pad takes the free slot instead of the occupied one.
+    expect(pads.p1).not.toBeNull();
+  });
+
+  it('ignores a replacement that is present but untouched', () => {
+    // The two pads are told apart by their input: the dead one is frozen
+    // mid-punch, the replacement is at rest. Asserting on the resulting input
+    // is what proves which of them the slot still points at.
+    const dead = () => pad({ index: 0, timestamp: 100, buttons: { 2: true } });
+    connect([dead()]);
+    readPlayerPads(true);
+    idle(200);
+
+    connect([dead(), pad({ index: 1, timestamp: 900 })]);
+    const pads = readPlayerPads(true);
+
+    // Nothing was pressed on the replacement, so nothing claims: the game does
+    // not guess which controller the player picked up.
+    expect(pads.p2).not.toBeNull();
+    expect(pads.p2!.punch).toBe(true);
   });
 });

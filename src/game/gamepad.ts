@@ -139,6 +139,61 @@ export interface PlayerPadInputs {
 let assignedP1Index: number | null = null;
 let assignedP2Index: number | null = null;
 
+/**
+ * Frames a pad may go without its data being refreshed before its slot becomes
+ * reclaimable. Three seconds at 60fps.
+ */
+const STALE_AFTER_FRAMES = 180;
+
+interface PadActivity {
+  /** Last `Gamepad.timestamp` seen for this index. */
+  timestamp: number;
+  /** Frame at which that timestamp last changed. */
+  lastChangeFrame: number;
+}
+
+const padActivity = new Map<number, PadActivity>();
+let assignmentFrame = 0;
+
+/**
+ * Records whether each pad's data is still being refreshed.
+ *
+ * A wireless controller that is switched off — rather than unpaired — often
+ * stays in `navigator.getGamepads()` with `connected` still true: the browser
+ * has no way to tell "idle" from "powered down" until the OS reports the
+ * disconnect, which can take a long time or never happen. `Gamepad.timestamp`
+ * does tell them apart: it stops advancing the moment the data stops arriving.
+ */
+function trackActivity(pads: Map<number, Gamepad>) {
+  assignmentFrame++;
+
+  for (const [index, pad] of pads) {
+    const previous = padActivity.get(index);
+    if (!previous || previous.timestamp !== pad.timestamp) {
+      padActivity.set(index, { timestamp: pad.timestamp, lastChangeFrame: assignmentFrame });
+    }
+  }
+
+  for (const index of [...padActivity.keys()]) {
+    if (!pads.has(index)) padActivity.delete(index);
+  }
+}
+
+function isResponsive(index: number | null): boolean {
+  if (index === null) return false;
+  const activity = padActivity.get(index);
+  if (!activity) return false;
+  return assignmentFrame - activity.lastChangeFrame < STALE_AFTER_FRAMES;
+}
+
+/** Any control off its resting position. Used to mean "this player is here". */
+function hasActivity(pad: Gamepad): boolean {
+  for (const button of pad.buttons) {
+    if (button && (button.pressed || button.value > TRIGGER_THRESHOLD)) return true;
+  }
+  return pad.axes.some((axis) => Math.abs(axis) > STICK_DEADZONE);
+}
+
 /** Live pads keyed by their stable browser index. */
 function livePads(): Map<number, Gamepad> {
   const map = new Map<number, Gamepad>();
@@ -152,7 +207,9 @@ function livePads(): Map<number, Gamepad> {
 export function readPlayerPads(coop: boolean): PlayerPadInputs {
   const pads = livePads();
 
-  // Release slots whose pad went away.
+  trackActivity(pads);
+
+  // Release slots whose pad left the list entirely.
   if (assignedP1Index !== null && !pads.has(assignedP1Index)) assignedP1Index = null;
   if (assignedP2Index !== null && !pads.has(assignedP2Index)) assignedP2Index = null;
 
@@ -160,10 +217,34 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
     .filter((i) => i !== assignedP1Index && i !== assignedP2Index)
     .sort((a, b) => a - b);
 
+  // Hand a slot over from a pad that has gone quiet to one that is being used.
+  //
+  // Releasing purely on staleness would drop a live controller that is simply
+  // resting — Firefox only advances `timestamp` when the state changes, so an
+  // untouched pad looks identical to a dead one. Requiring a competing pad
+  // with a control actually held makes that ambiguity harmless: a lone idle
+  // controller keeps its slot forever, and a switched-off one only loses it to
+  // somebody pressing a button on a replacement.
+  const claimed = new Set<number>();
+  for (const index of unassigned) {
+    const claimant = pads.get(index);
+    if (!claimant || !hasActivity(claimant)) continue;
+
+    if (assignedP2Index !== null && !isResponsive(assignedP2Index)) {
+      assignedP2Index = index;
+    } else if (assignedP1Index !== null && !isResponsive(assignedP1Index)) {
+      assignedP1Index = index;
+    } else {
+      continue;
+    }
+    claimed.add(index);
+  }
+
   // In co-op the first controller joins as player two: the keyboard player
   // already holds player one, and handing the pad to P1 would put both people
   // on the same fighter.
   for (const index of unassigned) {
+    if (claimed.has(index)) continue;
     if (coop) {
       if (assignedP2Index === null) assignedP2Index = index;
       else if (assignedP1Index === null) assignedP1Index = index;
@@ -186,6 +267,8 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
 export function resetPadAssignments() {
   assignedP1Index = null;
   assignedP2Index = null;
+  padActivity.clear();
+  assignmentFrame = 0;
 }
 
 /** How many pads are currently connected. */
