@@ -257,6 +257,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
         ctx.restore();
       });
 
+      // 5. CRT Scanlines
+      //
+      // This used to be a separate CSS overlay div with a fixed 4-CSS-pixel
+      // repeat. That size has no relationship to how large the canvas is
+      // actually displayed — `object-contain` scales the 800x450 bitmap up to
+      // fill whatever the container measures, and on a large screen that scale
+      // can be 3x or more. The sprite pixels grow with that scale; the CSS
+      // overlay's stripes did not, so at high scale several scanlines fell
+      // inside a single sprite pixel and read as solid dark bands across
+      // character art instead of a faint texture. Drawing the lines here
+      // instead, in the same 800x450 space the sprites are drawn in, means
+      // they scale together at any display size.
+      if (crtFilter) {
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#000000';
+        for (let y = 0; y < height; y += 4) {
+          ctx.fillRect(0, y, width, 2);
+        }
+        ctx.globalAlpha = 1;
+      }
+
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -265,7 +286,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [engine]);
+  }, [engine, crtFilter, showHitboxes]);
 
   // The engine mutates outside the React cycle, so reading its fields straight
   // from the JSX left the HUD frozen: it only refreshed when some unrelated
@@ -289,23 +310,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
         className="w-full h-full object-contain [image-rendering:pixelated]"
       />
 
-      {/* Retro Arcade CRT Scanline & Curved Glass Shader Overlay */}
+      {/* Retro Arcade CRT Curved Glass Shader Overlay.
+          The scanlines used to be a second layer here — a CSS gradient with a
+          fixed 4-CSS-pixel repeat that did not scale with the canvas, so on a
+          large display it cut multiple lines through a single sprite pixel
+          instead of one faint line per pixel row. They are drawn inside the
+          canvas now, in step 5 of the render loop above, so they scale with
+          the art at any display size. The vignette stays CSS: it is a smooth
+          gradient with no fine repeating pattern, so scale doesn't distort it. */}
       {crtFilter && (
         <>
-          {/* Scanline Grid.
-              Opacity used to be 0.35 — with the canvas rendering blurred (the
-              pixelated image-rendering class was dead), that softened into a
-              faint texture. Now that sprites render crisp, the same value read
-              as opaque black bars cutting across character art. Lowered to
-              read as a classic CRT sheen instead of stripes on top of it. */}
-          <div
-            className="absolute inset-0 pointer-events-none z-20"
-            style={{
-              background:
-                'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.12) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03))',
-              backgroundSize: '100% 4px, 6px 100%',
-            }}
-          />
           {/* CRT Glass Curved Vignette & Phosphor Corner Reflection */}
           <div
             className="absolute inset-0 pointer-events-none z-25 rounded-[12px]"

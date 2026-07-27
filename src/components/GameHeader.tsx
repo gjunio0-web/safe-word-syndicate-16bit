@@ -110,13 +110,32 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
           {/* Volume. The setting existed with no control anywhere, so only the
               mute button ever did anything. Hidden on narrow screens, where the
-              header is already tight. */}
+              header is already tight.
+
+              App's global keydown handler ignores every key while an <input>
+              has focus, so leaving this slider focused after use silently
+              disabled every game control — movement, pause, attacks — until
+              the player happened to click elsewhere. Blurring on change
+              handles a drag or an arrow-key nudge; blurring on mouse-up/touch-
+              end also covers a plain click that leaves the value unchanged,
+              which fires no change event at all. None of these interrupt an
+              in-progress drag, since the browser tracks that by pointer
+              capture, not by DOM focus. tabIndex={-1} closes the remaining
+              gap — landing here via Tab alone, with no click or drag to
+              trigger any of the above — the same tradeoff the audio modal's
+              file picker already makes for mouse/touch-only controls. */}
           <input
             type="range"
             min={0}
             max={100}
             value={Math.round(settings.volume * 100)}
-            onChange={(e) => changeVolume(Number(e.target.value) / 100)}
+            onChange={(e) => {
+              changeVolume(Number(e.target.value) / 100);
+              e.currentTarget.blur();
+            }}
+            onMouseUp={(e) => e.currentTarget.blur()}
+            onTouchEnd={(e) => e.currentTarget.blur()}
+            tabIndex={-1}
             disabled={!settings.soundEnabled}
             title={`Volume: ${Math.round(settings.volume * 100)}%`}
             aria-label="Volume"
