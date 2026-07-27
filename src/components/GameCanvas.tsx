@@ -308,19 +308,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
       // instead, in the same 800x450 space the sprites are drawn in, means
       // they scale together at any display size.
       if (crtFilter) {
-        // Drawn in device pixels, not design pixels.
+        // One device pixel, always.
         //
-        // In design space a 2-on-2-off pattern is multiplied by the display
-        // scale along with everything else: at 3x that is a six-pixel black bar
-        // every twelve pixels, which reads as banding laid over the characters
-        // rather than as screen texture. A scanline belongs to the screen, so
-        // it is one device pixel wherever it is shown.
+        // Two earlier versions of this were too coarse. Drawing in design space
+        // multiplied the line by the display scale. Scaling it by
+        // devicePixelRatio instead kept its physical thickness constant, which
+        // sounds right but is not: the reference a scanline has to stay under
+        // is the game pixel, not the millimetre. On a 1.5x display that gave a
+        // three-pixel bar while a design pixel measured 2.29 — a texture
+        // coarser than the art it sits on reads as banding, which is what it
+        // looked like. One device pixel is finer than a design pixel at every
+        // scale the game is ever displayed at.
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalAlpha = 0.14;
+        ctx.globalAlpha = 0.18;
         ctx.fillStyle = '#000000';
-        const spacing = Math.max(2, Math.round(2 * (window.devicePixelRatio || 1)));
-        for (let y = 0; y < canvas.height; y += spacing * 2) {
-          ctx.fillRect(0, y, canvas.width, spacing);
+        for (let y = 0; y < canvas.height; y += 3) {
+          ctx.fillRect(0, y, canvas.width, 1);
         }
         ctx.globalAlpha = 1;
       }

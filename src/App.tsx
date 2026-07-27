@@ -166,6 +166,18 @@ export default function App() {
     };
   }, [screen]);
 
+  // Release every controller slot whenever the game comes back to a menu.
+  //
+  // Assignments are already cleared when a match starts, but a slot held by a
+  // controller that was switched off mid-session survived until then. Clearing
+  // on the way out as well means returning to the title is enough to start
+  // over: whatever is switched on and pressed next claims a slot fresh.
+  useEffect(() => {
+    if (screen === 'TITLE' || screen === 'ATTRACT') {
+      resetPadAssignments();
+    }
+  }, [screen]);
+
   // Modals change the navigable set; drop stale focus when that happens.
   useMenuFocusReset(`${screen}:${isPaused}`);
 
