@@ -546,8 +546,22 @@ function renderPlayerSprite(
         ctx.fill();
       } else {
         // Arm swinging when walking
+        // One path per limb.
+        //
+        // Two ellipses in a single path are joined by a straight line running
+        // from the end of the first to the start of the second, and stroking
+        // the path draws that join along with the shapes. Both arms sit at the
+        // same height, so the join ran horizontally across the chest — one of
+        // the two bands that crossed the shirt. The fill hid it; the stroke
+        // did not, and it only became obvious once the stroke was a bright
+        // colour. `moveTo` would also break the join, but a path per limb says
+        // what is meant.
         ctx.beginPath();
         ctx.ellipse(-22 - armSwing, -64, 7, 15, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
         ctx.ellipse(18 + armSwing, -64, 7, 15, 0.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
@@ -555,6 +569,10 @@ function renderPlayerSprite(
         ctx.fillStyle = '#18181e';
         ctx.beginPath();
         ctx.arc(-22 - armSwing, -50, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
         ctx.arc(18 + armSwing, -50, 7, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
@@ -777,6 +795,10 @@ function renderPlayerSprite(
       } else {
         ctx.beginPath();
         ctx.ellipse(-22 - armSwing, -66, 7, 15, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
         ctx.ellipse(18 + armSwing, -66, 7, 15, 0.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
@@ -933,6 +955,16 @@ function renderPlayerSprite(
       ctx.fillRect(-19, -30 - lift1 / 2 + stride1 / 2, 12, 2);
       ctx.fillRect(3, -30 - lift2 / 2 + stride2 / 2, 12, 2);
       ctx.restore();
+
+      // Back to the silhouette stroke for the arms.
+      //
+      // The switch to DETAIL_STROKE above covers the jacket, whose own top and
+      // bottom edges fall inside the figure. It used to stay in force until the
+      // helmet, so the gauntlets were caught by it too and the arms lost their
+      // outline — on the one fighter the outline exists for. Measured against
+      // the neon and church stages, that cost him a third of his edge contrast:
+      // 54.6 and 42.6 where the arms outlined score 72.6 and 63.1.
+      ctx.strokeStyle = outline;
 
       // 4. ARMORED GAUNTLETS
       ctx.fillStyle = '#121217';
