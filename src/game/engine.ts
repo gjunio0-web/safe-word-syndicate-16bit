@@ -22,6 +22,8 @@ import {
   PLAYER_PUSH_SHARE,
   ATTACKERS_BY_DIFFICULTY,
   PLAYER_KICK_REACH,
+  ARENA_MIN_Y,
+  ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
 } from './constants';
@@ -394,7 +396,7 @@ export class GameEngine {
     this.entities.forEach((ent) => {
       if (ent.isPlayer) {
         ent.x = Math.max(this.cameraX + 20, Math.min(this.cameraX + 760, ent.x));
-        ent.y = Math.max(220, Math.min(440, ent.y)); // Y depth bounds
+        ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y)); // Y depth bounds
       } else if (ent.hp > 0) {
         // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out
         const minX = this.cameraX - 30;
@@ -406,7 +408,7 @@ export class GameEngine {
           ent.x = maxX - 60;
           ent.vx = -4;
         }
-        ent.y = Math.max(220, Math.min(440, ent.y));
+        ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
       }
     });
 
@@ -1292,6 +1294,12 @@ export class GameEngine {
   private updateEntityPhysics(ent: EntityState) {
     ent.x += ent.vx;
     ent.y += ent.vy;
+
+    // Clamped here, right after the position is integrated, rather than only
+    // at the top of the frame. Clamping before movement leaves every entity a
+    // full frame's velocity outside the band when the frame ends — about three
+    // pixels, which is what the render then draws.
+    ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
 
     // Apply smooth friction decay when in HURT/KNOCKDOWN state
     if (ent.action === 'HURT' || ent.action === 'KNOCKDOWN' || ent.action === 'RECOVERY') {

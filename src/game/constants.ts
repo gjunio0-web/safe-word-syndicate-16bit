@@ -115,3 +115,21 @@ export const PLAYER_PUSH_SHARE = 0.15;
  * same number the combat code uses instead of guessing one.
  */
 export const PLAYER_KICK_REACH = 135;
+
+/**
+ * Depth band the fighters may occupy.
+ *
+ * `STREET_TOP_Y` mirrors where `renderStageBackground` starts drawing the road:
+ * `canvasHeight - 210` against a 450-tall design space. The walkable band used
+ * to begin at 220, twenty pixels above that line, so a fighter who walked all
+ * the way back stood on the strip between the buildings and the kerb — feet
+ * planted on nothing, hovering over the edge of the road. Twenty design pixels
+ * is a 46-pixel gap once the game is scaled onto a real display, which is large
+ * enough to read as a bug rather than as perspective.
+ *
+ * The lower bound keeps a small margin above the bottom of the road so the
+ * near kerb stays visible behind the closest fighter.
+ */
+export const STREET_TOP_Y = 240;
+export const ARENA_MIN_Y = STREET_TOP_Y;
+export const ARENA_MAX_Y = 440;

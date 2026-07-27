@@ -10,6 +10,7 @@ import {
   startEngine,
 } from './helpers';
 import { STAGES } from '../game/stageData';
+import { ARENA_MAX_Y, ARENA_MIN_Y, STREET_TOP_Y } from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
 
@@ -374,5 +375,55 @@ describe('difficulty', () => {
     const normal = engagedAt('NORMAL');
     expect(normal).toBeGreaterThanOrEqual(engagedAt('EASY'));
     expect(normal).toBeLessThanOrEqual(engagedAt('PUNK_HARD'));
+  });
+});
+
+/**
+ * Depth band.
+ *
+ * Fighters were clamped to y >= 220 while the road starts at y = 240, so
+ * walking all the way back put them on the twenty-pixel strip above the kerb —
+ * standing on nothing. Scaled onto a real display that reads as a 46-pixel gap
+ * between the soles and the street.
+ */
+describe('walkable depth band', () => {
+  it('keeps the near and far edges inside the drawn road', () => {
+    expect(ARENA_MIN_Y).toBeGreaterThanOrEqual(STREET_TOP_Y);
+    expect(ARENA_MAX_Y).toBeLessThanOrEqual(450);
+  });
+
+  it('does not let a player walk above the road', () => {
+    const engine = startEngine();
+    advance(engine, 60);
+
+    // Checked every frame, not only at the end: clamping before movement
+    // instead of after leaves the fighter a frame's velocity out of bounds
+    // whenever the frame ends, which is the position that actually gets drawn.
+    const up = input({ up: true });
+    for (let i = 0; i < 400; i++) {
+      engine.update(up);
+      expect(engine.player1!.y).toBeGreaterThanOrEqual(STREET_TOP_Y);
+    }
+  });
+
+  it('does not let an enemy walk above the road either', () => {
+    const engine = startEngine();
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 100, dy: -200 }]);
+    advance(engine, 300);
+
+    for (const enemy of livingEnemies(engine)) {
+      expect(enemy.y).toBeGreaterThanOrEqual(STREET_TOP_Y);
+    }
+  });
+
+  it('spawns waves inside the band', () => {
+    const engine = startEngine();
+    advance(engine, 400, input({ right: true }));
+
+    for (const enemy of livingEnemies(engine)) {
+      expect(enemy.y).toBeGreaterThanOrEqual(ARENA_MIN_Y);
+      expect(enemy.y).toBeLessThanOrEqual(ARENA_MAX_Y);
+    }
   });
 });
