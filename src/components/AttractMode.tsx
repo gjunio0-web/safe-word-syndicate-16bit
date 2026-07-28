@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CHARACTERS } from '../game/characterData';
 import { STAGES, renderStageBackground } from '../game/stageData';
 import { CharacterId } from '../types';
+import { FullscreenPrompt } from './FullscreenPrompt';
 
 /**
  * Attract mode: what the cabinet shows before anyone puts money in.
@@ -74,6 +75,11 @@ export const AttractMode: React.FC<AttractModeProps> = ({ onInsertCoin }) => {
     // the coin can land on a button of the screen that just replaced this one.
     const insert = (event: Event) => {
       event.preventDefault();
+      // Fullscreen only works from inside a live user gesture, and this
+      // keydown/pointerdown already is one — piggybacking here means no
+      // separate button is needed. Optional chaining covers browsers (iOS
+      // Safari) that don't expose the API at all.
+      document.documentElement.requestFullscreen?.().catch(() => {});
       onInsertCoinRef.current();
     };
     window.addEventListener('keydown', insert);
@@ -181,6 +187,8 @@ export const AttractMode: React.FC<AttractModeProps> = ({ onInsertCoin }) => {
           </div>
         </div>
       )}
+
+      <FullscreenPrompt position={panel?.kind === 'TITLE' ? 'middle' : 'top'} />
 
       {/* Always on top of whatever panel is showing, never part of it. */}
       <div className="absolute bottom-5 left-0 right-0 text-center pointer-events-none">
