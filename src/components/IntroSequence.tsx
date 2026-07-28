@@ -41,17 +41,17 @@ export interface IntroAssets {
 }
 
 const DEFAULT_ASSETS: IntroAssets = {
-  scene1: '/assets/intro/01_neon_district.png',
-  scene2: '/assets/intro/02_boardroom.png',
-  scene3: '/assets/intro/03_alley_bw.png',
-  scene3Neon: '/assets/intro/03_alley_neon.png',
-  scene4Plate: '/assets/intro/04_street_plate.png',
-  scene4Heroes: '/assets/intro/04_heroes_overlay.png',
+  scene1: '/assets/intro/01_neon_district.webp',
+  scene2: '/assets/intro/02_boardroom.webp',
+  scene3: '/assets/intro/03_alley_bw.webp',
+  scene3Neon: '/assets/intro/03_alley_neon.webp',
+  scene4Plate: '/assets/intro/04_street_plate.webp',
+  scene4Heroes: '/assets/intro/04_heroes_overlay.webp',
   closeups: [
-    '/assets/intro/cu_feet_master.png',
-    '/assets/intro/cu_fun_maker.png',
-    '/assets/intro/cu_omega_biker.png',
-    '/assets/intro/cu_angry_corso.png',
+    '/assets/intro/cu_feet_master.webp',
+    '/assets/intro/cu_fun_maker.webp',
+    '/assets/intro/cu_omega_biker.webp',
+    '/assets/intro/cu_angry_corso.webp',
   ],
   music: '/assets/intro/intro_theme.ogg',
 };
