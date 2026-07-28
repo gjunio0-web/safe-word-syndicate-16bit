@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sound } from '../game/sound';
+import { useGamepadMenu } from '../hooks/useGamepadMenu';
 
 /**
  * THE SAFE-WORD SYNDICATE — attract-mode intro.
@@ -303,21 +304,30 @@ export default function IntroSequence({ onComplete, assets: overrides }: Props) 
   const scene = sceneAt(elapsed);
   const climax = climaxAt(elapsed);
 
+  /**
+   * Advances the sequence: skips to the prompt before the drop, finishes
+   * after it. Shared by keyboard, mouse/touch, and gamepad so all three
+   * answer to the same "press any key" prompt — a controller-only player
+   * had no way to leave this screen before this was wired in, since the
+   * keydown/pointerdown listeners below never covered the Gamepad API.
+   */
+  const handle = useCallback(() => {
+    if (climax >= 3) finish();
+    else playFrom(DROP_AT + 2 * BAR);
+  }, [climax, finish, playFrom]);
+
   useEffect(() => {
-    const handle = () => {
-      // Before the prompt appears, a key skips ahead rather than starting the
-      // game — the arcade convention, and it stops an early press from throwing
-      // the player into character select by accident.
-      if (climax >= 3) finish();
-      else playFrom(DROP_AT + 2 * BAR);
-    };
     window.addEventListener('keydown', handle);
     window.addEventListener('pointerdown', handle);
     return () => {
       window.removeEventListener('keydown', handle);
       window.removeEventListener('pointerdown', handle);
     };
-  }, [climax, finish, playFrom]);
+  }, [handle]);
+
+  // Any button or direction, matching the breadth of the keyboard/pointer
+  // listeners above — the prompt says "press ANY key", not "press confirm".
+  useGamepadMenu(() => handle());
 
   /* ---- Narration ---- */
   const narration = useMemo(() => {
