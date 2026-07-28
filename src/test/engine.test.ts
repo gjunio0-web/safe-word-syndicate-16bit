@@ -427,3 +427,100 @@ describe('walkable depth band', () => {
     }
   });
 });
+
+/**
+ * Sayonara is a hostage, not an enemy.
+ *
+ * She used to die like anything else, which made killing her the natural end of
+ * the fight rather than a decision — and the victory text then claimed she had
+ * walked away free. Zero health now drops her; striking her from the floor is
+ * what kills her, and that is the only thing separating the two endings.
+ */
+describe('Sayonara', () => {
+  const withSayonara = () => {
+    const engine = startEngine();
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx: 90 }]);
+    advance(engine, 2);
+    return engine;
+  };
+
+  const sayonara = (engine: ReturnType<typeof startEngine>) =>
+    engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
+
+  /** Beats on her until she drops, then keeps going for `extra` frames. */
+  const beat = (engine: ReturnType<typeof startEngine>, extra: number) => {
+    const punch = input({ punch: true });
+    for (let i = 0; i < 900; i++) {
+      const target = sayonara(engine);
+      if (!target || target.downed) break;
+      target.hp = 1;
+      engine.update(i % 8 < 2 ? punch : NEUTRAL);
+    }
+    for (let i = 0; i < extra; i++) engine.update(i % 8 < 2 ? punch : NEUTRAL);
+  };
+
+  it('goes down instead of dying', () => {
+    const engine = withSayonara();
+    beat(engine, 0);
+
+    expect(sayonara(engine), 'she should still be on the field').toBeDefined();
+    expect(sayonara(engine)!.downed).toBe(true);
+    expect(engine.sayonaraKilled).toBe(false);
+  });
+
+  it('stops holding the wave open once down, so sparing her cannot soft-lock', () => {
+    const engine = withSayonara();
+    // Put the engine in a real wave, which `stageEnemies` bypasses.
+    (engine as unknown as { isWaveActive: boolean }).isWaveActive = true;
+    beat(engine, 0);
+
+    // Still on the field, and no longer counted among the enemies to clear.
+    expect(sayonara(engine), 'she must not be removed').toBeDefined();
+    expect(sayonara(engine)!.downed).toBe(true);
+    expect(
+      (engine as unknown as { isWaveActive: boolean }).isWaveActive,
+      'the wave should have closed'
+    ).toBe(false);
+  });
+
+  it('is only killed by being struck again on the floor', () => {
+    const engine = withSayonara();
+    beat(engine, 120);
+    expect(engine.sayonaraKilled).toBe(true);
+  });
+
+  it('walks away when Mizydia falls, even from the floor', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 60);
+    stageEnemies(engine, [
+      { type: 'BOSS_SAYONARA', dx: 90 },
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 200 },
+    ]);
+    advance(engine, 2);
+
+    const dog = sayonara(engine)!;
+    const punch = input({ punch: true });
+    for (let i = 0; i < 400 && !dog.downed; i++) {
+      dog.hp = 1;
+      engine.update(i % 8 < 2 ? punch : NEUTRAL);
+    }
+    expect(dog.downed).toBe(true);
+
+    // Now finish Mizydia.
+    const boss = engine.entities.find((e) => e.enemyType === 'BOSS_MADAM_MIZYDIA')!;
+    boss.shieldHp = 0;
+    for (let i = 0; i < 1200 && boss.hp > 0; i++) {
+      boss.hp = 1;
+      const near = Math.abs(boss.x - engine.player1!.x) < 90;
+      engine.update(input(near ? { punch: i % 8 < 2 } : boss.x > engine.player1!.x ? { right: true } : { left: true }));
+    }
+
+    expect(engine.bossDefeated).toBe(true);
+    expect(engine.sayonaraKilled, 'knocking her out is not killing her').toBe(false);
+    expect(dog.downed, 'the collar breaks and she gets up').toBe(false);
+    // Checked by action rather than velocity: physics keeps rewriting vx.
+    expect(dog.action).toBe('WALK');
+    expect(dog.facing).toBe('RIGHT');
+  });
+});

@@ -98,6 +98,9 @@ export default function App() {
   // Keyboard controls state
   const [inputP1, setInputP1] = useState<PlayerInput>(NEUTRAL_INPUT);
   const [inputP2, setInputP2] = useState<PlayerInput>(NEUTRAL_INPUT);
+  // Captured when the campaign ends: the victory screen outlives the engine
+  // instance that recorded it.
+  const [sayonaraKilled, setSayonaraKilled] = useState(false);
 
   // Handle Keyboard Listener
   useEffect(() => {
@@ -356,12 +359,18 @@ export default function App() {
             engineRef.current.update(mergeInputs(inputRef.current, pads.p1), p2Input);
           }
 
-          if (engineRef.current.stageCleared) {
+          // Victory is checked before stage clear.
+          //
+          // On the final stage both flags can rise on the same frame, and stage
+          // clear winning meant the campaign ended on a screen offering a NEXT
+          // STAGE that does not exist.
+          if (engineRef.current.bossDefeated) {
+            setSayonaraKilled(engineRef.current.sayonaraKilled);
+            setScreen('VICTORY');
+          } else if (engineRef.current.stageCleared) {
             setScreen('STAGE_CLEAR');
           } else if (engineRef.current.gameOver) {
             setScreen('GAME_OVER');
-          } else if (engineRef.current.bossDefeated) {
-            setScreen('VICTORY');
           }
         }
       }
@@ -662,11 +671,15 @@ export default function App() {
             </div>
 
             <h1 className="text-3xl md:text-5xl font-black italic text-amber-400 uppercase tracking-wider">
-              VICTORY! THE SAFE-WORD SYNDICATE TRIUMPHS!
+              {sayonaraKilled
+                ? 'VICTORY — BUT NOT FOR EVERYONE'
+                : 'VICTORY! THE SAFE-WORD SYNDICATE TRIUMPHS!'}
             </h1>
 
             <p className="text-sm md:text-base font-mono text-zinc-300 leading-relaxed">
-              Madam Mizydia's corporate broadcast signal has been permanently dismantled! Sayonara broke free from her leash and walked away into freedom! The Ultra Evil League of Conservative Christians' gray status quo is shattered forever, restoring vibrant punk joy to the world!
+              {sayonaraKilled
+                ? "Madam Mizydia's corporate broadcast signal has been permanently dismantled, and the gray status quo is shattered forever. But the collar came off too late. Sayonara never got to walk out on her own terms. The city is loud again — one voice short."
+                : "Madam Mizydia's corporate broadcast signal has been permanently dismantled! Sayonara broke free from her leash and walked away into freedom! The Ultra Evil League of Conservative Christians' gray status quo is shattered forever, restoring vibrant punk joy to the world!"}
             </p>
           </div>
 

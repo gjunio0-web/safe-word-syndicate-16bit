@@ -98,6 +98,14 @@ export class GameEngine {
   public gameOver: boolean = false;
   public bossDefeated: boolean = false;
 
+  /**
+   * Whether Sayonara was struck while already on the floor.
+   *
+   * The campaign has two endings and this is the only thing separating them:
+   * knocking her out is unavoidable, finishing her off is a choice.
+   */
+  public sayonaraKilled: boolean = false;
+
   public stageStartBannerTimer: number = 210;
   public bossWarningTimer: number = 0;
   public bossWarningTitle: string = '';
@@ -416,7 +424,8 @@ export class GameEngine {
 
     // Update Enemies & AI
     this.entities.forEach((ent) => {
-      if (!ent.isPlayer && ent.hp > 0) {
+      // A downed fighter has stopped fighting: no AI, no attacks, no chasing.
+      if (!ent.isPlayer && ent.hp > 0 && !ent.downed && !ent.freed) {
         this.updateEnemyAi(ent);
       }
       this.updateEntityPhysics(ent);
@@ -439,7 +448,11 @@ export class GameEngine {
     this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer > 0);
 
     // Check wave clear status
-    const remainingEnemies = this.entities.filter((ent) => !ent.isPlayer && ent.hp > 0);
+    // A downed Sayonara is out of the fight without being dead, so she must
+    // not hold the wave open — otherwise sparing her would soft-lock the stage.
+    const remainingEnemies = this.entities.filter(
+      (ent) => !ent.isPlayer && ent.hp > 0 && !ent.downed && !ent.freed
+    );
     if (this.isWaveActive && remainingEnemies.length === 0) {
       this.isWaveActive = false;
       this.currentWaveIndex++;
@@ -468,6 +481,20 @@ export class GameEngine {
     if (this.player1 && this.player1.hp > 0) return this.player1;
     if (this.player2 && this.player2.hp > 0) return this.player2;
     return null;
+  }
+
+  /**
+   * Whether an attack aimed at this frame should land on `target`.
+   *
+   * A fighter on the floor is only hit when nothing else is within reach.
+   * Without that, punches thrown past a downed Sayonara on the way to Mizydia
+   * finished her off by accident — which is the same failure the floor state
+   * exists to remove, one level down. Reaching her now takes standing over her
+   * with nothing else to swing at.
+   */
+  private isValidTarget(target: EntityState, candidates: EntityState[]): boolean {
+    if (!target.downed) return true;
+    return !candidates.some((other) => other !== target && !other.downed);
   }
 
   private isMelee(enemy: EntityState): boolean {
@@ -821,8 +848,9 @@ export class GameEngine {
 
     // Generous Hitbox check (scaled for 1.5x character dimensions)
     const reach = 110;
+    const inRange = this.entities.filter((e) => !e.isPlayer && e.hp > 0 && Math.abs(e.y - player.y) < 55);
     this.entities.forEach((target) => {
-      if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 55) {
+      if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, inRange) && Math.abs(target.y - player.y) < 55) {
         const dx = target.x - player.x;
         const inHitbox =
           player.facing === 'RIGHT'
@@ -859,8 +887,9 @@ export class GameEngine {
     this.addParticle(kx, ky, 0, '#ffff00', undefined, 'SHOCKWAVE');
 
     const reach = PLAYER_KICK_REACH;
+    const inRange = this.entities.filter((e) => !e.isPlayer && e.hp > 0 && Math.abs(e.y - player.y) < 60);
     this.entities.forEach((target) => {
-      if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 60) {
+      if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, inRange) && Math.abs(target.y - player.y) < 60) {
         const dx = target.x - player.x;
         const inHitbox =
           player.facing === 'RIGHT'
@@ -890,8 +919,19 @@ export class GameEngine {
 
     if (charId === 'FEET_MASTER') {
       // Feet Master: Human Bat Swing (Massive 360 AoE)
+      //
+      // Same downed-Sayonara exclusivity as punch/kick: a wide AoE special is
+      // if anything more likely to catch her by accident, not less.
+      const swingRange = this.entities.filter(
+        (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 200
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.hypot(target.x - player.x, target.y - player.y) < 200) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          this.isValidTarget(target, swingRange) &&
+          Math.hypot(target.x - player.x, target.y - player.y) < 200
+        ) {
           this.damageEntity(target, 45, player);
           target.vx = target.x > player.x ? 12 : -12;
           target.vz = 6;
@@ -902,8 +942,16 @@ export class GameEngine {
     } else if (charId === 'FUN_MAKER') {
       // Fun Maker: Rollercoaster Hurricane (Spin skyward cyclone)
       player.vz = 10;
+      const cycloneRange = this.entities.filter(
+        (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 180
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.hypot(target.x - player.x, target.y - player.y) < 180) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          this.isValidTarget(target, cycloneRange) &&
+          Math.hypot(target.x - player.x, target.y - player.y) < 180
+        ) {
           this.damageEntity(target, 40, player);
           target.vz = 9; // Juggle enemies into the air!
         }
@@ -913,8 +961,15 @@ export class GameEngine {
     } else if (charId === 'OMEGA_BIKER') {
       // Omega Biker: Heavy Shockwave Kick (Destroys shields & heavy knockback)
       const shockDir = player.facing === 'RIGHT' ? 1 : -1;
+      const shockRange = this.entities.filter(
+        (e) =>
+          !e.isPlayer &&
+          e.hp > 0 &&
+          Math.abs(e.y - player.y) < 60 &&
+          ((shockDir === 1 && e.x > player.x) || (shockDir === -1 && e.x < player.x))
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 60) {
+        if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, shockRange) && Math.abs(target.y - player.y) < 60) {
           if ((shockDir === 1 && target.x > player.x) || (shockDir === -1 && target.x < player.x)) {
             if (target.shieldHp) target.shieldHp = 0; // Guard breaker!
             this.damageEntity(target, 50, player);
@@ -928,8 +983,16 @@ export class GameEngine {
       // Angry Corso: Feral Pup Rush & Bite (Pin down, bite, leech health!)
       player.action = 'BITING';
       sound.playBite();
+      const biteRange = this.entities.filter(
+        (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 150
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.hypot(target.x - player.x, target.y - player.y) < 150) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          this.isValidTarget(target, biteRange) &&
+          Math.hypot(target.x - player.x, target.y - player.y) < 150
+        ) {
           this.damageEntity(target, 55, player);
           // Leech health back!
           player.hp = Math.min(player.maxHp, player.hp + 25);
@@ -978,6 +1041,31 @@ export class GameEngine {
       this.stats.damageTaken += damage;
     }
 
+    // Sayonara goes down rather than dying.
+    //
+    // She is the one fighter the heroes are trying to save, and also the one
+    // attacking them, so killing her was the path of least resistance rather
+    // than a decision. Zero health now drops her: the collar loses its grip,
+    // she stops fighting, and the wave counts her as handled. Striking her from
+    // there kills her for real.
+    if (target.enemyType === 'BOSS_SAYONARA' && target.hp <= 0) {
+      if (target.downed) {
+        this.sayonaraKilled = true;
+        target.downed = false;
+        target.hp = 0;
+      } else {
+        // Held at one hit point rather than zero. Zero would make her
+        // unhittable, since attacks only look for living targets, and an
+        // unkillable hostage is not a choice either.
+        target.downed = true;
+        target.hp = 1;
+        target.vx = 0;
+        target.vy = 0;
+        target.action = 'KNOCKDOWN';
+        target.actionTimer = 30;
+      }
+    }
+
     // Check Boss Sayonara Defeat Resolution
     if (target.enemyType === 'BOSS_MADAM_MIZYDIA' && target.hp <= 0) {
       // Mizydia is the boss of stage 2 as well, where the fiction calls her a
@@ -987,11 +1075,17 @@ export class GameEngine {
         this.bossDefeated = true;
       }
       // Free Sayonara!
+      // The collar breaks whether she is standing or on the floor. Only a
+      // killing blow puts her past saving, and that takes her off the field —
+      // so finding nobody here is itself the failed outcome.
       const sayonara = this.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
       if (sayonara) {
+        sayonara.downed = false;
+        sayonara.freed = true;
         sayonara.action = 'WALK';
         sayonara.facing = 'RIGHT';
         sayonara.vx = 4; // Sayonara breaks control and walks away freely!
+        sayonara.actionTimer = 0;
       }
     }
 

@@ -96,6 +96,22 @@ export interface EntityState {
   aiTargetY?: number;
   aiState?: 'PATROL' | 'APPROACH' | 'ATTACK' | 'RETREAT' | 'SPECIAL';
   aiTimer?: number;
+
+  /**
+   * Sayonara only. She is not an enemy but a hostage, so reaching zero health
+   * puts her on the floor instead of killing her: the collar stops driving her
+   * and she stops fighting. Striking her again from there is what kills her,
+   * and that is a separate, deliberate act rather than the natural end of the
+   * fight.
+   */
+  downed?: boolean;
+
+  /**
+   * Sayonara after the collar breaks. She is neither an enemy nor a corpse:
+   * the AI must stop steering her or she turns round and resumes the fight,
+   * and the wave must not wait on her.
+   */
+  freed?: boolean;
   
   // Boss Phase state
   bossPhase?: number;
