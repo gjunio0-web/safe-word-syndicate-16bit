@@ -161,6 +161,31 @@ export default function App() {
     return engine.subscribeDialogue(() => setActiveDialogue(engine.activeDialogue));
   }, [engineVersion]);
 
+  // Requests fullscreen on the first real user gesture, then stops
+  // listening. Deliberately not inside AttractMode's own insert-coin
+  // handler: that screen unmounts on the very same tap, tearing its
+  // listeners down before a touch's pointerup fires. Mounted here instead,
+  // for the whole app's lifetime, so that natural pointerup still lands.
+  //
+  // pointerup rather than pointerdown: per the HTML spec, pointerdown only
+  // counts as an activation-triggering event for mouse pointerType — touch
+  // needs pointerup (or touchend). Using pointerdown here, matching how
+  // AttractMode's own coin-insert and the audio-unlock arm() below listen,
+  // is what silently failed on Android Chrome. keydown covers keyboard.
+  useEffect(() => {
+    const requestFs = () => {
+      window.removeEventListener('pointerup', requestFs);
+      window.removeEventListener('keydown', requestFs);
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    };
+    window.addEventListener('pointerup', requestFs);
+    window.addEventListener('keydown', requestFs);
+    return () => {
+      window.removeEventListener('pointerup', requestFs);
+      window.removeEventListener('keydown', requestFs);
+    };
+  }, []);
+
   // An abandoned cabinet goes back to attracting. Without this the attract
   // sequence would only ever be seen once per session.
   useEffect(() => {

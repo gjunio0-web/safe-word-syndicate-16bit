@@ -75,11 +75,6 @@ export const AttractMode: React.FC<AttractModeProps> = ({ onInsertCoin }) => {
     // the coin can land on a button of the screen that just replaced this one.
     const insert = (event: Event) => {
       event.preventDefault();
-      // Fullscreen only works from inside a live user gesture, and this
-      // keydown/pointerdown already is one — piggybacking here means no
-      // separate button is needed. Optional chaining covers browsers (iOS
-      // Safari) that don't expose the API at all.
-      document.documentElement.requestFullscreen?.().catch(() => {});
       onInsertCoinRef.current();
     };
     window.addEventListener('keydown', insert);
