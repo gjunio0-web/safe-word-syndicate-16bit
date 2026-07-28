@@ -561,31 +561,77 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
       )}
 
       {/* Boss Health Bar Display */}
-      {boss && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-4/5 max-w-lg bg-black/95 border-2 border-red-600 p-3 rounded-xl shadow-[0_0_30px_rgba(255,0,0,0.7)] pointer-events-none z-30 font-mono text-center">
-          <div className="flex justify-between items-center mb-1 text-xs">
-            <span className="font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping inline-block" />
-              ⚠️ BOSS: {boss.enemyType === 'BOSS_MADAM_MIZYDIA' ? 'MADAM MIZYDIA' : boss.enemyType === 'BOSS_SAYONARA' ? 'SAYONARA' : 'PURITY COMMANDER'}
-            </span>
-            <span className="text-amber-300 font-bold">{Math.ceil(boss.hp)} / {boss.maxHp} HP</span>
-          </div>
+      {boss && (() => {
+        // Sayonara gets a different bar.
+        //
+        // Nothing on screen distinguished the hostage from the enemy: same red,
+        // same warning triangle, same wording. The codex explains that beating
+        // Mizydia frees her, but nobody opens a bestiary mid-fight, and the one
+        // moment the information matters is the one moment it was unavailable.
+        // Amber against her crimson, and a label naming her state rather than
+        // just her name, are read without stopping to read.
+        const hostage = boss.enemyType === 'BOSS_SAYONARA';
+        const name =
+          boss.enemyType === 'BOSS_MADAM_MIZYDIA'
+            ? 'MADAM MIZYDIA'
+            : hostage
+              ? 'SAYONARA — UNDER CONTROL'
+              : 'PURITY COMMANDER';
 
-          <div className="w-full h-3.5 bg-zinc-950 rounded-full overflow-hidden border border-red-900 p-0.5">
-            <div
-              className="h-full bg-gradient-to-r from-red-700 via-red-500 to-amber-500 rounded-full transition-all duration-150 shadow-sm shadow-red-500"
-              style={{ width: `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%` }}
-            />
-          </div>
-
-          {/* Shield status */}
-          {boss.shieldHp !== undefined && boss.shieldHp > 0 && (
-            <div className="mt-1 text-[10px] text-cyan-400 font-bold tracking-wide">
-              🛡️ CENSURE BARRIER SHIELD ACTIVE ({boss.shieldHp} HP)
+        return (
+          <div
+            className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-4/5 max-w-lg bg-black/95 border-2 p-3 rounded-xl pointer-events-none z-30 font-mono text-center ${
+              hostage
+                ? 'border-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.6)]'
+                : 'border-red-600 shadow-[0_0_30px_rgba(255,0,0,0.7)]'
+            }`}
+          >
+            <div className="flex justify-between items-center mb-1 text-xs">
+              <span
+                className={`font-black uppercase tracking-widest flex items-center gap-1.5 ${
+                  hostage ? 'text-amber-400' : 'text-red-500'
+                }`}
+              >
+                <span
+                  className={`w-2.5 h-2.5 rounded-full animate-ping inline-block ${
+                    hostage ? 'bg-amber-400' : 'bg-red-500'
+                  }`}
+                />
+                {hostage ? '⛓️' : '⚠️'} {hostage ? '' : 'BOSS: '}{name}
+              </span>
+              <span className="text-amber-300 font-bold">{Math.ceil(boss.hp)} / {boss.maxHp} HP</span>
             </div>
-          )}
-        </div>
-      )}
+
+            <div
+              className={`w-full h-3.5 bg-zinc-950 rounded-full overflow-hidden border p-0.5 ${
+                hostage ? 'border-amber-800' : 'border-red-900'
+              }`}
+            >
+              <div
+                className={`h-full rounded-full transition-all duration-150 shadow-sm ${
+                  hostage
+                    ? 'bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 shadow-amber-500'
+                    : 'bg-gradient-to-r from-red-700 via-red-500 to-amber-500 shadow-red-500'
+                }`}
+                style={{ width: `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%` }}
+              />
+            </div>
+
+            {hostage && (
+              <div className="mt-1 text-[10px] text-amber-300/80 font-bold tracking-wide">
+                BREAK MIZYDIA'S SPELL TO FREE HER
+              </div>
+            )}
+
+            {/* Shield status */}
+            {boss.shieldHp !== undefined && boss.shieldHp > 0 && (
+              <div className="mt-1 text-[10px] text-cyan-400 font-bold tracking-wide">
+                🛡️ CENSURE BARRIER SHIELD ACTIVE ({boss.shieldHp} HP)
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

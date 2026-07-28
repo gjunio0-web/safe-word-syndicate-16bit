@@ -4,12 +4,10 @@ export type GameScreen =
   | 'INTRO'
   | 'TITLE'
   | 'CHAR_SELECT'
-  | 'DIALOGUE'
   | 'GAMEPLAY'
   | 'STAGE_CLEAR'
   | 'GAME_OVER'
-  | 'VICTORY'
-  | 'CODEX';
+  | 'VICTORY';
 
 export type CharacterId = 'FEET_MASTER' | 'FUN_MAKER' | 'OMEGA_BIKER' | 'ANGRY_CORSO';
 

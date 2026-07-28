@@ -22,6 +22,7 @@ import {
   PLAYER_PUSH_SHARE,
   ATTACKERS_BY_DIFFICULTY,
   PLAYER_KICK_REACH,
+  CASTING_DAMAGE_MULTIPLIER,
   ARENA_MIN_Y,
   ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
@@ -1005,6 +1006,22 @@ export class GameEngine {
   private damageEntity(target: EntityState, damage: number, attacker: EntityState) {
     if (target.invulnerableTimer > 0) return;
 
+    // Casting leaves the Matriarch open.
+    //
+    // She already roots herself for the half second a wave takes to leave her
+    // hands — she has to, or the projectile would trail behind her — but there
+    // was no reason to exploit it. Reaching her costs the player a chase past
+    // a faster dog, and the payoff has to be worth that. The extra damage is
+    // what turns her retreat from a wall into a rhythm to read.
+    if (
+      attacker.isPlayer &&
+      target.enemyType === 'BOSS_MADAM_MIZYDIA' &&
+      target.action === 'PUNCH1'
+    ) {
+      damage = Math.round(damage * CASTING_DAMAGE_MULTIPLIER);
+      this.addParticle(target.x, target.y - 80, 0, '#ffe066', 'PUNISHED!', 'TEXT');
+    }
+
     // Boss shield protection check
     if (target.shieldHp && target.shieldHp > 0) {
       target.shieldHp = Math.max(0, target.shieldHp - damage);
@@ -1048,6 +1065,11 @@ export class GameEngine {
     // than a decision. Zero health now drops her: the collar loses its grip,
     // she stops fighting, and the wave counts her as handled. Striking her from
     // there kills her for real.
+    // Hitting the hostage reads differently from hitting an enemy.
+    if (target.enemyType === 'BOSS_SAYONARA' && !target.freed && Math.random() < 0.25) {
+      this.addParticle(target.x, target.y - 70, 0, '#ffb347', "SHE'S NOT THE ENEMY", 'TEXT');
+    }
+
     if (target.enemyType === 'BOSS_SAYONARA' && target.hp <= 0) {
       if (target.downed) {
         this.sayonaraKilled = true;

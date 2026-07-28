@@ -524,3 +524,83 @@ describe('Sayonara', () => {
     expect(dog.facing).toBe('RIGHT');
   });
 });
+
+/**
+ * The Matriarch's casting window.
+ *
+ * She roots herself for the half second a censure wave takes to leave her
+ * hands, but there was nothing in it for the player: reaching her costs a chase
+ * past a faster dog, and arriving during the one moment she cannot move paid
+ * the same as arriving at any other. Measured, killing her first took 2.9 times
+ * as long as killing Sayonara first, and that gap is what made the choice not a
+ * choice.
+ */
+describe('punishing a cast', () => {
+  const boss = (engine: ReturnType<typeof startEngine>) =>
+    engine.entities.find((e) => e.enemyType === 'BOSS_MADAM_MIZYDIA')!;
+
+  const damageDealt = (casting: boolean) => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 60 }]);
+    advance(engine, 2);
+
+    const target = boss(engine);
+    target.shieldHp = 0;
+    target.action = casting ? 'PUNCH1' : 'IDLE';
+    target.actionTimer = casting ? 30 : 0;
+    const before = target.hp;
+
+    // One clean punch, with the pose held so the state cannot tick away.
+    for (let i = 0; i < 6; i++) {
+      target.action = casting ? 'PUNCH1' : 'IDLE';
+      engine.update(input({ punch: i < 2 }));
+    }
+    return before - target.hp;
+  };
+
+  it('hurts more than hitting her at rest', () => {
+    const normal = damageDealt(false);
+    const punished = damageDealt(true);
+    expect(normal).toBeGreaterThan(0);
+    expect(punished).toBeGreaterThan(normal);
+  });
+
+  it('leaves other enemies unaffected, so it reads as her tell and not a global rule', () => {
+    // A fresh engine per measurement: invulnerability frames from the first
+    // punch would otherwise swallow the second.
+    const hit = (casting: boolean) => {
+      const engine = startEngine();
+      advance(engine, 60);
+      stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 60 }]);
+
+      const grunt = engine.entities.find((e) => e.enemyType === 'PURITY_PATROL')!;
+      const player = engine.player1!;
+      // Pinned every frame. A regular grunt's own AI walks and attacks on
+      // Math.random()-driven timing (a 4% chance per frame, once in range):
+      // left alone, the two branches drift to different, non-reproducible
+      // positions, and the grunt can land its own hit on the player first,
+      // interrupting the very punch this test measures. Holding actionTimer
+      // at 1 keeps its "am I free to act" gate from ever opening.
+      const pin = () => {
+        grunt.x = player.x + 60;
+        grunt.y = player.y;
+        grunt.actionTimer = 1;
+      };
+      pin();
+      advance(engine, 2);
+      pin();
+
+      const before = grunt.hp;
+      for (let i = 0; i < 6; i++) {
+        grunt.action = casting ? 'PUNCH1' : 'IDLE';
+        pin();
+        engine.update(input({ punch: i < 2 }));
+      }
+      return before - grunt.hp;
+    };
+
+    expect(hit(false)).toBeGreaterThan(0);
+    expect(hit(true)).toBe(hit(false));
+  });
+});

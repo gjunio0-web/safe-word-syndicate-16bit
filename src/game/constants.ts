@@ -133,3 +133,12 @@ export const PLAYER_KICK_REACH = 135;
 export const STREET_TOP_Y = 240;
 export const ARENA_MIN_Y = STREET_TOP_Y;
 export const ARENA_MAX_Y = 440;
+
+/**
+ * Damage multiplier while Madam Mizydia is locked into a cast.
+ *
+ * Her standoff makes reaching her expensive: the player crosses two hundred
+ * pixels with a faster enemy in the way. Without a payoff for arriving during
+ * the one window she cannot move, the fight is a chase rather than a read.
+ */
+export const CASTING_DAMAGE_MULTIPLIER = 1.75;
