@@ -543,17 +543,30 @@ describe('punishing a cast', () => {
     const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
     advance(engine, 60);
     stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 60 }]);
-    advance(engine, 2);
 
     const target = boss(engine);
+    // Frozen from the moment she exists, including the settle-in advance
+    // right below: left unpinned there, her own AI already has two free
+    // frames to move her or roll her own cast before the measurement even
+    // starts.
+    target.stunTimer = 4;
+    advance(engine, 2);
+
     target.shieldHp = 0;
     target.action = casting ? 'PUNCH1' : 'IDLE';
     target.actionTimer = casting ? 30 : 0;
     const before = target.hp;
 
     // One clean punch, with the pose held so the state cannot tick away.
+    //
+    // stunTimer is reset every frame so her own AI never runs: left alone,
+    // the 'IDLE' branch lets her autonomous behaviour move her or roll her
+    // own cast, occasionally consuming Math.random() in a way that shifts
+    // results between runs. The player's forced input is the only thing
+    // that should vary here.
     for (let i = 0; i < 6; i++) {
       target.action = casting ? 'PUNCH1' : 'IDLE';
+      target.stunTimer = 2;
       engine.update(input({ punch: i < 2 }));
     }
     return before - target.hp;
@@ -575,26 +588,25 @@ describe('punishing a cast', () => {
       stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 60 }]);
 
       const grunt = engine.entities.find((e) => e.enemyType === 'PURITY_PATROL')!;
-      const player = engine.player1!;
-      // Pinned every frame. A regular grunt's own AI walks and attacks on
-      // Math.random()-driven timing (a 4% chance per frame, once in range):
-      // left alone, the two branches drift to different, non-reproducible
-      // positions, and the grunt can land its own hit on the player first,
-      // interrupting the very punch this test measures. Holding actionTimer
-      // at 1 keeps its "am I free to act" gate from ever opening.
-      const pin = () => {
-        grunt.x = player.x + 60;
-        grunt.y = player.y;
-        grunt.actionTimer = 1;
-      };
-      pin();
+      // Frozen from the moment it exists, including the settle-in advance
+      // right below: left unpinned there, the grunt's own AI already has two
+      // free frames to roll its own attack before the measurement even
+      // starts.
+      grunt.stunTimer = 4;
       advance(engine, 2);
-      pin();
 
       const before = grunt.hp;
       for (let i = 0; i < 6; i++) {
         grunt.action = casting ? 'PUNCH1' : 'IDLE';
-        pin();
+        // Reset every frame for the same reason: an 'IDLE' grunt runs its
+        // own AI, which has its own small per-frame chance to throw a punch.
+        // That chance draws from the same unseeded Math.random() stream as
+        // everything else in the suite, so how many calls the tests before
+        // this one happened to make could occasionally let the grunt attack
+        // mid-measurement -- observed failing intermittently across full
+        // suite runs, never in isolation, which is the fingerprint of shared
+        // random state rather than a real bug.
+        grunt.stunTimer = 2;
         engine.update(input({ punch: i < 2 }));
       }
       return before - grunt.hp;
