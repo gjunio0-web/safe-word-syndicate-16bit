@@ -23,14 +23,16 @@ import { resolveKeyBinding } from './game/keyboard';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
+import { useIsMobileDevice } from './hooks/useDeviceType';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
 import { GameOverModal } from './components/GameOverModal';
 import { GameHeader } from './components/GameHeader';
 import { LoreCodex } from './components/LoreCodex';
 import { CustomAudioModal } from './components/CustomAudioModal';
+import { DifficultyModal } from './components/DifficultyModal';
 import { sound } from './game/sound';
-import { Play, BookOpen, Award, Disc } from 'lucide-react';
+import { Play, BookOpen, Award, Disc, Gauge } from 'lucide-react';
 
 // Kept module-level: useSyncExternalStore resubscribes on every render if the
 // accessors are recreated.
@@ -80,7 +82,16 @@ export default function App() {
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
+  // Touch controls exist for phones without a keyboard. On desktop the
+  // fighter is keyboard-only — the D-pad and action buttons duplicated keys
+  // that were already there, cluttering the corner with clickable circles
+  // nobody used, since a mouse cannot hold a direction and press an attack at
+  // once. Everything else on screen — the header buttons, pause, codex,
+  // jukebox — stays mouse-operable; only the fighter's own controls move to
+  // keyboard alone.
+  const isMobile = useIsMobileDevice();
   const [showAudioModal, setShowAudioModal] = useState(false);
+  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
 
   const engineRef = useRef<GameEngine | null>(null);
 
@@ -229,8 +240,8 @@ export default function App() {
   // of pressing anything. Closing them left focus on an element that no longer
   // existed, costing another press.
   useMenuFocusReset(
-    `${screen}:${isPaused}:${showCodex}:${showAudioModal}`,
-    screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal
+    `${screen}:${isPaused}:${showCodex}:${showAudioModal}:${showDifficultyModal}`,
+    screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal || showDifficultyModal
   );
 
   const gameRootRef = useRef<HTMLDivElement>(null);
@@ -378,21 +389,14 @@ export default function App() {
     setScreen('GAMEPLAY');
   };
 
-  const handleSelectFighter = (
-    p1: CharacterId,
-    p2?: CharacterId,
-    mode?: GameMode,
-    difficulty?: GameSettings['difficulty']
-  ) => {
+  const handleSelectFighter = (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => {
     setP1Char(p1);
     setP2Char(p2);
     if (mode) setGameMode(mode);
-    // setSettings is async, so startStage can't read the new difficulty back
-    // out of `settings` in the same call — pass the resolved object directly
-    // and let the state update catch up for the stages after this one.
-    const nextSettings = difficulty ? { ...settings, difficulty } : settings;
-    if (difficulty) setSettings(nextSettings);
-    startStage(0, p1, p2, nextSettings);
+    // Difficulty is chosen from the title screen's own modal now, not passed
+    // through this screen, so `settings` already holds whatever the player
+    // picked and there is nothing left to reconcile here.
+    startStage(0, p1, p2, settings);
   };
 
   const handleNextStage = () => {
@@ -428,10 +432,11 @@ export default function App() {
       // it: pressing start with the codex open began the match behind the
       // codex, and confirm fell through to the same handler whenever focus was
       // not on one of the overlay's own buttons.
-      if (showCodex || showAudioModal) {
+      if (showCodex || showAudioModal || showDifficultyModal) {
         if (action === 'BACK') {
           setShowCodex(false);
           setShowAudioModal(false);
+          setShowDifficultyModal(false);
           return;
         }
         applyMenuNavigation(action);
@@ -531,6 +536,18 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => setShowDifficultyModal(true)}
+              className="w-full sm:w-auto px-5 py-4 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+            >
+              <Gauge className="w-4 h-4 text-[#ffff00]" />
+              {settings.difficulty === 'PUNK_HARD'
+                ? 'PUNK HARD'
+                : settings.difficulty === 'EASY'
+                  ? 'EASY'
+                  : 'NORMAL'}
+            </button>
+
+            <button
               onClick={() => setShowAudioModal(true)}
               className="w-full sm:w-auto px-5 py-4 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all"
             >
@@ -545,6 +562,14 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {showDifficultyModal && (
+        <DifficultyModal
+          difficulty={settings.difficulty}
+          onSelect={(difficulty) => setSettings((prev) => ({ ...prev, difficulty }))}
+          onClose={() => setShowDifficultyModal(false)}
+        />
       )}
 
       {/* 2. CHARACTER SELECT SCREEN */}
@@ -597,11 +622,13 @@ export default function App() {
               showHitboxes={settings.showHitboxes}
             />
 
-            <OnScreenControls
-              input={inputP1}
-              setInput={setInputP1}
-              powerMeter={engineRef.current.player1?.powerMeter || 0}
-            />
+            {isMobile && (
+              <OnScreenControls
+                input={inputP1}
+                setInput={setInputP1}
+                powerMeter={engineRef.current.player1?.powerMeter || 0}
+              />
+            )}
           </div>
         </div>
       )}

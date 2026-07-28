@@ -1,21 +1,13 @@
 import React, { useState, useEffect, useSyncExternalStore } from 'react';
 import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
 import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
-import { CharacterId, GameMode, GameSettings } from '../types';
+import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { Flame, Crosshair, Users, Bot, UserCheck, Play, User, Gauge } from 'lucide-react';
+import { Flame, Crosshair, Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
-type Difficulty = GameSettings['difficulty'];
-
-const DIFFICULTIES: { id: Difficulty; label: string }[] = [
-  { id: 'EASY', label: 'EASY' },
-  { id: 'NORMAL', label: 'NORMAL' },
-  { id: 'PUNK_HARD', label: 'PUNK HARD' },
-];
-
 interface CharacterSelectDesktopProps {
-  onSelect: (p1: CharacterId, p2?: CharacterId, mode?: GameMode, difficulty?: Difficulty) => void;
+  onSelect: (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => void;
   onBack: () => void;
 }
 
@@ -24,7 +16,6 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   const [selectedP2, setSelectedP2] = useState<CharacterId | null>(null);
   const [mode, setMode] = useState<GameMode>('SINGLE');
   const [activeSlot, setActiveSlot] = useState<'P1' | 'P2'>('P1');
-  const [difficulty, setDifficulty] = useState<Difficulty>('NORMAL');
 
   const charColors: Record<CharacterId, { border: string; text: string; shadow: string; bar: string }> = {
     FEET_MASTER: {
@@ -190,7 +181,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
 
   const handleStart = () => {
     sound.playStageClear();
-    onSelect(selectedP1, selectedP2 || undefined, mode, difficulty);
+    onSelect(selectedP1, selectedP2 || undefined, mode);
   };
 
   return (
@@ -252,35 +243,6 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         </div>
       </header>
 
-      {/* Difficulty Selector */}
-      <div className="mt-3 bg-[#141414] border-2 border-[#333] p-2 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3">
-        <div className="flex items-center gap-2 text-[10px] sm:text-xs font-mono text-zinc-400">
-          <Gauge className="w-3.5 h-3.5 text-[#ffff00]" />
-          <span className="text-[#ffff00] font-bold">DIFFICULTY:</span>
-        </div>
-        <div className="flex bg-[#111] p-1 border-2 border-[#333] gap-1 w-full sm:w-auto justify-center">
-          {DIFFICULTIES.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => {
-                sound.playPunch();
-                setDifficulty(d.id);
-              }}
-              className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                difficulty === d.id
-                  ? d.id === 'EASY'
-                    ? 'bg-[#34c759] text-black shadow-md'
-                    : d.id === 'PUNK_HARD'
-                    ? 'bg-[#ff3b30] text-black shadow-md'
-                    : 'bg-[#00ffff] text-black shadow-md'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Active Selection Target Tabs (Only shown in 2P / AI companion modes) */}
       {mode !== 'SINGLE' && (

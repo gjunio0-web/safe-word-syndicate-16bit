@@ -1,16 +1,8 @@
 import React, { useState } from 'react';
-import { CharacterId, GameSettings } from '../types';
+import { CharacterId } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { ChevronLeft, ChevronRight, Crosshair, Gauge, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crosshair, Play } from 'lucide-react';
 import { sound } from '../game/sound';
-
-type Difficulty = GameSettings['difficulty'];
-
-const DIFFICULTIES: { id: Difficulty; label: string }[] = [
-  { id: 'EASY', label: 'EASY' },
-  { id: 'NORMAL', label: 'NORMAL' },
-  { id: 'PUNK_HARD', label: 'PUNK HARD' },
-];
 
 const charColors: Record<CharacterId, { text: string }> = {
   FEET_MASTER: { text: 'text-[#00ffff]' },
@@ -20,7 +12,7 @@ const charColors: Record<CharacterId, { text: string }> = {
 };
 
 interface CharacterSelectMobileProps {
-  onSelect: (p1: CharacterId, p2: undefined, mode: 'SINGLE', difficulty: Difficulty) => void;
+  onSelect: (p1: CharacterId, p2: undefined, mode: 'SINGLE') => void;
   onBack: () => void;
 }
 
@@ -38,7 +30,6 @@ interface CharacterSelectMobileProps {
 export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ onSelect, onBack }) => {
   const roster = Object.values(CHARACTERS);
   const [index, setIndex] = useState(0);
-  const [difficulty, setDifficulty] = useState<Difficulty>('NORMAL');
 
   const char = roster[index];
   const theme = charColors[char.id];
@@ -50,7 +41,7 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
 
   const handleStart = () => {
     sound.playStageClear();
-    onSelect(char.id, undefined, 'SINGLE', difficulty);
+    onSelect(char.id, undefined, 'SINGLE');
   };
 
   return (
@@ -67,36 +58,6 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
           </h1>
         </div>
       </header>
-
-      {/* Difficulty Selector — same block as desktop */}
-      <div className="shrink-0 mt-3 bg-[#141414] border-2 border-[#333] p-2 flex flex-col items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
-          <Gauge className="w-3.5 h-3.5 text-[#ffff00]" />
-          <span className="text-[#ffff00] font-bold">DIFFICULTY:</span>
-        </div>
-        <div className="flex bg-[#111] p-1 border-2 border-[#333] gap-1 w-full justify-center">
-          {DIFFICULTIES.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => {
-                sound.playPunch();
-                setDifficulty(d.id);
-              }}
-              className={`flex-1 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                difficulty === d.id
-                  ? d.id === 'EASY'
-                    ? 'bg-[#34c759] text-black shadow-md'
-                    : d.id === 'PUNK_HARD'
-                    ? 'bg-[#ff3b30] text-black shadow-md'
-                    : 'bg-[#00ffff] text-black shadow-md'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Roster position, above the dossier it now doubles for */}
       <div className="shrink-0 flex justify-center gap-1.5 mt-3">
