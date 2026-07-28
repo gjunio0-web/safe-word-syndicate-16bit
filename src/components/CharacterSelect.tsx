@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useGamepadMenu } from '../hooks/useGamepadMenu';
+import React, { useState, useEffect, useSyncExternalStore } from 'react';
+import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
+import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
 import { CharacterId, GameMode, GameSettings } from '../types';
 import { CHARACTERS } from '../game/characterData';
 import { Flame, Crosshair, Users, Bot, UserCheck, Play, User, Gauge } from 'lucide-react';
@@ -90,13 +91,25 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
   // binary toggle fits a button.
   const MODE_ORDER: GameMode[] = ['SINGLE', 'AI_COMPANION', 'COOP'];
 
-  useGamepadMenu((action) => {
+  // Two controllers means two people choosing at once; below that there is one
+  // cursor and everything drives it.
+  const padCount = useSyncExternalStore(subscribeGamepadConnection, connectedGamepadCount, () => 0);
+  const twoPadsConnected = padCount >= 2;
+
+  /**
+   * One menu action, applied to a named slot.
+   *
+   * Pulled out of the hook so the same logic can serve two callers: the shared
+   * cursor, driven by the keyboard and by a lone controller, and one stream per
+   * player when two controllers are connected.
+   */
+  const applyMenuAction = (action: MenuAction, slot: 'P1' | 'P2', shared: boolean) => {
     if (action === 'LEFT' || action === 'RIGHT') {
-      const current = activeSlot === 'P1' ? selectedP1 : selectedP2;
+      const current = slot === 'P1' ? selectedP1 : selectedP2;
       const at = charList.findIndex((c) => c.id === current);
       const step = action === 'RIGHT' ? 1 : -1;
       const next = charList[(at + step + charList.length) % charList.length];
-      if (next) selectCharacterForActiveSlot(next.id);
+      if (next) selectCharacterForSlot(next.id, slot, shared);
       return;
     }
     if (action === 'UP' || action === 'DOWN') {
@@ -104,9 +117,8 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
       const step = action === 'DOWN' ? 1 : -1;
       const next = MODE_ORDER[(at + step + MODE_ORDER.length) % MODE_ORDER.length];
       setMode(next);
-      // Leaving a two-player mode must not strand the cursor on P2, nor leave
-      // a stale P2 highlight on the roster card (SINGLE mode has no P2) —
-      // mirrors what the "1P SOLO" button already does.
+      // Leaving a two-player mode must not strand the cursor on P2, nor leave a
+      // stale P2 highlight on the roster card.
       if (next === 'SINGLE') {
         setActiveSlot('P1');
         setSelectedP2(null);
@@ -115,39 +127,66 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
       return;
     }
     if (action === 'TOGGLE') {
-      if (mode !== 'SINGLE') {
+      // Only meaningful for the shared cursor. A player with their own pad is
+      // already locked to their own slot.
+      if (shared && mode !== 'SINGLE') {
         setActiveSlot((prev) => (prev === 'P1' ? 'P2' : 'P1'));
         sound.playSelect();
       }
       return;
     }
-    if (action === 'CONFIRM' || action === 'START') handleStart();
+    if (action === 'CONFIRM' || action === 'START') {
+      handleStart();
+      return;
+    }
     if (action === 'BACK') {
-      // Picking P1 auto-advances to P2/AI, which reads as a step forward —
-      // BACK should undo that step before it leaves the whole screen.
-      if (mode !== 'SINGLE' && activeSlot === 'P2') {
+      if (shared && mode !== 'SINGLE' && activeSlot === 'P2') {
         setActiveSlot('P1');
         sound.playSelect();
       } else {
         onBack();
       }
     }
-  });
+  };
 
-  const selectCharacterForActiveSlot = (charId: CharacterId) => {
+  // Shared cursor: keyboard, and any controller while there is only one.
+  useGamepadMenu(
+    (action) => applyMenuAction(action, mode === 'SINGLE' ? 'P1' : activeSlot, true),
+    !twoPadsConnected
+  );
+
+  // One stream per player once both controllers are present, so each person
+  // moves their own selection instead of both fighting over one cursor.
+  useGamepadPlayerMenus(
+    (player, action) => applyMenuAction(action, player === 2 ? 'P2' : 'P1', false),
+    mode === 'COOP',
+    twoPadsConnected && mode !== 'SINGLE'
+  );
+
+  /**
+   * Sets a fighter for a named slot.
+   *
+   * `advanceCursor` is what makes one-input selection flow: choosing P1 moves
+   * the shared cursor on to P2. A player with their own controller must not
+   * trigger it — they are only ever choosing their own fighter, and moving the
+   * cursor would drag the other person's selection with it.
+   */
+  const selectCharacterForSlot = (
+    charId: CharacterId,
+    slot: 'P1' | 'P2',
+    advanceCursor = false
+  ) => {
     sound.playPunch();
-    if (mode === 'SINGLE') {
+    if (mode === 'SINGLE' || slot === 'P1') {
       setSelectedP1(charId);
+      if (advanceCursor && mode !== 'SINGLE') setActiveSlot('P2');
     } else {
-      if (activeSlot === 'P1') {
-        setSelectedP1(charId);
-        // Automatically switch active slot to P2 after setting P1 to streamline selection
-        setActiveSlot('P2');
-      } else {
-        setSelectedP2(charId);
-      }
+      setSelectedP2(charId);
     }
   };
+
+  const selectCharacterForActiveSlot = (charId: CharacterId) =>
+    selectCharacterForSlot(charId, mode === 'SINGLE' ? 'P1' : activeSlot, true);
 
   const handleStart = () => {
     sound.playStageClear();

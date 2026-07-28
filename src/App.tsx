@@ -195,7 +195,18 @@ export default function App() {
   }, [screen]);
 
   // Modals change the navigable set; drop stale focus when that happens.
-  useMenuFocusReset(`${screen}:${isPaused}`, screen !== 'GAMEPLAY' || isPaused);
+  // Every overlay that carries `data-gamepad-scope` has to appear in this key.
+  //
+  // It used to be screen and pause state only, so opening the codex or the
+  // jukebox changed which elements were navigable without the effect noticing:
+  // focus stayed on the button behind the overlay, `applyMenuNavigation` could
+  // not find it in the new scope, and confirm spent itself moving focus instead
+  // of pressing anything. Closing them left focus on an element that no longer
+  // existed, costing another press.
+  useMenuFocusReset(
+    `${screen}:${isPaused}:${showCodex}:${showAudioModal}`,
+    screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal
+  );
 
   const gameRootRef = useRef<HTMLDivElement>(null);
 
@@ -386,6 +397,22 @@ export default function App() {
   // cursor and handles it internally.
   useGamepadMenu(
     (action) => {
+      // An open overlay owns the controller.
+      //
+      // Without this the screen-level shortcuts below fired straight through
+      // it: pressing start with the codex open began the match behind the
+      // codex, and confirm fell through to the same handler whenever focus was
+      // not on one of the overlay's own buttons.
+      if (showCodex || showAudioModal) {
+        if (action === 'BACK') {
+          setShowCodex(false);
+          setShowAudioModal(false);
+          return;
+        }
+        applyMenuNavigation(action);
+        return;
+      }
+
       if (screen === 'ATTRACT') {
         // Every button is the coin slot here, matching keyboard and touch.
         handleInsertCoin();
