@@ -587,10 +587,6 @@ export default function App() {
           stageName={STAGES[currentStageIdx].name}
           stats={engineRef.current.stats}
           onNextStage={handleNextStage}
-          onReturnToTitle={() => {
-            sound.stopAll();
-            setScreen('TITLE');
-          }}
         />
       )}
 
