@@ -8,6 +8,29 @@ import { sound } from '../game/sound';
 
 type Difficulty = GameSettings['difficulty'];
 
+/**
+ * Matches Tailwind's own `sm` breakpoint (640px) rather than introducing a
+ * second, uncoordinated cutoff — every other responsive choice on this screen
+ * already turns on it.
+ *
+ * Module-level, not inside the component: an inline subscribe/getSnapshot
+ * pair is a new function every render, and useSyncExternalStore resubscribes
+ * whenever either one changes identity.
+ */
+const TWO_PLAYER_ROOM_QUERY = '(min-width: 640px)';
+
+function hasTwoPlayerRoom(): boolean {
+  if (typeof window === 'undefined') return true;
+  return window.matchMedia(TWO_PLAYER_ROOM_QUERY).matches;
+}
+
+function subscribeTwoPlayerRoom(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const mql = window.matchMedia(TWO_PLAYER_ROOM_QUERY);
+  mql.addEventListener('change', onChange);
+  return () => mql.removeEventListener('change', onChange);
+}
+
 const DIFFICULTIES: { id: Difficulty; label: string }[] = [
   { id: 'EASY', label: 'EASY' },
   { id: 'NORMAL', label: 'NORMAL' },
@@ -91,6 +114,23 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
   // binary toggle fits a button.
   const MODE_ORDER: GameMode[] = ['SINGLE', 'AI_COMPANION', 'COOP'];
 
+  // Two virtual D-pads and eight action buttons do not fit a phone screen, so
+  // a phone-width viewport only ever gets SINGLE — not just the mode buttons
+  // hidden, but the mode itself unreachable, so a paired Bluetooth keyboard or
+  // controller cannot reach it either.
+  const hasRoomForTwoPlayers = useSyncExternalStore(subscribeTwoPlayerRoom, hasTwoPlayerRoom, () => true);
+  const AVAILABLE_MODES = hasRoomForTwoPlayers ? MODE_ORDER : (['SINGLE'] as GameMode[]);
+
+  // Falls back to SINGLE the moment the viewport can no longer fit a second
+  // player — resizing or rotating down out of a two-player mode must not
+  // strand it selected with its buttons hidden and no way to change it.
+  useEffect(() => {
+    if (hasRoomForTwoPlayers || mode === 'SINGLE') return;
+    setMode('SINGLE');
+    setSelectedP2(null);
+    setActiveSlot('P1');
+  }, [hasRoomForTwoPlayers, mode]);
+
   // Two controllers means two people choosing at once; below that there is one
   // cursor and everything drives it.
   const padCount = useSyncExternalStore(subscribeGamepadConnection, connectedGamepadCount, () => 0);
@@ -113,9 +153,13 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
       return;
     }
     if (action === 'UP' || action === 'DOWN') {
-      const at = MODE_ORDER.indexOf(mode);
+      // indexOf can miss for one render: hasRoomForTwoPlayers can flip before
+      // the effect above has caught up and reset a two-player mode back to
+      // SINGLE. Falls back to the first available mode rather than -1, which
+      // would look up AVAILABLE_MODES[-1] and read undefined.
+      const at = Math.max(0, AVAILABLE_MODES.indexOf(mode));
       const step = action === 'DOWN' ? 1 : -1;
-      const next = MODE_ORDER[(at + step + MODE_ORDER.length) % MODE_ORDER.length];
+      const next = AVAILABLE_MODES[(at + step + AVAILABLE_MODES.length) % AVAILABLE_MODES.length];
       setMode(next);
       // Leaving a two-player mode must not strand the cursor on P2, nor leave a
       // stale P2 highlight on the roster card.
@@ -222,6 +266,10 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
             >
               <UserCheck className="w-3.5 h-3.5" /> 1P SOLO
             </button>
+            {/* Hidden rather than unrendered: keeps the toggle group's layout
+                stable across the breakpoint, and the effect above is what
+                actually keeps `mode` out of reach below it — this is just the
+                button. */}
             <button
               onClick={() => {
                 sound.playPunch();
@@ -229,7 +277,7 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
                 if (!selectedP2) setSelectedP2('FUN_MAKER');
                 setActiveSlot('P2');
               }}
-              className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+              className={`hidden sm:flex px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider items-center gap-1 transition-all cursor-pointer ${
                 mode === 'AI_COMPANION' ? 'bg-[#00ffff] text-black shadow-md' : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -242,7 +290,7 @@ export const CharacterSelect: React.FC<CharacterSelectProps> = ({ onSelect, onBa
                 if (!selectedP2) setSelectedP2('OMEGA_BIKER');
                 setActiveSlot('P2');
               }}
-              className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+              className={`hidden sm:flex px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider items-center gap-1 transition-all cursor-pointer ${
                 mode === 'COOP' ? 'bg-[#ffff00] text-black shadow-md' : 'text-zinc-400 hover:text-white'
               }`}
             >
