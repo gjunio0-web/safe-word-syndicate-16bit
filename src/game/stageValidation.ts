@@ -68,6 +68,22 @@ export function assertStagesAreCompletable(stages: StageConfig[]): void {
     );
   }
 
+  // Every wave speaks. The five that did not were not a style choice, they
+  // were an oversight that inverted the engagement curve: the campaign went
+  // quiet exactly as it approached its climax. Silence is allowed, but it has
+  // to be asked for, so that the next wave someone adds cannot go mute by
+  // accident the way these did.
+  const mute = stages.flatMap((stage) =>
+    stage.waves.flatMap((wave, waveIndex) =>
+      wave.dialogueBefore || wave.barkOnSpawn || wave.intentionallySilent
+        ? []
+        : [`stage ${stage.id} wave ${waveIndex + 1} has no line and is not marked intentionallySilent`]
+    )
+  );
+  if (mute.length > 0) {
+    throw new Error(`[stageData] ${mute.length} silent wave(s):\n${mute.map((m) => `  - ${m}`).join('\n')}`);
+  }
+
   const issues = validateStages(stages);
   if (issues.length === 0) return;
 

@@ -99,11 +99,28 @@ describe('engine roster', () => {
 
 describe('migrated campaign script', () => {
   const heroLines = STAGES.flatMap((stage) =>
-    stage.waves.flatMap((wave) => (wave.dialogueBefore ?? []).filter(isHeroLine))
+    stage.waves.flatMap((wave) =>
+      [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ? [wave.barkOnSpawn] : [])].filter(
+        isHeroLine
+      )
+    )
   );
 
-  it('carries a hero line in every wave that already spoke', () => {
-    expect(heroLines).toHaveLength(6);
+  it('leaves no wave in the campaign without a line', () => {
+    const waves = STAGES.flatMap((stage) => stage.waves);
+    expect(waves).toHaveLength(11);
+    for (const wave of waves) {
+      expect(Boolean(wave.dialogueBefore || wave.barkOnSpawn)).toBe(true);
+    }
+  });
+
+  it('gives every hero a variant everywhere a hero speaks', () => {
+    expect(heroLines).toHaveLength(11);
+    for (const line of heroLines) {
+      expect(Object.keys(line.variants).sort()).toEqual([
+        'ANGRY_CORSO', 'FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER',
+      ]);
+    }
   });
 
   it('never makes the same hero answer twice in one wave', () => {

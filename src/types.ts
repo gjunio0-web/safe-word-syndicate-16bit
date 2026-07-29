@@ -193,6 +193,12 @@ export interface WaveConfig {
    * can talk without stopping eleven times.
    */
   barkOnSpawn?: ScriptEntry;
+  /**
+   * Opt out of the "every wave speaks" check. Nothing sets this today; it
+   * exists so a deliberate silence is a decision someone wrote down rather
+   * than a wave nobody got around to.
+   */
+  intentionallySilent?: boolean;
 }
 
 export type PortraitId =
