@@ -1,14 +1,13 @@
 import type { BgmTrack } from './game/bgmTracks';
 export type GameScreen =
   | 'ATTRACT'
+  | 'INTRO'
   | 'TITLE'
   | 'CHAR_SELECT'
-  | 'DIALOGUE'
   | 'GAMEPLAY'
   | 'STAGE_CLEAR'
   | 'GAME_OVER'
-  | 'VICTORY'
-  | 'CODEX';
+  | 'VICTORY';
 
 export type CharacterId = 'FEET_MASTER' | 'FUN_MAKER' | 'OMEGA_BIKER' | 'ANGRY_CORSO';
 
@@ -95,6 +94,22 @@ export interface EntityState {
   aiTargetY?: number;
   aiState?: 'PATROL' | 'APPROACH' | 'ATTACK' | 'RETREAT' | 'SPECIAL';
   aiTimer?: number;
+
+  /**
+   * Sayonara only. She is not an enemy but a hostage, so reaching zero health
+   * puts her on the floor instead of killing her: the collar stops driving her
+   * and she stops fighting. Striking her again from there is what kills her,
+   * and that is a separate, deliberate act rather than the natural end of the
+   * fight.
+   */
+  downed?: boolean;
+
+  /**
+   * Sayonara after the collar breaks. She is neither an enemy nor a corpse:
+   * the AI must stop steering her or she turns round and resumes the fight,
+   * and the wave must not wait on her.
+   */
+  freed?: boolean;
   
   // Boss Phase state
   bossPhase?: number;
@@ -170,15 +185,61 @@ export interface WaveConfig {
     count: number;
     spawnSide?: 'LEFT' | 'RIGHT' | 'BOTH';
   }[];
-  dialogueBefore?: DialogueLine[];
+  dialogueBefore?: ScriptEntry[];
+  /**
+   * One line thrown over the fight as the wave lands. Unlike dialogueBefore it
+   * does not hold the spawn or wait on the player: it appears, it is read or it
+   * is not, it goes. Waves that only need a reaction use this so the campaign
+   * can talk without stopping eleven times.
+   */
+  barkOnSpawn?: ScriptEntry;
+  /**
+   * Opt out of the "every wave speaks" check. Nothing sets this today; it
+   * exists so a deliberate silence is a decision someone wrote down rather
+   * than a wave nobody got around to.
+   */
+  intentionallySilent?: boolean;
 }
 
+export type PortraitId =
+  | 'FEET_MASTER'
+  | 'FUN_MAKER'
+  | 'OMEGA_BIKER'
+  | 'ANGRY_CORSO'
+  | 'PURITY_PATROL'
+  | 'TRAD_WIFE_STRIKER'
+  | 'MADAM_MIZYDIA'
+  | 'SAYONARA';
+
+/** A line with a fixed speaker: enemies, bosses, anyone who isn't the player. */
 export interface DialogueLine {
   speaker: string;
-  portrait: 'FEET_MASTER' | 'FUN_MAKER' | 'OMEGA_BIKER' | 'ANGRY_CORSO' | 'PURITY_LEADER' | 'MADAM_MIZYDIA' | 'SAYONARA';
+  portrait: PortraitId;
   text: string;
   side: 'LEFT' | 'RIGHT';
 }
+
+export interface HeroVariant {
+  speaker: string;
+  portrait: PortraitId;
+  text: string;
+}
+
+/**
+ * A line the heroes answer with, written once per hero and picked at runtime.
+ *
+ * The `Record` is deliberately complete rather than partial: every hero gets a
+ * variant or the build fails. Four rebels who refused to fade away, and one of
+ * them going quiet because nobody wrote him a line is not the vibe.
+ */
+export interface HeroLine {
+  /** Whose wave this is. Falls through to whoever actually showed up. */
+  prefer?: CharacterId;
+  variants: Record<CharacterId, HeroVariant>;
+}
+
+/** What a wave's script holds before the roster resolves it down to flat lines. */
+export type ScriptEntry = DialogueLine | HeroLine;
 
 export interface PlayerInput {
   left: boolean;

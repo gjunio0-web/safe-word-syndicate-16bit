@@ -217,40 +217,47 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
     .filter((i) => i !== assignedP1Index && i !== assignedP2Index)
     .sort((a, b) => a - b);
 
-  // Hand a slot over from a pad that has gone quiet to one that is being used.
+  // Assign each unclaimed pad to the first slot it may take.
   //
-  // Releasing purely on staleness would drop a live controller that is simply
-  // resting — Firefox only advances `timestamp` when the state changes, so an
-  // untouched pad looks identical to a dead one. Requiring a competing pad
-  // with a control actually held makes that ambiguity harmless: a lone idle
-  // controller keeps its slot forever, and a switched-off one only loses it to
-  // somebody pressing a button on a replacement.
-  const claimed = new Set<number>();
-  for (const index of unassigned) {
-    const claimant = pads.get(index);
-    if (!claimant || !hasActivity(claimant)) continue;
+  // Two situations look alike from here and need opposite outcomes, so the
+  // preference order settles both instead of separate passes:
+  //
+  //   a pad whose signal dropped for a frame returns, and its own slot is now
+  //   empty — it must go back there, not take the other player's;
+  //
+  //   a replacement is plugged in because the previous controller died, and
+  //   that dead pad is still listed as holding a slot — it must take that one,
+  //   not the empty slot the keyboard is already covering.
+  //
+  // Both are "the first slot in preference order that is free or held by a pad
+  // that stopped reporting". Ordering the passes the other way broke whichever
+  // case ran second: an earlier version filled free slots first, and a pad
+  // returning from a dropout then stole an idle player's controller.
+  //
+  // Taking over from a live holder still requires the newcomer to be pressing
+  // something. Staleness alone cannot mean "gone": Firefox only advances
+  // `timestamp` on state change, so a controller resting on the table looks
+  // exactly like one switched off.
+  const slotOrder: Array<'p1' | 'p2'> = coop ? ['p2', 'p1'] : ['p1', 'p2'];
+  const held = (slot: 'p1' | 'p2') => (slot === 'p1' ? assignedP1Index : assignedP2Index);
+  const assign = (slot: 'p1' | 'p2', index: number) => {
+    if (slot === 'p1') assignedP1Index = index;
+    else assignedP2Index = index;
+  };
 
-    if (assignedP2Index !== null && !isResponsive(assignedP2Index)) {
-      assignedP2Index = index;
-    } else if (assignedP1Index !== null && !isResponsive(assignedP1Index)) {
-      assignedP1Index = index;
-    } else {
-      continue;
-    }
-    claimed.add(index);
-  }
-
-  // In co-op the first controller joins as player two: the keyboard player
-  // already holds player one, and handing the pad to P1 would put both people
-  // on the same fighter.
   for (const index of unassigned) {
-    if (claimed.has(index)) continue;
-    if (coop) {
-      if (assignedP2Index === null) assignedP2Index = index;
-      else if (assignedP1Index === null) assignedP1Index = index;
-    } else {
-      if (assignedP1Index === null) assignedP1Index = index;
-      else if (assignedP2Index === null) assignedP2Index = index;
+    const pad = pads.get(index);
+    if (!pad) continue;
+    const active = hasActivity(pad);
+
+    for (const slot of slotOrder) {
+      const current = held(slot);
+      const livre = current === null;
+      const abandonado = current !== null && active && !isResponsive(current);
+      if (livre || abandonado) {
+        assign(slot, index);
+        break;
+      }
     }
   }
 
@@ -383,6 +390,51 @@ function emptyMenuState(): MenuState {
  * Menu state merged across every connected pad, so either player can drive the
  * menus without the game caring which slot they hold.
  */
+/** Menu state from one pad, without merging in the others. */
+function menuStateFromPad(pad: Gamepad): MenuState {
+  const state = emptyMenuState();
+  const dir = mapGamepadToInput(pad);
+
+  state.UP = dir.up;
+  state.DOWN = dir.down;
+  state.LEFT = dir.left;
+  state.RIGHT = dir.right;
+  state.CONFIRM = pressed(pad, MENU_BUTTON.CONFIRM);
+  state.BACK = pressed(pad, MENU_BUTTON.BACK);
+  state.START = pressed(pad, MENU_BUTTON.START);
+  state.TOGGLE =
+    pressed(pad, MENU_BUTTON.TOGGLE_L) || pressed(pad, MENU_BUTTON.TOGGLE_R);
+
+  return state;
+}
+
+/**
+ * Menu input kept separate per player.
+ *
+ * `readMenuState` merges every pad into one, which is right for a screen with a
+ * single cursor: any controller can drive it. Character select is the exception
+ * — two people choosing at once need a cursor each, and a merged state gives
+ * them one cursor that both fight over.
+ *
+ * The slots come from the same assignment the match uses, so whoever is player
+ * two on the fighting screen is player two while picking.
+ */
+export function readPlayerMenuStates(coop: boolean): {
+  p1: MenuState | null;
+  p2: MenuState | null;
+} {
+  const pads = livePads();
+  readPlayerPads(coop);
+
+  const at = (index: number | null) => {
+    if (index === null) return null;
+    const pad = pads.get(index);
+    return pad ? menuStateFromPad(pad) : null;
+  };
+
+  return { p1: at(assignedP1Index), p2: at(assignedP2Index) };
+}
+
 export function readMenuState(): MenuState {
   const state = emptyMenuState();
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return state;

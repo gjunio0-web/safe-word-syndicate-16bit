@@ -10,11 +10,15 @@ import {
   StageStats,
   GameSettings,
 } from '../types';
+import { heroLine, resolveDialogue } from './dialogue';
 import { CHARACTERS, ENEMIES } from './characterData';
 import {
   maxCameraX,
   maxWaveTriggerX,
   WAVE_TRIGGER_LOOKAHEAD,
+  BARK_DURATION_FRAMES,
+  OUTRO_MAX_FRAMES,
+  VIEWPORT_WIDTH,
   PLAYER_BODY_SEPARATION_X,
   PLAYER_BODY_SEPARATION_Y,
   ENEMY_BODY_SEPARATION_X,
@@ -22,6 +26,7 @@ import {
   PLAYER_PUSH_SHARE,
   ATTACKERS_BY_DIFFICULTY,
   PLAYER_KICK_REACH,
+  CASTING_DAMAGE_MULTIPLIER,
   ARENA_MIN_Y,
   ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
@@ -98,11 +103,33 @@ export class GameEngine {
   public gameOver: boolean = false;
   public bossDefeated: boolean = false;
 
+  /**
+   * Whether Sayonara was struck while already on the floor.
+   *
+   * The campaign has two endings and this is the only thing separating them:
+   * knocking her out is unavoidable, finishing her off is a choice.
+   */
+  public sayonaraKilled: boolean = false;
+
   public stageStartBannerTimer: number = 210;
   public bossWarningTimer: number = 0;
   public bossWarningTitle: string = '';
   private _activeDialogue: import('../types').DialogueLine[] | null = null;
   private dialogueListeners: Set<() => void> = new Set();
+  /**
+   * The bark channel. Same shape as the dialogue channel above, deliberately:
+   * one line instead of a list, and a frame counter instead of a player press.
+   * The timer lives here rather than in React so it pauses when the fight
+   * pauses and cannot drift away from the frame the line was fired on.
+   */
+  private _activeBark: import('../types').DialogueLine | null = null;
+  private barkListeners: Set<() => void> = new Set();
+  private barkTimer = 0;
+  /**
+   * Counts down while Sayonara walks out. Zero means no outro is running; the
+   * campaign is only declared won when it lapses or she leaves the field.
+   */
+  private outroTimer = 0;
 
   private hudSnapshot: HudSnapshot;
   private hudListeners: Set<() => void> = new Set();
@@ -113,6 +140,13 @@ export class GameEngine {
 
   public player1: EntityState | null = null;
   public player2: EntityState | null = null;
+  /**
+   * Whether the second fighter is a person. Until now the difference between
+   * "2P CO-OP" and "1P + AI BUDDY" lived entirely in whether App passed a p2
+   * input object each frame, which the dialogue resolver cannot see. It needs
+   * to: the AI companion should never be the one answering the villains.
+   */
+  private p2IsHuman: boolean;
 
   public stats: StageStats = {
     score: 0,
@@ -226,13 +260,33 @@ export class GameEngine {
     };
   }
 
+  public get activeBark(): import('../types').DialogueLine | null {
+    return this._activeBark;
+  }
+
+  private setActiveBark(next: import('../types').DialogueLine | null) {
+    if (this._activeBark === next) return;
+    this._activeBark = next;
+    this.barkListeners.forEach((listener) => listener());
+  }
+
+  /** Subscribes to bark changes. Returns the unsubscribe function. */
+  public subscribeBark(listener: () => void): () => void {
+    this.barkListeners.add(listener);
+    return () => {
+      this.barkListeners.delete(listener);
+    };
+  }
+
   constructor(
     stage: StageConfig,
     p1Char: CharacterId,
     p2Char?: CharacterId,
-    settings?: GameSettings
+    settings?: GameSettings,
+    p2IsHuman = false
   ) {
     this.stage = stage;
+    this.p2IsHuman = p2IsHuman;
     this.settings = settings || {
       soundEnabled: true,
       musicEnabled: true,
@@ -243,10 +297,6 @@ export class GameEngine {
     };
 
     this.stageStartBannerTimer = 90;
-    if (stage.waves[0]?.dialogueBefore) {
-      this.setActiveDialogue(stage.waves[0].dialogueBefore);
-      this.shownWaveDialogues.add(0);
-    }
 
     // Spawn Player 1
     this.player1 = this.createPlayerEntity('p1', 1, p1Char, 100, 300);
@@ -258,12 +308,32 @@ export class GameEngine {
       this.entities.push(this.player2);
     }
 
+    // Wave one's dialogue is published after the fighters exist, not before.
+    // Hero lines resolve against whoever is on the roster, and resolving that
+    // against an empty arena silently handed every stage opener to the default
+    // hero no matter who the player picked.
+    if (stage.waves[0]?.dialogueBefore) {
+      this.setActiveDialogue(resolveDialogue(stage.waves[0].dialogueBefore, this.roster()));
+      this.shownWaveDialogues.add(0);
+    }
+
     // Stage one used to be special-cased here because its declared musicTrack,
     // NEON_BEAT, was an alias nothing could reach. The stage now names its own
     // track like the other two.
     sound.playBgm(stage.musicTrack);
 
     this.hudSnapshot = this.buildHudSnapshot();
+  }
+
+  /**
+   * Who may answer a hero line, in priority order. Player 1 first, then a human
+   * player 2. The AI companion is omitted: it fights, it does not talk back.
+   */
+  private roster(): CharacterId[] {
+    const ids: CharacterId[] = [];
+    if (this.player1?.charId) ids.push(this.player1.charId);
+    if (this.p2IsHuman && this.player2?.charId) ids.push(this.player2.charId);
+    return ids;
   }
 
   private createPlayerEntity(
@@ -354,6 +424,20 @@ export class GameEngine {
     if (this.bossWarningTimer > 0) {
       this.bossWarningTimer--;
     }
+    if (this.barkTimer > 0) {
+      this.barkTimer--;
+      if (this.barkTimer === 0) this.setActiveBark(null);
+    }
+    if (this.outroTimer > 0) {
+      this.outroTimer--;
+      const sayonara = this.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
+      // Off the right edge of the camera, or out of patience. The ceiling
+      // matters: an outro that can hang is worse than one that ends early.
+      if (!sayonara || sayonara.x > this.cameraX + VIEWPORT_WIDTH + 80 || this.outroTimer === 0) {
+        this.outroTimer = 0;
+        this.bossDefeated = true;
+      }
+    }
 
     // Check wave triggers based on camera position
     this.updateWaveTriggers();
@@ -395,8 +479,15 @@ export class GameEngine {
       if (ent.isPlayer) {
         ent.x = Math.max(this.cameraX + 20, Math.min(this.cameraX + 760, ent.x));
         ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y)); // Y depth bounds
-      } else if (ent.hp > 0) {
-        // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out
+      } else if (ent.hp > 0 && !ent.freed) {
+        // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out.
+        //
+        // A freed Sayonara is exempt: she is not being knocked around, she is
+        // making a scripted exit, and this clamp used to catch her at cameraX
+        // + 830 -- short of the outro's own cameraX + VIEWPORT_WIDTH + 80 exit
+        // threshold -- reversing her vx and sending her walking back in.
+        // Every ending hit the outro's timeout ceiling because of it; none of
+        // them ever actually saw her leave.
         const minX = this.cameraX - 30;
         const maxX = this.cameraX + 830;
         if (ent.x < minX) {
@@ -407,6 +498,8 @@ export class GameEngine {
           ent.vx = -4;
         }
         ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
+      } else if (ent.hp > 0) {
+        ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
       }
     });
 
@@ -416,7 +509,8 @@ export class GameEngine {
 
     // Update Enemies & AI
     this.entities.forEach((ent) => {
-      if (!ent.isPlayer && ent.hp > 0) {
+      // A downed fighter has stopped fighting: no AI, no attacks, no chasing.
+      if (!ent.isPlayer && ent.hp > 0 && !ent.downed && !ent.freed) {
         this.updateEnemyAi(ent);
       }
       this.updateEntityPhysics(ent);
@@ -439,7 +533,11 @@ export class GameEngine {
     this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer > 0);
 
     // Check wave clear status
-    const remainingEnemies = this.entities.filter((ent) => !ent.isPlayer && ent.hp > 0);
+    // A downed Sayonara is out of the fight without being dead, so she must
+    // not hold the wave open — otherwise sparing her would soft-lock the stage.
+    const remainingEnemies = this.entities.filter(
+      (ent) => !ent.isPlayer && ent.hp > 0 && !ent.downed && !ent.freed
+    );
     if (this.isWaveActive && remainingEnemies.length === 0) {
       this.isWaveActive = false;
       this.currentWaveIndex++;
@@ -468,6 +566,20 @@ export class GameEngine {
     if (this.player1 && this.player1.hp > 0) return this.player1;
     if (this.player2 && this.player2.hp > 0) return this.player2;
     return null;
+  }
+
+  /**
+   * Whether an attack aimed at this frame should land on `target`.
+   *
+   * A fighter on the floor is only hit when nothing else is within reach.
+   * Without that, punches thrown past a downed Sayonara on the way to Mizydia
+   * finished her off by accident — which is the same failure the floor state
+   * exists to remove, one level down. Reaching her now takes standing over her
+   * with nothing else to swing at.
+   */
+  private isValidTarget(target: EntityState, candidates: EntityState[]): boolean {
+    if (!target.downed) return true;
+    return !candidates.some((other) => other !== target && !other.downed);
   }
 
   private isMelee(enemy: EntityState): boolean {
@@ -509,12 +621,19 @@ export class GameEngine {
     if (this.cameraX >= this.effectiveTriggerX(wave) - WAVE_TRIGGER_LOOKAHEAD) {
       // Check if wave has dialogue that hasn't been shown yet
       if (wave.dialogueBefore && !this.shownWaveDialogues.has(this.currentWaveIndex)) {
-        this.setActiveDialogue(wave.dialogueBefore);
+        this.setActiveDialogue(resolveDialogue(wave.dialogueBefore, this.roster()));
         this.shownWaveDialogues.add(this.currentWaveIndex);
         return; // wait until dialogue is dismissed before spawning enemies
       }
 
       this.isWaveActive = true;
+      if (wave.barkOnSpawn) {
+        // Fired as the wave lands, not before it. A bark is a reaction to
+        // enemies arriving, so it wants them on screen behind it.
+        const [line] = resolveDialogue([wave.barkOnSpawn], this.roster());
+        this.setActiveBark(line);
+        this.barkTimer = BARK_DURATION_FRAMES;
+      }
       // Spawn wave enemies
       wave.enemies.forEach((spawnGroup) => {
         for (let i = 0; i < spawnGroup.count; i++) {
@@ -821,8 +940,9 @@ export class GameEngine {
 
     // Generous Hitbox check (scaled for 1.5x character dimensions)
     const reach = 110;
+    const inRange = this.entities.filter((e) => !e.isPlayer && e.hp > 0 && Math.abs(e.y - player.y) < 55);
     this.entities.forEach((target) => {
-      if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 55) {
+      if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, inRange) && Math.abs(target.y - player.y) < 55) {
         const dx = target.x - player.x;
         const inHitbox =
           player.facing === 'RIGHT'
@@ -859,8 +979,9 @@ export class GameEngine {
     this.addParticle(kx, ky, 0, '#ffff00', undefined, 'SHOCKWAVE');
 
     const reach = PLAYER_KICK_REACH;
+    const inRange = this.entities.filter((e) => !e.isPlayer && e.hp > 0 && Math.abs(e.y - player.y) < 60);
     this.entities.forEach((target) => {
-      if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 60) {
+      if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, inRange) && Math.abs(target.y - player.y) < 60) {
         const dx = target.x - player.x;
         const inHitbox =
           player.facing === 'RIGHT'
@@ -890,8 +1011,19 @@ export class GameEngine {
 
     if (charId === 'FEET_MASTER') {
       // Feet Master: Human Bat Swing (Massive 360 AoE)
+      //
+      // Same downed-Sayonara exclusivity as punch/kick: a wide AoE special is
+      // if anything more likely to catch her by accident, not less.
+      const swingRange = this.entities.filter(
+        (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 200
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.hypot(target.x - player.x, target.y - player.y) < 200) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          this.isValidTarget(target, swingRange) &&
+          Math.hypot(target.x - player.x, target.y - player.y) < 200
+        ) {
           this.damageEntity(target, 45, player);
           target.vx = target.x > player.x ? 12 : -12;
           target.vz = 6;
@@ -902,8 +1034,16 @@ export class GameEngine {
     } else if (charId === 'FUN_MAKER') {
       // Fun Maker: Rollercoaster Hurricane (Spin skyward cyclone)
       player.vz = 10;
+      const cycloneRange = this.entities.filter(
+        (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 180
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.hypot(target.x - player.x, target.y - player.y) < 180) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          this.isValidTarget(target, cycloneRange) &&
+          Math.hypot(target.x - player.x, target.y - player.y) < 180
+        ) {
           this.damageEntity(target, 40, player);
           target.vz = 9; // Juggle enemies into the air!
         }
@@ -913,8 +1053,15 @@ export class GameEngine {
     } else if (charId === 'OMEGA_BIKER') {
       // Omega Biker: Heavy Shockwave Kick (Destroys shields & heavy knockback)
       const shockDir = player.facing === 'RIGHT' ? 1 : -1;
+      const shockRange = this.entities.filter(
+        (e) =>
+          !e.isPlayer &&
+          e.hp > 0 &&
+          Math.abs(e.y - player.y) < 60 &&
+          ((shockDir === 1 && e.x > player.x) || (shockDir === -1 && e.x < player.x))
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.abs(target.y - player.y) < 60) {
+        if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, shockRange) && Math.abs(target.y - player.y) < 60) {
           if ((shockDir === 1 && target.x > player.x) || (shockDir === -1 && target.x < player.x)) {
             if (target.shieldHp) target.shieldHp = 0; // Guard breaker!
             this.damageEntity(target, 50, player);
@@ -928,8 +1075,16 @@ export class GameEngine {
       // Angry Corso: Feral Pup Rush & Bite (Pin down, bite, leech health!)
       player.action = 'BITING';
       sound.playBite();
+      const biteRange = this.entities.filter(
+        (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 150
+      );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && Math.hypot(target.x - player.x, target.y - player.y) < 150) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          this.isValidTarget(target, biteRange) &&
+          Math.hypot(target.x - player.x, target.y - player.y) < 150
+        ) {
           this.damageEntity(target, 55, player);
           // Leech health back!
           player.hp = Math.min(player.maxHp, player.hp + 25);
@@ -941,6 +1096,22 @@ export class GameEngine {
 
   private damageEntity(target: EntityState, damage: number, attacker: EntityState) {
     if (target.invulnerableTimer > 0) return;
+
+    // Casting leaves the Matriarch open.
+    //
+    // She already roots herself for the half second a wave takes to leave her
+    // hands — she has to, or the projectile would trail behind her — but there
+    // was no reason to exploit it. Reaching her costs the player a chase past
+    // a faster dog, and the payoff has to be worth that. The extra damage is
+    // what turns her retreat from a wall into a rhythm to read.
+    if (
+      attacker.isPlayer &&
+      target.enemyType === 'BOSS_MADAM_MIZYDIA' &&
+      target.action === 'PUNCH1'
+    ) {
+      damage = Math.round(damage * CASTING_DAMAGE_MULTIPLIER);
+      this.addParticle(target.x, target.y - 80, 0, '#ffe066', 'PUNISHED!', 'TEXT');
+    }
 
     // Boss shield protection check
     if (target.shieldHp && target.shieldHp > 0) {
@@ -978,20 +1149,86 @@ export class GameEngine {
       this.stats.damageTaken += damage;
     }
 
+    // Sayonara goes down rather than dying.
+    //
+    // She is the one fighter the heroes are trying to save, and also the one
+    // attacking them, so killing her was the path of least resistance rather
+    // than a decision. Zero health now drops her: the collar loses its grip,
+    // she stops fighting, and the wave counts her as handled. Striking her from
+    // there kills her for real.
+    // Hitting the hostage reads differently from hitting an enemy.
+    if (target.enemyType === 'BOSS_SAYONARA' && !target.freed && Math.random() < 0.25) {
+      this.addParticle(target.x, target.y - 70, 0, '#ffb347', "SHE'S NOT THE ENEMY", 'TEXT');
+    }
+
+    if (target.enemyType === 'BOSS_SAYONARA' && target.hp <= 0) {
+      if (target.downed) {
+        this.sayonaraKilled = true;
+        target.downed = false;
+        target.hp = 0;
+      } else {
+        // Held at one hit point rather than zero. Zero would make her
+        // unhittable, since attacks only look for living targets, and an
+        // unkillable hostage is not a choice either.
+        target.downed = true;
+        target.hp = 1;
+        target.vx = 0;
+        target.vy = 0;
+        target.action = 'KNOCKDOWN';
+        target.actionTimer = 30;
+      }
+    }
+
     // Check Boss Sayonara Defeat Resolution
     if (target.enemyType === 'BOSS_MADAM_MIZYDIA' && target.hp <= 0) {
       // Mizydia is the boss of stage 2 as well, where the fiction calls her a
       // hologram. Without this gate, beating her there set bossDefeated and the
       // campaign ended two stages early — the final stage was unreachable.
-      if (this.stage.isFinalStage) {
-        this.bossDefeated = true;
-      }
       // Free Sayonara!
+      // The collar breaks whether she is standing or on the floor. Only a
+      // killing blow puts her past saving, and that takes her off the field —
+      // so finding nobody here is itself the failed outcome.
       const sayonara = this.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
       if (sayonara) {
+        sayonara.downed = false;
+        sayonara.freed = true;
         sayonara.action = 'WALK';
         sayonara.facing = 'RIGHT';
         sayonara.vx = 4; // Sayonara breaks control and walks away freely!
+        sayonara.actionTimer = 0;
+      }
+
+      if (this.stage.isFinalStage) {
+        // She has walked away since the day this was written and nobody has
+        // ever seen it: bossDefeated used to be set right here, App routed to
+        // the victory screen on the same frame, and the walk rendered on
+        // exactly zero of them. Hold the ending open until she is gone.
+        if (sayonara) {
+          this.outroTimer = OUTRO_MAX_FRAMES;
+          this.setActiveDialogue(
+            resolveDialogue(
+              [
+                {
+                  speaker: 'Sayonara',
+                  portrait: 'SAYONARA',
+                  text: "The collar... it's quiet. Her voice is gone from my head.",
+                  side: 'RIGHT',
+                },
+                heroLine('ANGRY_CORSO', {
+                  ANGRY_CORSO: "Go on, girl. Nobody's holding your leash now.",
+                  FEET_MASTER: 'Walk, Sayonara. Nobody gives you orders ever again.',
+                  FUN_MAKER: 'There she is. Go find somewhere loud, sweetheart.',
+                  OMEGA_BIKER: "Road's open, girl. Take it.",
+                }),
+              ],
+              this.roster()
+            )
+          );
+        } else {
+          // Nobody left to free. The victory is mechanical, and the screen
+          // that follows says so.
+          this.bossDefeated = true;
+        }
       }
     }
 

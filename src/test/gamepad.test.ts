@@ -281,3 +281,50 @@ describe('recovering a slot from a dead controller', () => {
     expect(pads.p2!.punch).toBe(true);
   });
 });
+
+/**
+ * Slot assignment when a pad leaves and returns.
+ *
+ * A returning pad and a replacement pad look alike from here and need opposite
+ * outcomes: the first belongs back in its own slot, the second belongs in the
+ * slot the dead controller is still holding. An earlier version filled free
+ * slots before considering hand-over, and a one-frame Bluetooth dropout then
+ * cost the *other* player their controller.
+ */
+describe('slot assignment under signal loss', () => {
+  const held = (index: number, ts: number, punching = false) =>
+    pad({ index, timestamp: ts, buttons: punching ? { 2: true } : {} });
+
+  it('gives a returning pad its own slot back, not the other player\'s', () => {
+    connect([held(0, 100), held(1, 100)]);
+    readPlayerPads(true);
+
+    // Player one rests; their pad's timestamp stops advancing.
+    let tick = 100;
+    for (let i = 0; i < 200; i++) {
+      tick++;
+      connect([held(0, tick, true), held(1, 100)]);
+      readPlayerPads(true);
+    }
+
+    // Player two's pad drops for a frame, then returns mid-press.
+    connect([held(1, 100)]);
+    readPlayerPads(true);
+    connect([held(0, ++tick, true), held(1, 100)]);
+    const pads = readPlayerPads(true);
+
+    expect(pads.p2, 'the returning pad should be back on player two').not.toBeNull();
+    expect(pads.p2!.punch).toBe(true);
+    expect(pads.p1, 'the resting player should keep their controller').not.toBeNull();
+  });
+
+  it('still lets a replacement take over from a pad that died', () => {
+    connect([held(0, 100)]);
+    readPlayerPads(true);
+    for (let i = 0; i < 200; i++) readPlayerPads(true);
+
+    connect([held(0, 100), held(1, 900, true)]);
+    const pads = readPlayerPads(true);
+    expect(pads.p2!.punch).toBe(true);
+  });
+});

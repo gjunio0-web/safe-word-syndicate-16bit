@@ -1,20 +1,18 @@
 import React from 'react';
 import { StageStats } from '../types';
-import { Trophy, ArrowRight, Zap, Target, ShieldAlert, Home } from 'lucide-react';
+import { Trophy, ArrowRight, Zap, Target, ShieldAlert } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface StageClearScreenProps {
   stageName: string;
   stats: StageStats;
   onNextStage: () => void;
-  onReturnToTitle?: () => void;
 }
 
 export const StageClearScreen: React.FC<StageClearScreenProps> = ({
   stageName,
   stats,
   onNextStage,
-  onReturnToTitle,
 }) => {
   const handleNext = () => {
     sound.playStageClear();
@@ -83,17 +81,6 @@ export const StageClearScreen: React.FC<StageClearScreenProps> = ({
             NEXT STAGE <ArrowRight className="w-4 h-4" />
           </button>
 
-          {onReturnToTitle && (
-            <button
-              onClick={() => {
-                sound.stopAll();
-                onReturnToTitle();
-              }}
-              className="w-full py-2.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-gray-500 text-gray-300 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <Home className="w-3.5 h-3.5 text-red-400" /> MAIN MENU / TITLE SCREEN
-            </button>
-          )}
         </div>
       </div>
     </div>

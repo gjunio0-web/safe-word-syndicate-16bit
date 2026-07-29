@@ -133,3 +133,20 @@ export const PLAYER_KICK_REACH = 135;
 export const STREET_TOP_Y = 240;
 export const ARENA_MIN_Y = STREET_TOP_Y;
 export const ARENA_MAX_Y = 440;
+
+/**
+ * Damage multiplier while Madam Mizydia is locked into a cast.
+ *
+ * Her standoff makes reaching her expensive: the player crosses two hundred
+ * pixels with a faster enemy in the way. Without a payoff for arriving during
+ * the one window she cannot move, the fight is a chase rather than a read.
+ */
+export const CASTING_DAMAGE_MULTIPLIER = 1.75;
+
+/** How long a bark stays up. Long enough to read mid-fight, short enough to
+ *  not still be hanging there when the next one lands. */
+export const BARK_DURATION_FRAMES = 200;
+
+/** Ceiling on the ending walk. She normally clears the screen well before
+ *  this; the cap is here so a missing entity can never hang the victory. */
+export const OUTRO_MAX_FRAMES = 420;

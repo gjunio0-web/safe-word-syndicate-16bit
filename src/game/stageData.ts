@@ -1,4 +1,5 @@
 import { StageConfig } from '../types';
+import { heroLine } from './dialogue';
 import { assertStagesAreCompletable } from './stageValidation';
 
 export const STAGES: StageConfig[] = [
@@ -19,17 +20,21 @@ export const STAGES: StageConfig[] = [
         ],
         dialogueBefore: [
           {
-            speaker: 'Purity Captain',
-            portrait: 'PURITY_LEADER',
+            // Was a "Purity Captain" who never existed in the fight. The
+            // ultimatum belongs to the patrol that actually walks on screen.
+            speaker: 'Purity Patrol',
+            portrait: 'PURITY_PATROL',
             text: 'Halt, degenerate heathens! This district is hereby impounded by order of the Ultra Evil League of Conservative Christians!',
             side: 'RIGHT',
           },
-          {
-            speaker: 'Feet Master',
-            portrait: 'FEET_MASTER',
-            text: 'You picked the wrong club to raid, khaki boy! Prepare for a boots-first eviction!',
-            side: 'LEFT',
-          },
+          heroLine('FEET_MASTER', {
+            FEET_MASTER:
+              'You picked the wrong club to raid, khaki boy! Prepare for a boots-first eviction!',
+            FUN_MAKER:
+              "Impounded? Sweetheart, this block doesn't even close. Let me show you the ride!",
+            OMEGA_BIKER: 'Read the room, khakis. Nobody here signed your paperwork.',
+            ANGRY_CORSO: 'Woof! Nobody impounds MY street! Grrr!',
+          }),
         ],
       },
       {
@@ -38,6 +43,14 @@ export const STAGES: StageConfig[] = [
           { type: 'PURITY_PATROL', count: 3, spawnSide: 'BOTH' },
           { type: 'CONVERSION_THERAPIST', count: 1, spawnSide: 'RIGHT' },
         ],
+        // First ranged enemy in the game. The line is a tutorial wearing a
+        // joke: name the threat and what it does to you.
+        barkOnSpawn: heroLine('FUN_MAKER', {
+          FUN_MAKER: "That's not therapy, that's a dart gun with a diploma!",
+          FEET_MASTER: "Ranged creep in a cardigan — don't let him get comfortable!",
+          OMEGA_BIKER: 'Vials incoming. Close the distance or eat the guilt.',
+          ANGRY_CORSO: 'Bad doctor! BAD doctor! Grrr!',
+        }),
       },
       {
         triggerX: 1300,
@@ -47,17 +60,21 @@ export const STAGES: StageConfig[] = [
         ],
         dialogueBefore: [
           {
-            speaker: 'Fun Maker',
-            portrait: 'FUN_MAKER',
-            text: 'Careful! Here come the Trad-Wife Strikers with cast-iron skillets!',
-            side: 'LEFT',
+            // The skillet parry used to be explained by a hero. It belongs to
+            // the woman holding the skillet, which frees the hero line to react
+            // instead of narrate.
+            speaker: 'Trad-Wife Striker',
+            portrait: 'TRAD_WIFE_STRIKER',
+            text: 'Off the street! We keep a clean block — and I keep a heavy skillet!',
+            side: 'RIGHT',
           },
-          {
-            speaker: 'Angry Corso',
-            portrait: 'ANGRY_CORSO',
-            text: 'Woof! Their skillets are no match for our feral strength! Let me at \'em!',
-            side: 'LEFT',
-          },
+          heroLine('FUN_MAKER', {
+            FUN_MAKER: 'Careful! Those cast-iron skillets parry anything heavy!',
+            ANGRY_CORSO:
+              "Woof! Their skillets are no match for our feral strength! Let me at 'em!",
+            FEET_MASTER: 'Cast iron parries the heavy stuff. Go light, go fast, or go around.',
+            OMEGA_BIKER: 'Skillets. Of course. Break the guard first, hit second.',
+          }),
         ],
       },
       {
@@ -73,12 +90,13 @@ export const STAGES: StageConfig[] = [
             text: 'I am Sayonara... under Madam Mizydia\'s censorship protocol. None shall pass!',
             side: 'RIGHT',
           },
-          {
-            speaker: 'Feet Master',
-            portrait: 'FEET_MASTER',
-            text: 'Sayonara, snap out of it! We\'ll knock that mind-control censorship right off you!',
-            side: 'LEFT',
-          },
+          heroLine('ANGRY_CORSO', {
+            FEET_MASTER:
+              "Sayonara, snap out of it! We'll knock that mind-control censorship right off you!",
+            FUN_MAKER: "Sayonara, it's me! Whatever she put on you, we're taking it off!",
+            OMEGA_BIKER: "That's not your voice, girl. That's her collar talking.",
+            ANGRY_CORSO: "Sayonara?! No — no, she's OURS! Get that thing off her neck!",
+          }),
         ],
       },
     ],
@@ -99,18 +117,18 @@ export const STAGES: StageConfig[] = [
           { type: 'PURITY_PATROL', count: 4, spawnSide: 'RIGHT' },
         ],
         dialogueBefore: [
-          {
-            speaker: 'Omega Biker',
-            portrait: 'OMEGA_BIKER',
-            text: 'Ugh... look at this place. Pure, soulless gray conformity.',
-            side: 'LEFT',
-          },
-          {
-            speaker: 'Feet Master',
-            portrait: 'FEET_MASTER',
-            text: 'Time to paint these white picket fences with some vibrant rebellion!',
-            side: 'LEFT',
-          },
+          // Two heroes used to talk to each other here, which meant the wave
+          // played as a scene between characters the player might not have
+          // picked. One hero reacts now, whoever they are.
+          heroLine('OMEGA_BIKER', {
+            OMEGA_BIKER:
+              "Ugh... look at this place. Pure, soulless gray conformity. Let's leave some skid marks.",
+            FEET_MASTER:
+              'Gray lawns, gray houses, gray people. Time to paint these picket fences with some vibrant rebellion!',
+            FUN_MAKER:
+              "Not one balloon on this whole street. That's a crime scene, not a neighborhood.",
+            ANGRY_CORSO: 'Every yard smells the same. No dogs. No noise. I hate it here!',
+          }),
         ],
       },
       {
@@ -119,6 +137,12 @@ export const STAGES: StageConfig[] = [
           { type: 'CONVERSION_THERAPIST', count: 2, spawnSide: 'BOTH' },
           { type: 'TRAD_WIFE_STRIKER', count: 2, spawnSide: 'RIGHT' },
         ],
+        barkOnSpawn: heroLine('OMEGA_BIKER', {
+          OMEGA_BIKER: 'Signed the Purity Covenant — or found it under the door at six a.m.?',
+          FEET_MASTER: "Therapists and skillets together now. She's mixing her defenses.",
+          FUN_MAKER: 'Every curtain shut. Somebody behind one of them is faking it.',
+          ANGRY_CORSO: 'This whole block smells like bleach and lies!',
+        }),
       },
       {
         triggerX: 1400,
@@ -127,6 +151,14 @@ export const STAGES: StageConfig[] = [
           { type: 'CONVERSION_THERAPIST', count: 2, spawnSide: 'RIGHT' },
           { type: 'TRAD_WIFE_STRIKER', count: 3, spawnSide: 'RIGHT' },
         ],
+        // Eight at once, the densest wave in the game. The line justifies the
+        // number and puts the boss just off screen.
+        barkOnSpawn: heroLine('FEET_MASTER', {
+          FEET_MASTER: "Eight at once? She's nervous. Good.",
+          OMEGA_BIKER: "They only swarm when the boss is watching. She's close.",
+          FUN_MAKER: "The whole cul-de-sac turned out! I've never felt so popular!",
+          ANGRY_CORSO: 'More of them? GOOD! I was just warming up!',
+        }),
       },
       {
         triggerX: 1900, // STAGE 2 BOSS WAVE
@@ -141,12 +173,13 @@ export const STAGES: StageConfig[] = [
             text: 'Impressive work reaching Suburbia. But my Censure Shield is impenetrable! Prepare for corporate purification!',
             side: 'RIGHT',
           },
-          {
-            speaker: 'Omega Biker',
-            portrait: 'OMEGA_BIKER',
-            text: 'Save your speech, Mizydia! We\'re smashing through your shield and taking down your whole corporate grid!',
-            side: 'LEFT',
-          },
+          heroLine('OMEGA_BIKER', {
+            OMEGA_BIKER:
+              "Save your speech, Mizydia! We're smashing through your shield and taking down your whole corporate grid!",
+            FEET_MASTER: "A hologram with a force field. She won't even show up in person.",
+            FUN_MAKER: "Impenetrable? Everything's penetrable from the air, honey.",
+            ANGRY_CORSO: "You took Sayonara! I'm biting through that shield to get to you!",
+          }),
         ],
       },
     ],
@@ -168,6 +201,26 @@ export const STAGES: StageConfig[] = [
           { type: 'PURITY_PATROL', count: 3, spawnSide: 'RIGHT' },
           { type: 'TRAD_WIFE_STRIKER', count: 2, spawnSide: 'RIGHT' },
         ],
+        // The only wave where the hero speaks first, and the only one of the
+        // five new ones that stops the fight. Walking into the enemy's temple
+        // quietly is obeying his decorum, so the game says so out loud here.
+        dialogueBefore: [
+          heroLine('FUN_MAKER', {
+            FUN_MAKER:
+              "No music. No laughing. Not even a bad hymn. It's a tomb with a broadcast tower.",
+            FEET_MASTER:
+              'So this is the altar. Marble, gold trim, and not one sound in the whole building.',
+            OMEGA_BIKER:
+              "Ten thousand seats and nobody's allowed to shout. Let's fix the acoustics.",
+            ANGRY_CORSO: "It's too quiet in here. It hurts my ears. Grrr...",
+          }),
+          {
+            speaker: 'Purity Patrol',
+            portrait: 'PURITY_PATROL',
+            text: 'SILENCE in the sanctuary! Your noise defiles this house!',
+            side: 'RIGHT',
+          },
+        ],
       },
       {
         triggerX: 600,
@@ -175,6 +228,14 @@ export const STAGES: StageConfig[] = [
           { type: 'CONVERSION_THERAPIST', count: 3, spawnSide: 'BOTH' },
           { type: 'TRAD_WIFE_STRIKER', count: 3, spawnSide: 'RIGHT' },
         ],
+        // Sets up Sayonara without depending on who is in the fight: all four
+        // variants carry the hook, each in its own register.
+        barkOnSpawn: heroLine('ANGRY_CORSO', {
+          ANGRY_CORSO: "Sayonara's up there. I can smell her. Hold on, girl!",
+          FEET_MASTER: "Last hallway. Sayonara's coming home with us, one way or another.",
+          FUN_MAKER: "Broadcast chamber's straight up. Thanks for the floor plan, sweetheart!",
+          OMEGA_BIKER: 'One door left. Then this city gets its noise back.',
+        }),
       },
       {
         triggerX: 1200, // FINAL BOSS ENCOUNTER
@@ -189,18 +250,18 @@ export const STAGES: StageConfig[] = [
             text: 'Insolent rabble! You dare bring your loud, colorful chaos into my sacred corporate altar?!',
             side: 'RIGHT',
           },
-          {
-            speaker: 'Feet Master',
-            portrait: 'FEET_MASTER',
-            text: 'Your gray empire ends today, Mizydia! The Safe-Word Syndicate is shutting down your broadcast!',
-            side: 'LEFT',
-          },
-          {
-            speaker: 'Angry Corso',
-            portrait: 'ANGRY_CORSO',
-            text: 'Grrr... Sayonara! Break free from her spell! She\'s just using you!',
-            side: 'LEFT',
-          },
+          // The defiance and the appeal to Sayonara were two lines by two
+          // fixed heroes. Merged, because the appeal is plot-critical and had
+          // to be made by whoever the player actually brought to the altar.
+          heroLine('ANGRY_CORSO', {
+            ANGRY_CORSO: "Grrr... Sayonara! Break free from her spell! She's just using you!",
+            FEET_MASTER:
+              "Your gray empire ends today, Mizydia! Sayonara — snap out of it, she's just using you!",
+            FUN_MAKER:
+              "Loud and colorful is the whole point! Sayonara, listen to me — that collar isn't you!",
+            OMEGA_BIKER:
+              'The road ends here for your status quo. Sayonara — drop the leash, girl.',
+          }),
           {
             speaker: 'Madam Mizydia',
             portrait: 'MADAM_MIZYDIA',

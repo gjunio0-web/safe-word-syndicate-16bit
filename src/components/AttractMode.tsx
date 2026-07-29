@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CHARACTERS } from '../game/characterData';
 import { STAGES, renderStageBackground } from '../game/stageData';
 import { CharacterId } from '../types';
+import { FullscreenPrompt } from './FullscreenPrompt';
 
 /**
  * Attract mode: what the cabinet shows before anyone puts money in.
@@ -181,6 +182,8 @@ export const AttractMode: React.FC<AttractModeProps> = ({ onInsertCoin }) => {
           </div>
         </div>
       )}
+
+      <FullscreenPrompt position={panel?.kind === 'TITLE' ? 'middle' : 'top'} />
 
       {/* Always on top of whatever panel is showing, never part of it. */}
       <div className="absolute bottom-5 left-0 right-0 text-center pointer-events-none">

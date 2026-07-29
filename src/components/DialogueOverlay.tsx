@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DialogueLine } from '../types';
 import { sound } from '../game/sound';
+import { portraitFor } from '../game/portraits';
 import { useGamepadMenu } from '../hooks/useGamepadMenu';
 import { ArrowRight, MessageSquareQuote } from 'lucide-react';
 
@@ -48,20 +49,38 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
 
   if (!line) return null;
 
+  // Undefined for every villain until their art exists, which is the whole
+  // point of looking it up instead of assuming it.
+  const face = portraitFor(line.portrait);
+
   return (
     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-40 flex flex-col justify-end p-6 select-none">
       {/* Cutscene Dialog Container */}
       <div className="bg-[#111] border-4 border-[#ff00ff] p-6 shadow-[0_0_30px_rgba(255,0,255,0.4)] max-w-2xl mx-auto w-full relative">
-        {/* Speaker Name Tag */}
-        <div className="inline-block bg-[#00ffff] text-black px-3 py-1 font-black text-xs uppercase tracking-wider mb-3">
-          {line.speaker}
-        </div>
+        <div className="flex items-start gap-4">
+          {face && (
+            <img
+              src={face}
+              alt=""
+              aria-hidden="true"
+              className="hidden sm:block w-24 h-24 shrink-0 object-cover border-2 border-[#00ffff] bg-black"
+              style={{ imageRendering: 'pixelated' }}
+            />
+          )}
 
-        {/* Text Speech Bubble */}
-        <p className="text-white font-mono text-sm md:text-base leading-relaxed flex items-start gap-2">
-          <MessageSquareQuote className="w-5 h-5 text-[#ff00ff] shrink-0 mt-0.5" />
-          <span>"{line.text}"</span>
-        </p>
+          <div className="min-w-0 flex-1">
+            {/* Speaker Name Tag */}
+            <div className="inline-block bg-[#00ffff] text-black px-3 py-1 font-black text-xs uppercase tracking-wider mb-3">
+              {line.speaker}
+            </div>
+
+            {/* Text Speech Bubble */}
+            <p className="text-white font-mono text-sm md:text-base leading-relaxed flex items-start gap-2">
+              <MessageSquareQuote className="w-5 h-5 text-[#ff00ff] shrink-0 mt-0.5" />
+              <span>"{line.text}"</span>
+            </p>
+          </div>
+        </div>
 
         {/* Continue Button & Keyboard Hint */}
         <div className="mt-5 flex flex-wrap justify-between items-center gap-2 text-xs text-gray-400 font-mono pt-3 border-t border-[#333]">

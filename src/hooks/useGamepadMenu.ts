@@ -5,6 +5,7 @@ import {
   MenuAction,
   MenuState,
   readMenuState,
+  readPlayerMenuStates,
 } from '../game/gamepad';
 
 /** Frames a direction must be held before it starts repeating. */
@@ -116,4 +117,43 @@ export function useGamepadMenu(onAction: (action: MenuAction) => void, enabled: 
     if (!enabled) return;
     return subscribe((action) => handlerRef.current(action));
   }, [enabled]);
+}
+
+/**
+ * Menu actions delivered per player, each with its own press-edge tracking.
+ *
+ * `useGamepadMenu` merges every controller into one stream, which is what a
+ * single-cursor screen wants. Character select needs the opposite: two people
+ * choosing at the same time need a cursor each, and edges have to be tracked
+ * separately or one player's press would swallow the other's.
+ */
+export function useGamepadPlayerMenus(
+  onAction: (player: 1 | 2, action: MenuAction) => void,
+  coop: boolean,
+  enabled: boolean = true
+) {
+  const handlerRef = useRef(onAction);
+  handlerRef.current = onAction;
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const steps = { 1: createMenuDispatcher(), 2: createMenuDispatcher() };
+    let frameId = 0;
+
+    const poll = () => {
+      const states = readPlayerMenuStates(coop);
+      for (const player of [1, 2] as const) {
+        const state = player === 1 ? states.p1 : states.p2;
+        if (!state) continue;
+        for (const action of steps[player](state)) {
+          handlerRef.current(player, action);
+        }
+      }
+      frameId = requestAnimationFrame(poll);
+    };
+
+    frameId = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(frameId);
+  }, [coop, enabled]);
 }

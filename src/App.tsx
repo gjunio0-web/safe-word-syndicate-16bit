@@ -17,19 +17,23 @@ import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
 import { AttractMode } from './components/AttractMode';
+import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { resolveKeyBinding } from './game/keyboard';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
+import { useIsMobileDevice } from './hooks/useDeviceType';
 import { DialogueOverlay } from './components/DialogueOverlay';
+import { BarkOverlay } from './components/BarkOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
 import { GameOverModal } from './components/GameOverModal';
 import { GameHeader } from './components/GameHeader';
 import { LoreCodex } from './components/LoreCodex';
 import { CustomAudioModal } from './components/CustomAudioModal';
+import { DifficultyModal } from './components/DifficultyModal';
 import { sound } from './game/sound';
-import { Play, BookOpen, Award, Disc } from 'lucide-react';
+import { Play, BookOpen, Award, Disc, Gauge } from 'lucide-react';
 
 // Kept module-level: useSyncExternalStore resubscribes on every render if the
 // accessors are recreated.
@@ -76,16 +80,29 @@ export default function App() {
   // subscription below would stay attached to the discarded engine.
   const [engineVersion, setEngineVersion] = useState(0);
   const [activeDialogue, setActiveDialogue] = useState<DialogueLine[] | null>(null);
+  const [activeBark, setActiveBark] = useState<DialogueLine | null>(null);
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
+  // Touch controls exist for phones without a keyboard. On desktop the
+  // fighter is keyboard-only — the D-pad and action buttons duplicated keys
+  // that were already there, cluttering the corner with clickable circles
+  // nobody used, since a mouse cannot hold a direction and press an attack at
+  // once. Everything else on screen — the header buttons, pause, codex,
+  // jukebox — stays mouse-operable; only the fighter's own controls move to
+  // keyboard alone.
+  const isMobile = useIsMobileDevice();
   const [showAudioModal, setShowAudioModal] = useState(false);
+  const [showDifficultyModal, setShowDifficultyModal] = useState(false);
 
   const engineRef = useRef<GameEngine | null>(null);
 
   // Keyboard controls state
   const [inputP1, setInputP1] = useState<PlayerInput>(NEUTRAL_INPUT);
   const [inputP2, setInputP2] = useState<PlayerInput>(NEUTRAL_INPUT);
+  // Captured when the campaign ends: the victory screen outlives the engine
+  // instance that recorded it.
+  const [sayonaraKilled, setSayonaraKilled] = useState(false);
 
   // Handle Keyboard Listener
   useEffect(() => {
@@ -109,21 +126,38 @@ export default function App() {
         return;
       }
 
-      // Suppress the browser's own handling of the game keys, but only while a
-      // match is actually running. The arrows scroll the page and Space
-      // activates whatever button holds focus — both belong to the document,
-      // not to a game using those keys to move and jump.
+      const isArrow = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k);
+      const inMatch = screenRef.current === 'GAMEPLAY' && !isPausedRef.current;
+
+      // Suppress the browser's own handling of the game keys while a match is
+      // running: the arrows scroll the page and Space activates whatever button
+      // holds focus, and both belong to the document rather than to a game
+      // using those keys to move and jump.
+      if (inMatch) {
+        if (e.code === 'Space' || isArrow) e.preventDefault();
+      }
+
+      // Off the field, the arrows drive menu navigation.
       //
-      // Scoped rather than global on purpose: on every other screen those same
-      // defaults are the keyboard menu navigation. Tab to a button and press
-      // Space is browser behaviour this game relies on and does not reimplement,
-      // so suppressing it everywhere would leave the menus unreachable without
-      // a mouse.
-      if (screenRef.current === 'GAMEPLAY' && !isPausedRef.current) {
-        const isGameKey =
-          e.code === 'Space' ||
-          ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k);
-        if (isGameKey) e.preventDefault();
+      // This was gamepad-only: `applyMenuNavigation` was wired to the pad
+      // poller and nothing ever called it from a key event, so a player without
+      // a controller was left with Tab and Enter — which the browser provides
+      // for free and which nobody expects to be the whole story on an arcade
+      // title screen. Character select is excluded because it owns the arrows
+      // for its own purpose there, changing the highlighted fighter rather than
+      // moving a focus ring between buttons.
+      if (!inMatch && isArrow && screenRef.current !== 'CHAR_SELECT') {
+        e.preventDefault();
+        const action =
+          k === 'arrowup'
+            ? 'UP'
+            : k === 'arrowdown'
+              ? 'DOWN'
+              : k === 'arrowleft'
+                ? 'LEFT'
+                : 'RIGHT';
+        applyMenuNavigation(action);
+        return;
       }
 
       applyKey(e, true);
@@ -160,6 +194,41 @@ export default function App() {
     return engine.subscribeDialogue(() => setActiveDialogue(engine.activeDialogue));
   }, [engineVersion]);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      setActiveBark(null);
+      return;
+    }
+    setActiveBark(engine.activeBark);
+    return engine.subscribeBark(() => setActiveBark(engine.activeBark));
+  }, [engineVersion]);
+
+  // Requests fullscreen on the first real user gesture, then stops
+  // listening. Deliberately not inside AttractMode's own insert-coin
+  // handler: that screen unmounts on the very same tap, tearing its
+  // listeners down before a touch's pointerup fires. Mounted here instead,
+  // for the whole app's lifetime, so that natural pointerup still lands.
+  //
+  // pointerup rather than pointerdown: per the HTML spec, pointerdown only
+  // counts as an activation-triggering event for mouse pointerType — touch
+  // needs pointerup (or touchend). Using pointerdown here, matching how
+  // AttractMode's own coin-insert and the audio-unlock arm() below listen,
+  // is what silently failed on Android Chrome. keydown covers keyboard.
+  useEffect(() => {
+    const requestFs = () => {
+      window.removeEventListener('pointerup', requestFs);
+      window.removeEventListener('keydown', requestFs);
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    };
+    window.addEventListener('pointerup', requestFs);
+    window.addEventListener('keydown', requestFs);
+    return () => {
+      window.removeEventListener('pointerup', requestFs);
+      window.removeEventListener('keydown', requestFs);
+    };
+  }, []);
+
   // An abandoned cabinet goes back to attracting. Without this the attract
   // sequence would only ever be seen once per session.
   useEffect(() => {
@@ -194,7 +263,18 @@ export default function App() {
   }, [screen]);
 
   // Modals change the navigable set; drop stale focus when that happens.
-  useMenuFocusReset(`${screen}:${isPaused}`, screen !== 'GAMEPLAY' || isPaused);
+  // Every overlay that carries `data-gamepad-scope` has to appear in this key.
+  //
+  // It used to be screen and pause state only, so opening the codex or the
+  // jukebox changed which elements were navigable without the effect noticing:
+  // focus stayed on the button behind the overlay, `applyMenuNavigation` could
+  // not find it in the new scope, and confirm spent itself moving focus instead
+  // of pressing anything. Closing them left focus on an element that no longer
+  // existed, costing another press.
+  useMenuFocusReset(
+    `${screen}:${isPaused}:${showCodex}:${showAudioModal}:${showDifficultyModal}`,
+    screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal || showDifficultyModal
+  );
 
   const gameRootRef = useRef<HTMLDivElement>(null);
 
@@ -220,6 +300,12 @@ export default function App() {
   // player clicked away — so the boss theme kept hammering underneath the defeat
   // screen while they decided whether to continue.
   useEffect(() => {
+    if (screen === 'INTRO') {
+      // The sequence plays its own track through the shared AudioContext; the
+      // screen theme would sit on top of it at a different tempo.
+      sound.stopBgm();
+      return;
+    }
     if (screen === 'ATTRACT' || screen === 'TITLE') {
       // Asking for the theme on ATTRACT costs nothing while audio is still
       // locked: playBgm arms the unlock and stays silent. Once a coin has been
@@ -302,12 +388,18 @@ export default function App() {
             engineRef.current.update(mergeInputs(inputRef.current, pads.p1), p2Input);
           }
 
-          if (engineRef.current.stageCleared) {
+          // Victory is checked before stage clear.
+          //
+          // On the final stage both flags can rise on the same frame, and stage
+          // clear winning meant the campaign ended on a screen offering a NEXT
+          // STAGE that does not exist.
+          if (engineRef.current.bossDefeated) {
+            setSayonaraKilled(engineRef.current.sayonaraKilled);
+            setScreen('VICTORY');
+          } else if (engineRef.current.stageCleared) {
             setScreen('STAGE_CLEAR');
           } else if (engineRef.current.gameOver) {
             setScreen('GAME_OVER');
-          } else if (engineRef.current.bossDefeated) {
-            setScreen('VICTORY');
           }
         }
       }
@@ -326,7 +418,13 @@ export default function App() {
     const p1 = p1Override ?? p1Char;
     const p2 = p2Override !== undefined ? p2Override : p2Char;
     const stage = STAGES[stageIdx];
-    engineRef.current = new GameEngine(stage, p1, p2, settingsOverride ?? settings);
+    engineRef.current = new GameEngine(
+      stage,
+      p1,
+      p2,
+      settingsOverride ?? settings,
+      gameMode === 'COOP'
+    );
     // Slots are not inherited between matches: co-op and solo assign them
     // differently, and a stale assignment would survive the mode change.
     resetPadAssignments();
@@ -335,21 +433,14 @@ export default function App() {
     setScreen('GAMEPLAY');
   };
 
-  const handleSelectFighter = (
-    p1: CharacterId,
-    p2?: CharacterId,
-    mode?: GameMode,
-    difficulty?: GameSettings['difficulty']
-  ) => {
+  const handleSelectFighter = (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => {
     setP1Char(p1);
     setP2Char(p2);
     if (mode) setGameMode(mode);
-    // setSettings is async, so startStage can't read the new difficulty back
-    // out of `settings` in the same call — pass the resolved object directly
-    // and let the state update catch up for the stages after this one.
-    const nextSettings = difficulty ? { ...settings, difficulty } : settings;
-    if (difficulty) setSettings(nextSettings);
-    startStage(0, p1, p2, nextSettings);
+    // Difficulty is chosen from the title screen's own modal now, not passed
+    // through this screen, so `settings` already holds whatever the player
+    // picked and there is nothing left to reconcile here.
+    startStage(0, p1, p2, settings);
   };
 
   const handleNextStage = () => {
@@ -364,7 +455,10 @@ export default function App() {
   // cabinet. The coin leaves attract mode; START begins the match.
   const handleInsertCoin = () => {
     sound.playCoin();
-    setScreen('TITLE');
+    // The coin is the user gesture that unlocks audio, which is why the intro
+    // sits here rather than ahead of it: run before the gesture and the browser
+    // refuses to start the track, and the whole sequence plays silent.
+    setScreen('INTRO');
   };
 
   const handleStartBrawl = () => {
@@ -376,6 +470,23 @@ export default function App() {
   // cursor and handles it internally.
   useGamepadMenu(
     (action) => {
+      // An open overlay owns the controller.
+      //
+      // Without this the screen-level shortcuts below fired straight through
+      // it: pressing start with the codex open began the match behind the
+      // codex, and confirm fell through to the same handler whenever focus was
+      // not on one of the overlay's own buttons.
+      if (showCodex || showAudioModal || showDifficultyModal) {
+        if (action === 'BACK') {
+          setShowCodex(false);
+          setShowAudioModal(false);
+          setShowDifficultyModal(false);
+          return;
+        }
+        applyMenuNavigation(action);
+        return;
+      }
+
       if (screen === 'ATTRACT') {
         // Every button is the coin slot here, matching keyboard and touch.
         handleInsertCoin();
@@ -423,6 +534,9 @@ export default function App() {
       {/* 0. ATTRACT MODE */}
       {screen === 'ATTRACT' && <AttractMode onInsertCoin={handleInsertCoin} />}
 
+      {/* 0.5 INTRO SEQUENCE */}
+      {screen === 'INTRO' && <IntroSequence onComplete={() => setScreen('TITLE')} />}
+
       {/* 1. TITLE SCREEN */}
       {screen === 'TITLE' && (
         <div className="relative w-full h-full bg-[#0a0a0a] flex flex-col justify-between p-8 text-white text-center border-[12px] border-[#ff00ff]/10">
@@ -456,30 +570,61 @@ export default function App() {
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 max-w-lg mx-auto w-full pb-4">
+          {/* Actions
+            *
+            * START BRAWL sits on its own row rather than sharing one with the
+            * rest. It used to be one row of three, and adding difficulty as a
+            * fourth squeezed every label until the words wrapped mid-button —
+            * "START / BRAWL" stacked into a magenta square, "JUKEBOX / MUSIC"
+            * broken across two lines. Splitting by importance keeps the
+            * primary action full width and lets the three secondary buttons
+            * divide the row evenly, so they stay the same size as each other.
+            */}
+          <div className="flex flex-col gap-3 max-w-lg mx-auto w-full pb-4">
             <button
               onClick={handleStartBrawl}
-              className="w-full sm:flex-1 py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
+              className="w-full py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Play className="w-5 h-5 fill-current" /> START BRAWL
             </button>
 
-            <button
-              onClick={() => setShowAudioModal(true)}
-              className="w-full sm:w-auto px-5 py-4 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all"
-            >
-              <Disc className="w-4 h-4 text-[#00ffff] animate-spin-slow" /> JUKEBOX / MUSIC
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <button
+                onClick={() => setShowDifficultyModal(true)}
+                className="w-full sm:flex-1 px-3 py-3 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <Gauge className="w-4 h-4 shrink-0 text-[#ffff00]" />
+                {settings.difficulty === 'PUNK_HARD'
+                  ? 'PUNK HARD'
+                  : settings.difficulty === 'EASY'
+                    ? 'EASY'
+                    : 'NORMAL'}
+              </button>
 
-            <button
-              onClick={() => setShowCodex(true)}
-              className="w-full sm:w-auto px-5 py-4 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
-            >
-              <BookOpen className="w-4 h-4 text-[#ffff00]" /> CODEX
-            </button>
+              <button
+                onClick={() => setShowAudioModal(true)}
+                className="w-full sm:flex-1 px-3 py-3 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all whitespace-nowrap"
+              >
+                <Disc className="w-4 h-4 shrink-0 text-[#00ffff] animate-spin-slow" /> JUKEBOX
+              </button>
+
+              <button
+                onClick={() => setShowCodex(true)}
+                className="w-full sm:flex-1 px-3 py-3 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <BookOpen className="w-4 h-4 shrink-0 text-[#ffff00]" /> CODEX
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {showDifficultyModal && (
+        <DifficultyModal
+          difficulty={settings.difficulty}
+          onSelect={(difficulty) => setSettings((prev) => ({ ...prev, difficulty }))}
+          onClose={() => setShowDifficultyModal(false)}
+        />
       )}
 
       {/* 2. CHARACTER SELECT SCREEN */}
@@ -532,11 +677,15 @@ export default function App() {
               showHitboxes={settings.showHitboxes}
             />
 
-            <OnScreenControls
-              input={inputP1}
-              setInput={setInputP1}
-              powerMeter={engineRef.current.player1?.powerMeter || 0}
-            />
+            {activeBark && !activeDialogue && <BarkOverlay line={activeBark} />}
+
+            {isMobile && (
+              <OnScreenControls
+                input={inputP1}
+                setInput={setInputP1}
+                powerMeter={engineRef.current.player1?.powerMeter || 0}
+              />
+            )}
           </div>
         </div>
       )}
@@ -547,10 +696,6 @@ export default function App() {
           stageName={STAGES[currentStageIdx].name}
           stats={engineRef.current.stats}
           onNextStage={handleNextStage}
-          onReturnToTitle={() => {
-            sound.stopAll();
-            setScreen('TITLE');
-          }}
         />
       )}
 
@@ -574,11 +719,15 @@ export default function App() {
             </div>
 
             <h1 className="text-3xl md:text-5xl font-black italic text-amber-400 uppercase tracking-wider">
-              VICTORY! THE SAFE-WORD SYNDICATE TRIUMPHS!
+              {sayonaraKilled
+                ? 'VICTORY — BUT NOT FOR EVERYONE'
+                : 'VICTORY! THE SAFE-WORD SYNDICATE TRIUMPHS!'}
             </h1>
 
             <p className="text-sm md:text-base font-mono text-zinc-300 leading-relaxed">
-              Madam Mizydia's corporate broadcast signal has been permanently dismantled! Sayonara broke free from her leash and walked away into freedom! The Ultra Evil League of Conservative Christians' gray status quo is shattered forever, restoring vibrant punk joy to the world!
+              {sayonaraKilled
+                ? "Madam Mizydia's corporate broadcast signal has been permanently dismantled, and the gray status quo is shattered forever. But the collar came off too late. Sayonara never got to walk out on her own terms. The city is loud again — one voice short."
+                : "Madam Mizydia's corporate broadcast signal has been permanently dismantled! Sayonara broke free from her leash and walked away into freedom! The Ultra Evil League of Conservative Christians' gray status quo is shattered forever, restoring vibrant punk joy to the world!"}
             </p>
           </div>
 

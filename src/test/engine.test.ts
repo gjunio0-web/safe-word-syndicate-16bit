@@ -10,7 +10,7 @@ import {
   startEngine,
 } from './helpers';
 import { STAGES } from '../game/stageData';
-import { ARENA_MAX_Y, ARENA_MIN_Y, STREET_TOP_Y } from '../game/constants';
+import { ARENA_MAX_Y, ARENA_MIN_Y, OUTRO_MAX_FRAMES, STREET_TOP_Y } from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
 
@@ -425,5 +425,231 @@ describe('walkable depth band', () => {
       expect(enemy.y).toBeGreaterThanOrEqual(ARENA_MIN_Y);
       expect(enemy.y).toBeLessThanOrEqual(ARENA_MAX_Y);
     }
+  });
+});
+
+/**
+ * Sayonara is a hostage, not an enemy.
+ *
+ * She used to die like anything else, which made killing her the natural end of
+ * the fight rather than a decision — and the victory text then claimed she had
+ * walked away free. Zero health now drops her; striking her from the floor is
+ * what kills her, and that is the only thing separating the two endings.
+ */
+describe('Sayonara', () => {
+  const withSayonara = () => {
+    const engine = startEngine();
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx: 90 }]);
+    advance(engine, 2);
+    return engine;
+  };
+
+  const sayonara = (engine: ReturnType<typeof startEngine>) =>
+    engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
+
+  /** Beats on her until she drops, then keeps going for `extra` frames. */
+  const beat = (engine: ReturnType<typeof startEngine>, extra: number) => {
+    const punch = input({ punch: true });
+    for (let i = 0; i < 900; i++) {
+      const target = sayonara(engine);
+      if (!target || target.downed) break;
+      target.hp = 1;
+      engine.update(i % 8 < 2 ? punch : NEUTRAL);
+    }
+    for (let i = 0; i < extra; i++) engine.update(i % 8 < 2 ? punch : NEUTRAL);
+  };
+
+  it('goes down instead of dying', () => {
+    const engine = withSayonara();
+    beat(engine, 0);
+
+    expect(sayonara(engine), 'she should still be on the field').toBeDefined();
+    expect(sayonara(engine)!.downed).toBe(true);
+    expect(engine.sayonaraKilled).toBe(false);
+  });
+
+  it('stops holding the wave open once down, so sparing her cannot soft-lock', () => {
+    const engine = withSayonara();
+    // Put the engine in a real wave, which `stageEnemies` bypasses.
+    (engine as unknown as { isWaveActive: boolean }).isWaveActive = true;
+    beat(engine, 0);
+
+    // Still on the field, and no longer counted among the enemies to clear.
+    expect(sayonara(engine), 'she must not be removed').toBeDefined();
+    expect(sayonara(engine)!.downed).toBe(true);
+    expect(
+      (engine as unknown as { isWaveActive: boolean }).isWaveActive,
+      'the wave should have closed'
+    ).toBe(false);
+  });
+
+  it('is only killed by being struck again on the floor', () => {
+    const engine = withSayonara();
+    beat(engine, 120);
+    expect(engine.sayonaraKilled).toBe(true);
+  });
+
+  it('walks away when Mizydia falls, even from the floor', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 60);
+    stageEnemies(engine, [
+      { type: 'BOSS_SAYONARA', dx: 90 },
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 200 },
+    ]);
+    advance(engine, 2);
+
+    const dog = sayonara(engine)!;
+    const punch = input({ punch: true });
+    for (let i = 0; i < 400 && !dog.downed; i++) {
+      dog.hp = 1;
+      engine.update(i % 8 < 2 ? punch : NEUTRAL);
+    }
+    expect(dog.downed).toBe(true);
+
+    // Now finish Mizydia.
+    const boss = engine.entities.find((e) => e.enemyType === 'BOSS_MADAM_MIZYDIA')!;
+    boss.shieldHp = 0;
+    for (let i = 0; i < 1200 && boss.hp > 0; i++) {
+      boss.hp = 1;
+      const near = Math.abs(boss.x - engine.player1!.x) < 90;
+      engine.update(input(near ? { punch: i % 8 < 2 } : boss.x > engine.player1!.x ? { right: true } : { left: true }));
+    }
+
+    // The campaign is not won on the frame Mizydia drops any more. She walks
+    // out first, and the victory screen waits for her.
+    expect(engine.bossDefeated, 'the ending holds while she leaves').toBe(false);
+    expect(engine.sayonaraKilled, 'knocking her out is not killing her').toBe(false);
+    expect(dog.downed, 'the collar breaks and she gets up').toBe(false);
+    // Checked by action rather than velocity: physics keeps rewriting vx.
+    expect(dog.action).toBe('WALK');
+    expect(dog.facing).toBe('RIGHT');
+
+    // Landing by the ceiling alone proves nothing: a Sayonara stuck bouncing
+    // off the arena's own boundary clamp (which reverses vx on anything that
+    // crosses cameraX + 830, with no exemption for a scripted exit) hits
+    // bossDefeated at exactly this timeout too, having never actually left.
+    // Advancing in a tight loop and checking after each frame is what tells
+    // the two apart.
+    let framesToClear = 0;
+    while (!engine.bossDefeated && framesToClear < OUTRO_MAX_FRAMES) {
+      engine.update(NEUTRAL);
+      framesToClear++;
+    }
+    expect(engine.bossDefeated, 'and then it lands').toBe(true);
+    expect(framesToClear, 'she leaves well before the timeout, not because of it').toBeLessThan(
+      OUTRO_MAX_FRAMES / 2
+    );
+  });
+
+  it('does not stall the ending when there is nobody left to free', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 200 }]);
+    advance(engine, 2);
+
+    const boss = engine.entities.find(
+      (e: { enemyType?: string }) => e.enemyType === 'BOSS_MADAM_MIZYDIA'
+    )!;
+    boss.shieldHp = 0;
+    for (let i = 0; i < 1200 && boss.hp > 0; i++) {
+      boss.hp = 1;
+      const near = Math.abs(boss.x - engine.player1!.x) < 90;
+      engine.update(input(near ? { punch: i % 8 < 2 } : boss.x > engine.player1!.x ? { right: true } : { left: true }));
+    }
+
+    expect(engine.bossDefeated, 'no walk to wait for').toBe(true);
+  });
+});
+
+/**
+ * The Matriarch's casting window.
+ *
+ * She roots herself for the half second a censure wave takes to leave her
+ * hands, but there was nothing in it for the player: reaching her costs a chase
+ * past a faster dog, and arriving during the one moment she cannot move paid
+ * the same as arriving at any other. Measured, killing her first took 2.9 times
+ * as long as killing Sayonara first, and that gap is what made the choice not a
+ * choice.
+ */
+describe('punishing a cast', () => {
+  const boss = (engine: ReturnType<typeof startEngine>) =>
+    engine.entities.find((e) => e.enemyType === 'BOSS_MADAM_MIZYDIA')!;
+
+  const damageDealt = (casting: boolean) => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 60 }]);
+
+    const target = boss(engine);
+    // Frozen from the moment she exists, including the settle-in advance
+    // right below: left unpinned there, her own AI already has two free
+    // frames to move her or roll her own cast before the measurement even
+    // starts.
+    target.stunTimer = 4;
+    advance(engine, 2);
+
+    target.shieldHp = 0;
+    target.action = casting ? 'PUNCH1' : 'IDLE';
+    target.actionTimer = casting ? 30 : 0;
+    const before = target.hp;
+
+    // One clean punch, with the pose held so the state cannot tick away.
+    //
+    // stunTimer is reset every frame so her own AI never runs: left alone,
+    // the 'IDLE' branch lets her autonomous behaviour move her or roll her
+    // own cast, occasionally consuming Math.random() in a way that shifts
+    // results between runs. The player's forced input is the only thing
+    // that should vary here.
+    for (let i = 0; i < 6; i++) {
+      target.action = casting ? 'PUNCH1' : 'IDLE';
+      target.stunTimer = 2;
+      engine.update(input({ punch: i < 2 }));
+    }
+    return before - target.hp;
+  };
+
+  it('hurts more than hitting her at rest', () => {
+    const normal = damageDealt(false);
+    const punished = damageDealt(true);
+    expect(normal).toBeGreaterThan(0);
+    expect(punished).toBeGreaterThan(normal);
+  });
+
+  it('leaves other enemies unaffected, so it reads as her tell and not a global rule', () => {
+    // A fresh engine per measurement: invulnerability frames from the first
+    // punch would otherwise swallow the second.
+    const hit = (casting: boolean) => {
+      const engine = startEngine();
+      advance(engine, 60);
+      stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 60 }]);
+
+      const grunt = engine.entities.find((e) => e.enemyType === 'PURITY_PATROL')!;
+      // Frozen from the moment it exists, including the settle-in advance
+      // right below: left unpinned there, the grunt's own AI already has two
+      // free frames to roll its own attack before the measurement even
+      // starts.
+      grunt.stunTimer = 4;
+      advance(engine, 2);
+
+      const before = grunt.hp;
+      for (let i = 0; i < 6; i++) {
+        grunt.action = casting ? 'PUNCH1' : 'IDLE';
+        // Reset every frame for the same reason: an 'IDLE' grunt runs its
+        // own AI, which has its own small per-frame chance to throw a punch.
+        // That chance draws from the same unseeded Math.random() stream as
+        // everything else in the suite, so how many calls the tests before
+        // this one happened to make could occasionally let the grunt attack
+        // mid-measurement -- observed failing intermittently across full
+        // suite runs, never in isolation, which is the fingerprint of shared
+        // random state rather than a real bug.
+        grunt.stunTimer = 2;
+        engine.update(input({ punch: i < 2 }));
+      }
+      return before - grunt.hp;
+    };
+
+    expect(hit(false)).toBeGreaterThan(0);
+    expect(hit(true)).toBe(hit(false));
   });
 });
