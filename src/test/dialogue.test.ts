@@ -246,3 +246,34 @@ describe('portraits', () => {
     expect(portraitFor(line.portrait)).toBe(portraitFor('ANGRY_CORSO'));
   });
 });
+
+describe('boss warning banner', () => {
+  const NEUTRAL_IN = {
+    left: false, right: false, up: false, down: false,
+    punch: false, kick: false, special: false, jump: false, grab: false,
+  };
+
+  function bannerFor(types: ('BOSS_MADAM_MIZYDIA' | 'BOSS_SAYONARA')[]) {
+    const stage = {
+      ...STAGES[2],
+      waves: [{ triggerX: 0, enemies: types.map((type) => ({ type, count: 1 })) }],
+    };
+    const engine = new GameEngine(stage, 'FEET_MASTER');
+    engine.update(NEUTRAL_IN);
+    return engine.bossWarningTitle;
+  }
+
+  it('names the boss on the field', () => {
+    expect(bannerFor(['BOSS_SAYONARA'])).toContain('SAYONARA');
+  });
+
+  it('names both when both turn up', () => {
+    const banner = bannerFor(['BOSS_MADAM_MIZYDIA', 'BOSS_SAYONARA']);
+    expect(banner).toContain('MADAM MIZYDIA');
+    expect(banner).toContain('SAYONARA');
+  });
+
+  it('no longer sends the player after people who are not in this game', () => {
+    expect(bannerFor(['BOSS_MADAM_MIZYDIA'])).not.toContain('PURITY');
+  });
+});

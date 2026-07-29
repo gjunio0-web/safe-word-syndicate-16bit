@@ -525,6 +525,12 @@ describe('Sayonara', () => {
     expect(dog.action).toBe('WALK');
     expect(dog.facing).toBe('RIGHT');
 
+    const outro = engine.activeDialogue!;
+    expect(outro[0].speaker).toBe('Sayonara');
+    expect(outro[0].portrait, 'she is not wearing the collar she just lost').toBe(
+      'SAYONARA_FREED'
+    );
+
     // Landing by the ceiling alone proves nothing: a Sayonara stuck bouncing
     // off the arena's own boundary clamp (which reverses vx on anything that
     // crosses cameraX + 830, with no exemption for a scripted exit) hits
