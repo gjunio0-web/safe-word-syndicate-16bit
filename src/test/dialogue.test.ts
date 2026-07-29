@@ -3,6 +3,7 @@ import { GameEngine } from '../game/engine';
 import { heroLine, isHeroLine, resolveDialogue } from '../game/dialogue';
 import { STAGES } from '../game/stageData';
 import { BARK_DURATION_FRAMES } from '../game/constants';
+import { portraitFor } from '../game/portraits';
 import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
 
 const FIXED: DialogueLine = {
@@ -210,5 +211,25 @@ describe('bark channel', () => {
     expect(calls).toBe(1);
     run(engine, BARK_DURATION_FRAMES);
     expect(calls).toBe(2);
+  });
+});
+
+describe('portraits', () => {
+  it('has a face for every hero, since their art already existed', () => {
+    for (const id of ['FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER', 'ANGRY_CORSO'] as CharacterId[]) {
+      expect(portraitFor(id)).toBeTruthy();
+    }
+  });
+
+  it('returns nothing for villains rather than inventing a face', () => {
+    expect(portraitFor('MADAM_MIZYDIA')).toBeUndefined();
+    expect(portraitFor('SAYONARA')).toBeUndefined();
+    expect(portraitFor('PURITY_PATROL')).toBeUndefined();
+    expect(portraitFor('TRAD_WIFE_STRIKER')).toBeUndefined();
+  });
+
+  it('gives the player their own face when a hero line resolves', () => {
+    const line = resolveDialogue([variantLine('FEET_MASTER')], ['ANGRY_CORSO'])[0];
+    expect(portraitFor(line.portrait)).toBe(portraitFor('ANGRY_CORSO'));
   });
 });
