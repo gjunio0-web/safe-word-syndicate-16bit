@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../game/engine';
-import { isHeroLine, resolveDialogue } from '../game/dialogue';
+import { heroLine, isHeroLine, resolveDialogue } from '../game/dialogue';
 import { STAGES } from '../game/stageData';
+import { BARK_DURATION_FRAMES } from '../game/constants';
 import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
 
 const FIXED: DialogueLine = {
@@ -12,7 +13,7 @@ const FIXED: DialogueLine = {
 };
 
 /** A hero line whose text names its speaker, so assertions stay obvious. */
-function heroLine(prefer?: CharacterId): HeroLine {
+function variantLine(prefer?: CharacterId): HeroLine {
   const variant = (id: CharacterId) => ({ speaker: id, portrait: id, text: `line for ${id}` });
   return {
     prefer,
@@ -28,7 +29,7 @@ function heroLine(prefer?: CharacterId): HeroLine {
 describe('script entry discrimination', () => {
   it('tells hero lines from fixed lines', () => {
     expect(isHeroLine(FIXED)).toBe(false);
-    expect(isHeroLine(heroLine())).toBe(true);
+    expect(isHeroLine(variantLine())).toBe(true);
   });
 });
 
@@ -39,32 +40,32 @@ describe('resolveDialogue', () => {
   });
 
   it('gives the line to the only hero in play', () => {
-    const [line] = resolveDialogue([heroLine('FEET_MASTER')], ['OMEGA_BIKER']);
+    const [line] = resolveDialogue([variantLine('FEET_MASTER')], ['OMEGA_BIKER']);
     expect(line.text).toBe('line for OMEGA_BIKER');
   });
 
   it('gives the line to the preferred hero when they turned up', () => {
-    const [line] = resolveDialogue([heroLine('ANGRY_CORSO')], ['FUN_MAKER', 'ANGRY_CORSO']);
+    const [line] = resolveDialogue([variantLine('ANGRY_CORSO')], ['FUN_MAKER', 'ANGRY_CORSO']);
     expect(line.text).toBe('line for ANGRY_CORSO');
   });
 
   it('falls back to player one when the preferred hero is absent', () => {
-    const [line] = resolveDialogue([heroLine('ANGRY_CORSO')], ['FUN_MAKER', 'OMEGA_BIKER']);
+    const [line] = resolveDialogue([variantLine('ANGRY_CORSO')], ['FUN_MAKER', 'OMEGA_BIKER']);
     expect(line.text).toBe('line for FUN_MAKER');
   });
 
   it('resolves without a roster rather than throwing', () => {
-    const [line] = resolveDialogue([heroLine('OMEGA_BIKER')], []);
+    const [line] = resolveDialogue([variantLine('OMEGA_BIKER')], []);
     expect(line.text).toBe('line for OMEGA_BIKER');
   });
 
   it('always answers from stage left', () => {
-    const [line] = resolveDialogue([heroLine()], ['FEET_MASTER']);
+    const [line] = resolveDialogue([variantLine()], ['FEET_MASTER']);
     expect(line.side).toBe('LEFT');
   });
 
   it('keeps a wave in order when fixed and hero lines are mixed', () => {
-    const script: ScriptEntry[] = [FIXED, heroLine('FUN_MAKER')];
+    const script: ScriptEntry[] = [FIXED, variantLine('FUN_MAKER')];
     const lines = resolveDialogue(script, ['FUN_MAKER']);
     expect(lines.map((l) => l.speaker)).toEqual(['Purity Patrol', 'FUN_MAKER']);
   });
@@ -72,7 +73,7 @@ describe('resolveDialogue', () => {
 
 describe('engine roster', () => {
   it('resolves the stage opener against the chosen hero, not a default', () => {
-    const stage = { ...STAGES[0], waves: [{ ...STAGES[0].waves[0], dialogueBefore: [heroLine()] }] };
+    const stage = { ...STAGES[0], waves: [{ ...STAGES[0].waves[0], dialogueBefore: [variantLine()] }] };
     const engine = new GameEngine(stage, 'OMEGA_BIKER');
     expect(engine.activeDialogue?.[0].text).toBe('line for OMEGA_BIKER');
   });
@@ -80,7 +81,7 @@ describe('engine roster', () => {
   it('lets a human player two take a line written for them', () => {
     const stage = {
       ...STAGES[0],
-      waves: [{ ...STAGES[0].waves[0], dialogueBefore: [heroLine('ANGRY_CORSO')] }],
+      waves: [{ ...STAGES[0].waves[0], dialogueBefore: [variantLine('ANGRY_CORSO')] }],
     };
     const engine = new GameEngine(stage, 'FEET_MASTER', 'ANGRY_CORSO', undefined, true);
     expect(engine.activeDialogue?.[0].text).toBe('line for ANGRY_CORSO');
@@ -89,7 +90,7 @@ describe('engine roster', () => {
   it('never hands a line to the AI companion', () => {
     const stage = {
       ...STAGES[0],
-      waves: [{ ...STAGES[0].waves[0], dialogueBefore: [heroLine('ANGRY_CORSO')] }],
+      waves: [{ ...STAGES[0].waves[0], dialogueBefore: [variantLine('ANGRY_CORSO')] }],
     };
     const engine = new GameEngine(stage, 'FEET_MASTER', 'ANGRY_CORSO', undefined, false);
     expect(engine.activeDialogue?.[0].text).toBe('line for FEET_MASTER');
@@ -130,5 +131,67 @@ describe('migrated campaign script', () => {
       )
     );
     expect(speakers).not.toContain('Purity Captain');
+  });
+});
+
+describe('bark channel', () => {
+  const NEUTRAL = {
+    left: false, right: false, up: false, down: false,
+    punch: false, kick: false, special: false, jump: false, grab: false,
+  };
+
+  /** A one-wave stage that barks the moment the wave lands. */
+  function barkingStage(entry: ScriptEntry = heroLine('FUN_MAKER', {
+    FEET_MASTER: 'feet', FUN_MAKER: 'fun', OMEGA_BIKER: 'omega', ANGRY_CORSO: 'corso',
+  })) {
+    return {
+      ...STAGES[0],
+      waves: [{ triggerX: 0, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }], barkOnSpawn: entry }],
+    };
+  }
+
+  function run(engine: GameEngine, frames: number) {
+    for (let i = 0; i < frames; i++) engine.update(NEUTRAL);
+  }
+
+  it('starts with nothing on screen', () => {
+    expect(new GameEngine(barkingStage(), 'FEET_MASTER').activeBark).toBeNull();
+  });
+
+  it('fires the line when the wave lands, resolved for the hero in play', () => {
+    const engine = new GameEngine(barkingStage(), 'OMEGA_BIKER');
+    run(engine, 1);
+    expect(engine.activeBark?.text).toBe('omega');
+  });
+
+  it('does not hold the spawn the way a blocking dialogue does', () => {
+    const engine = new GameEngine(barkingStage(), 'FEET_MASTER');
+    run(engine, 1);
+    expect(engine.entities.some((e) => e.enemyType === 'PURITY_PATROL')).toBe(true);
+    expect(engine.activeDialogue).toBeNull();
+  });
+
+  it('clears itself without anyone dismissing it', () => {
+    const engine = new GameEngine(barkingStage(), 'FEET_MASTER');
+    run(engine, 1);
+    expect(engine.activeBark).not.toBeNull();
+    run(engine, BARK_DURATION_FRAMES);
+    expect(engine.activeBark).toBeNull();
+  });
+
+  it('carries a fixed line through unchanged', () => {
+    const engine = new GameEngine(barkingStage(FIXED), 'FEET_MASTER');
+    run(engine, 1);
+    expect(engine.activeBark).toEqual(FIXED);
+  });
+
+  it('notifies subscribers when the line appears and when it goes', () => {
+    const engine = new GameEngine(barkingStage(), 'FEET_MASTER');
+    let calls = 0;
+    engine.subscribeBark(() => calls++);
+    run(engine, 1);
+    expect(calls).toBe(1);
+    run(engine, BARK_DURATION_FRAMES);
+    expect(calls).toBe(2);
   });
 });

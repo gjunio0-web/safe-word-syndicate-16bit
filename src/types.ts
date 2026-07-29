@@ -186,6 +186,13 @@ export interface WaveConfig {
     spawnSide?: 'LEFT' | 'RIGHT' | 'BOTH';
   }[];
   dialogueBefore?: ScriptEntry[];
+  /**
+   * One line thrown over the fight as the wave lands. Unlike dialogueBefore it
+   * does not hold the spawn or wait on the player: it appears, it is read or it
+   * is not, it goes. Waves that only need a reaction use this so the campaign
+   * can talk without stopping eleven times.
+   */
+  barkOnSpawn?: ScriptEntry;
 }
 
 export type PortraitId =

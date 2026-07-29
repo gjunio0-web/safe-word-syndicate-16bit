@@ -16,6 +16,7 @@ import {
   maxCameraX,
   maxWaveTriggerX,
   WAVE_TRIGGER_LOOKAHEAD,
+  BARK_DURATION_FRAMES,
   PLAYER_BODY_SEPARATION_X,
   PLAYER_BODY_SEPARATION_Y,
   ENEMY_BODY_SEPARATION_X,
@@ -113,6 +114,15 @@ export class GameEngine {
   public bossWarningTitle: string = '';
   private _activeDialogue: import('../types').DialogueLine[] | null = null;
   private dialogueListeners: Set<() => void> = new Set();
+  /**
+   * The bark channel. Same shape as the dialogue channel above, deliberately:
+   * one line instead of a list, and a frame counter instead of a player press.
+   * The timer lives here rather than in React so it pauses when the fight
+   * pauses and cannot drift away from the frame the line was fired on.
+   */
+  private _activeBark: import('../types').DialogueLine | null = null;
+  private barkListeners: Set<() => void> = new Set();
+  private barkTimer = 0;
 
   private hudSnapshot: HudSnapshot;
   private hudListeners: Set<() => void> = new Set();
@@ -240,6 +250,24 @@ export class GameEngine {
     this.dialogueListeners.add(listener);
     return () => {
       this.dialogueListeners.delete(listener);
+    };
+  }
+
+  public get activeBark(): import('../types').DialogueLine | null {
+    return this._activeBark;
+  }
+
+  private setActiveBark(next: import('../types').DialogueLine | null) {
+    if (this._activeBark === next) return;
+    this._activeBark = next;
+    this.barkListeners.forEach((listener) => listener());
+  }
+
+  /** Subscribes to bark changes. Returns the unsubscribe function. */
+  public subscribeBark(listener: () => void): () => void {
+    this.barkListeners.add(listener);
+    return () => {
+      this.barkListeners.delete(listener);
     };
   }
 
@@ -388,6 +416,10 @@ export class GameEngine {
     }
     if (this.bossWarningTimer > 0) {
       this.bossWarningTimer--;
+    }
+    if (this.barkTimer > 0) {
+      this.barkTimer--;
+      if (this.barkTimer === 0) this.setActiveBark(null);
     }
 
     // Check wave triggers based on camera position
@@ -569,6 +601,13 @@ export class GameEngine {
       }
 
       this.isWaveActive = true;
+      if (wave.barkOnSpawn) {
+        // Fired as the wave lands, not before it. A bark is a reaction to
+        // enemies arriving, so it wants them on screen behind it.
+        const [line] = resolveDialogue([wave.barkOnSpawn], this.roster());
+        this.setActiveBark(line);
+        this.barkTimer = BARK_DURATION_FRAMES;
+      }
       // Spawn wave enemies
       wave.enemies.forEach((spawnGroup) => {
         for (let i = 0; i < spawnGroup.count; i++) {

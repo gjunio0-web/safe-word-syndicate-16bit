@@ -142,3 +142,7 @@ export const ARENA_MAX_Y = 440;
  * the one window she cannot move, the fight is a chase rather than a read.
  */
 export const CASTING_DAMAGE_MULTIPLIER = 1.75;
+
+/** How long a bark stays up. Long enough to read mid-fight, short enough to
+ *  not still be hanging there when the next one lands. */
+export const BARK_DURATION_FRAMES = 200;

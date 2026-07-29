@@ -25,6 +25,7 @@ import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigatio
 import { CharacterSelect } from './components/CharacterSelect';
 import { useIsMobileDevice } from './hooks/useDeviceType';
 import { DialogueOverlay } from './components/DialogueOverlay';
+import { BarkOverlay } from './components/BarkOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
 import { GameOverModal } from './components/GameOverModal';
 import { GameHeader } from './components/GameHeader';
@@ -79,6 +80,7 @@ export default function App() {
   // subscription below would stay attached to the discarded engine.
   const [engineVersion, setEngineVersion] = useState(0);
   const [activeDialogue, setActiveDialogue] = useState<DialogueLine[] | null>(null);
+  const [activeBark, setActiveBark] = useState<DialogueLine | null>(null);
 
   const [isPaused, setIsPaused] = useState(false);
   const [showCodex, setShowCodex] = useState(false);
@@ -190,6 +192,16 @@ export default function App() {
     }
     setActiveDialogue(engine.activeDialogue);
     return engine.subscribeDialogue(() => setActiveDialogue(engine.activeDialogue));
+  }, [engineVersion]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      setActiveBark(null);
+      return;
+    }
+    setActiveBark(engine.activeBark);
+    return engine.subscribeBark(() => setActiveBark(engine.activeBark));
   }, [engineVersion]);
 
   // Requests fullscreen on the first real user gesture, then stops
@@ -664,6 +676,8 @@ export default function App() {
               crtFilter={settings.crtFilter}
               showHitboxes={settings.showHitboxes}
             />
+
+            {activeBark && !activeDialogue && <BarkOverlay line={activeBark} />}
 
             {isMobile && (
               <OnScreenControls
