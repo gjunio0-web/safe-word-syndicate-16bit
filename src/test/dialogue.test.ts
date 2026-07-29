@@ -4,6 +4,7 @@ import { heroLine, isHeroLine, resolveDialogue } from '../game/dialogue';
 import { STAGES } from '../game/stageData';
 import { BARK_DURATION_FRAMES } from '../game/constants';
 import { portraitFor } from '../game/portraits';
+import { CHARACTERS } from '../game/characterData';
 import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
 
 const FIXED: DialogueLine = {
@@ -275,5 +276,33 @@ describe('boss warning banner', () => {
 
   it('no longer sends the player after people who are not in this game', () => {
     expect(bannerFor(['BOSS_MADAM_MIZYDIA'])).not.toContain('PURITY');
+  });
+});
+
+describe('codex descriptions', () => {
+  const HEROES = ['FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER', 'ANGRY_CORSO'] as const;
+
+  it('stays inside the two-line clamp the character card gives it', () => {
+    // The card renders visualDesc at text-xs with line-clamp-2. The longest
+    // description that shipped before this was 116 characters and fitted, so
+    // that is the budget these have to live in, give or take a few.
+    for (const id of HEROES) {
+      expect(CHARACTERS[id].visualDesc.length, id).toBeLessThanOrEqual(130);
+    }
+  });
+
+  it('describes what the art actually shows', () => {
+    // Each of these was in the illustration and missing from the description.
+    expect(CHARACTERS.FEET_MASTER.visualDesc).toMatch(/boot and skull/i);
+    expect(CHARACTERS.FUN_MAKER.visualDesc).toMatch(/spiked/i);
+    expect(CHARACTERS.OMEGA_BIKER.visualDesc).toMatch(/omega/i);
+    expect(CHARACTERS.ANGRY_CORSO.visualDesc).toMatch(/PUNK/);
+  });
+
+  it('no longer promises things the art does not have', () => {
+    expect(CHARACTERS.FEET_MASTER.visualDesc, 'he wears shades').not.toMatch(/specs/i);
+    expect(CHARACTERS.FUN_MAKER.visualDesc, 'the harness has spikes').not.toMatch(/O-ring/i);
+    expect(CHARACTERS.OMEGA_BIKER.visualDesc, 'the visor is lit').not.toMatch(/reflective/i);
+    expect(CHARACTERS.ANGRY_CORSO.visualDesc, 'exactly one tag').not.toMatch(/dog tags/i);
   });
 });

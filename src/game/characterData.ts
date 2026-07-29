@@ -10,7 +10,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     name: 'Feet Master',
     title: 'The Unbreakable Grappler',
     archetype: 'Tank / Grappler',
-    visualDesc: 'Brown hair, full beard, specs, plain black shirt, blue jeans, black combat boots.',
+    visualDesc:
+      'Spiked auburn hair, full beard, dark shades. Black tee stamped with a boot and skull, studded belt, worn jeans, scuffed boots.',
     origin: 'Name inspired by his feet fetish. Unleashes devastating ground slams and human bat swings.',
     powerMoveName: 'Human Bat Swing',
     powerMoveDesc: 'Grabs enemies by their feet and swings them in a 360° whirlpool, wiping out all nearby foes with massive AoE damage!',
@@ -35,7 +36,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     name: 'Fun Maker',
     title: 'The Aerial Hurricane',
     archetype: 'Combo / Aerial Specialist',
-    visualDesc: 'Muscular blonde hair, black leather chest harness with silver O-rings, blue jeans, brown shoes.',
+    visualDesc:
+      'Spiked blond-tipped hair, spiked leather chest harness, studded fingerless gloves, pouch belt with a hip chain, olive cargos.',
     origin: 'Inspired by his love for European Fun Fairs. Combines flashiness with airborne juggling combos.',
     powerMoveName: 'Rollercoaster Hurricane',
     powerMoveDesc: 'Soars into the air in a spinning corkscrew dive, dragging enemies into a high-speed skyward juggling cyclone!',
@@ -60,7 +62,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     name: 'Omega Biker',
     title: 'The Heavy Armor Striker',
     archetype: 'Striker / Guard Breaker',
-    visualDesc: 'Sleek black motorcycle armor, full-face helmet with dark reflective visor, armored gloves & boots.',
+    visualDesc:
+      'Angular black armor threaded with amber light, orange omega on the chest, full helmet with a burning red visor. No face, ever.',
     origin: 'Leather and biker enthusiast. "Omega" represents absolute finality and brutal martial arts impact.',
     powerMoveName: 'Omega Knockback Boot',
     powerMoveDesc: 'Delivers a high-velocity armoured kick accompanied by a kinetic shockwave that smashes through guards and launches enemies across the stage!',
@@ -85,7 +88,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     name: 'Angry Corso',
     title: 'The Feral Pup Berserker',
     archetype: 'Berserker / Rushdown',
-    visualDesc: 'Grey camo dog mask, black leather harness with dog tags, bronzed muscular build, olive shorts, tall camo boots.',
+    visualDesc:
+      'Grey camo pup mask, mohawk crest, spiked collar and chain. X-harness with one dog tag, skull-and-flame ink, PUNK on his forearm.',
     origin: 'Dedicated PupPlay enthusiast of the powerful Cani Corso breed. Fast gap-closing bites that leech health.',
     powerMoveName: 'Feral Pup Rush & Bite',
     powerMoveDesc: 'Leaps over target enemy with aggressive speed, pinning them down for a ferocious bite attack that leeches health back to Corso!',
