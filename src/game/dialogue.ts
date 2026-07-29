@@ -1,4 +1,24 @@
-import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
+import { CharacterId, DialogueLine, HeroLine, HeroVariant, ScriptEntry } from '../types';
+import { CHARACTERS } from './characterData';
+
+/**
+ * Builds a hero line from one text per hero.
+ *
+ * Speaker name and portrait are derived from the hero id, because writing them
+ * out four times per line turns a page of script into a page of scaffolding and
+ * invites the kind of copy-paste error where the Fun Maker speaks with the
+ * Omega Biker's face.
+ *
+ * `prefer` is whose wave this is. If they are not in the fight, the line falls
+ * to whoever is.
+ */
+export function heroLine(prefer: CharacterId, texts: Record<CharacterId, string>): HeroLine {
+  const variants = {} as Record<CharacterId, HeroVariant>;
+  (Object.keys(texts) as CharacterId[]).forEach((id) => {
+    variants[id] = { speaker: CHARACTERS[id].name, portrait: id, text: texts[id] };
+  });
+  return { prefer, variants };
+}
 
 /**
  * Hero lines carry one text per hero; fixed lines carry their own speaker.

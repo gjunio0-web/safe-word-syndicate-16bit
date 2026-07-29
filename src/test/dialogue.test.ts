@@ -6,7 +6,7 @@ import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
 
 const FIXED: DialogueLine = {
   speaker: 'Purity Patrol',
-  portrait: 'PURITY_LEADER',
+  portrait: 'PURITY_PATROL',
   text: 'Halt, degenerate heathens!',
   side: 'RIGHT',
 };
@@ -93,5 +93,42 @@ describe('engine roster', () => {
     };
     const engine = new GameEngine(stage, 'FEET_MASTER', 'ANGRY_CORSO', undefined, false);
     expect(engine.activeDialogue?.[0].text).toBe('line for FEET_MASTER');
+  });
+});
+
+describe('migrated campaign script', () => {
+  const heroLines = STAGES.flatMap((stage) =>
+    stage.waves.flatMap((wave) => (wave.dialogueBefore ?? []).filter(isHeroLine))
+  );
+
+  it('carries a hero line in every wave that already spoke', () => {
+    expect(heroLines).toHaveLength(6);
+  });
+
+  it('never makes the same hero answer twice in one wave', () => {
+    for (const stage of STAGES) {
+      for (const wave of stage.waves) {
+        const spoken = resolveDialogue(wave.dialogueBefore ?? [], ['FEET_MASTER']);
+        const heroes = spoken.filter((l) => l.side === 'LEFT').map((l) => l.speaker);
+        expect(new Set(heroes).size).toBe(heroes.length);
+      }
+    }
+  });
+
+  it('lets every hero answer the final boss, since the appeal is plot-critical', () => {
+    const final = STAGES[2].waves[2].dialogueBefore ?? [];
+    for (const id of ['FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER', 'ANGRY_CORSO'] as CharacterId[]) {
+      const spoken = resolveDialogue(final, [id]);
+      expect(spoken.some((l) => l.text.includes('Sayonara'))).toBe(true);
+    }
+  });
+
+  it('has retired the speaker who never appeared on the field', () => {
+    const speakers = STAGES.flatMap((stage) =>
+      stage.waves.flatMap((wave) =>
+        resolveDialogue(wave.dialogueBefore ?? [], ['FEET_MASTER']).map((l) => l.speaker)
+      )
+    );
+    expect(speakers).not.toContain('Purity Captain');
   });
 });

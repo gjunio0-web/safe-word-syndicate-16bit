@@ -193,14 +193,8 @@ export type PortraitId =
   | 'FUN_MAKER'
   | 'OMEGA_BIKER'
   | 'ANGRY_CORSO'
-  /**
-   * Retired. There is no Purity Leader in the game and there never was: three
-   * orphan names survive for a mini-boss that was designed and never built.
-   * The opening ultimatum belongs to the patrol that actually walks on screen,
-   * and this member leaves with the rename. Kept only because stageData still
-   * points at it, and content moves in its own patch.
-   */
-  | 'PURITY_LEADER'
+  | 'PURITY_PATROL'
+  | 'TRAD_WIFE_STRIKER'
   | 'MADAM_MIZYDIA'
   | 'SAYONARA';
 
