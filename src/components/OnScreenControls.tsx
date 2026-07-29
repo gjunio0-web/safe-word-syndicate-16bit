@@ -23,11 +23,12 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
   };
 
   return (
-    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 select-none z-30">
-      {/* Top instruction indicator */}
-      <div className="text-center text-xs font-mono text-zinc-400 bg-black/60 backdrop-blur-sm py-1 px-3 rounded-full w-max mx-auto border border-zinc-800">
-        KEYBOARD: <span className="text-amber-400 font-bold">WASD / ARROWS</span> = MOVE | <span className="text-amber-400 font-bold">J</span> = PUNCH | <span className="text-amber-400 font-bold">K</span> = KICK | <span className="text-amber-400 font-bold">L</span> = POWER MOVE | <span className="text-amber-400 font-bold">SPACE</span> = JUMP
-      </div>
+    <div className="absolute inset-0 pointer-events-none flex flex-col justify-end p-4 select-none z-30">
+      {/* The keyboard reference that used to sit here moved to KeyboardHints.
+        * It was never a touch control: it tells a keyboard player which keys
+        * do what, so gating it behind the touch layer hid it from the only
+        * people it was written for.
+        */}
 
       {/* Touch D-Pad and Action Buttons for Mobile / Touch Screen */}
       <div className="flex justify-between items-end w-full pb-2">

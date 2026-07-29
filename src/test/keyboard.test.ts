@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveKeyBinding } from '../game/keyboard';
+import { KEYBOARD_LAYOUT, resolveKeyBinding } from '../game/keyboard';
+import { primaryKey } from '../components/KeyboardHints';
 
 /** Shorthand: most keys need only the character, a few need the physical code. */
 const bind = (key: string, coop = false, code = '') =>
@@ -131,6 +132,43 @@ describe('when the game claims a key from the browser', () => {
   it('leaves the letter keys alone, which carry no default worth blocking', () => {
     for (const key of ['w', 'j', 'k', 'l']) {
       expect(claimsKey(`Key${key.toUpperCase()}`, key, true)).toBe(false);
+    }
+  });
+});
+
+/**
+ * The heads-up strip shows one key per action, derived from the same layout
+ * the codex spells out in full. The derivation has a trap: player two's punch
+ * is the comma key, and an early version split on commas to strip the "L, E, F"
+ * style alternative lists — which ate the comma binding and rendered an empty
+ * label where a key should be.
+ */
+describe('primary key shown in the heads-up strip', () => {
+  it('takes the first alternative when a binding lists several', () => {
+    expect(primaryKey('J or Z')).toBe('J');
+    expect(primaryKey('L, E, F or U')).toBe('L');
+    expect(primaryKey('Right Shift or Numpad 0')).toBe('RIGHT SHIFT');
+  });
+
+  it('keeps a binding that is itself punctuation', () => {
+    expect(primaryKey(', or Numpad 1')).toBe(',');
+    expect(primaryKey('. or Numpad 2')).toBe('.');
+    expect(primaryKey('/ or Numpad 3')).toBe('/');
+  });
+
+  it('passes through a binding with no alternatives', () => {
+    expect(primaryKey('Space')).toBe('SPACE');
+    expect(primaryKey('W A S D')).toBe('W A S D');
+    expect(primaryKey('Arrow keys')).toBe('ARROW KEYS');
+  });
+
+  it('never returns an empty label for any real binding', () => {
+    const all = [
+      ...Object.values(KEYBOARD_LAYOUT.playerOne),
+      ...Object.values(KEYBOARD_LAYOUT.playerTwo),
+    ];
+    for (const binding of all) {
+      expect(primaryKey(binding), `empty label for ${JSON.stringify(binding)}`).not.toBe('');
     }
   });
 });

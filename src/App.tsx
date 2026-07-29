@@ -16,6 +16,7 @@ import { STAGES } from './game/stageData';
 import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
+import { KeyboardHints } from './components/KeyboardHints';
 import { AttractMode } from './components/AttractMode';
 import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
@@ -679,12 +680,14 @@ export default function App() {
 
             {activeBark && !activeDialogue && <BarkOverlay line={activeBark} />}
 
-            {isMobile && (
+            {isMobile ? (
               <OnScreenControls
                 input={inputP1}
                 setInput={setInputP1}
                 powerMeter={engineRef.current.player1?.powerMeter || 0}
               />
+            ) : (
+              <KeyboardHints mode={gameMode} />
             )}
           </div>
         </div>

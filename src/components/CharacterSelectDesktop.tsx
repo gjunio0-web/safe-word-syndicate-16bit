@@ -3,7 +3,7 @@ import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
 import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
 import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { Flame, Crosshair, Users, Bot, UserCheck, Play, User } from 'lucide-react';
+import { Crosshair, Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface CharacterSelectDesktopProps {
@@ -311,10 +311,10 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         return (
           <div
             id="selected-fighter-banner"
-            className="mt-4 bg-[#0d0718] border-3 sm:border-4 border-[#ff00ff] rounded-xl shadow-[0_0_30px_rgba(255,0,255,0.5)] p-4 sm:p-6 relative overflow-hidden flex flex-col justify-between min-h-[320px] sm:min-h-[380px] gap-4"
+            className="mt-4 bg-[#0d0718] border-3 sm:border-4 border-[#ff00ff] rounded-xl shadow-[0_0_30px_rgba(255,0,255,0.5)] p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between gap-3 min-h-[248px]"
           >
             {/* Top Arcade Marquee Header Bar */}
-            <div className="flex justify-between items-center bg-[#240038] border-b-2 border-[#ff00ff] -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 p-2.5 px-4 mb-1">
+            <div className="flex justify-between items-center bg-[#240038] border-b-2 border-[#ff00ff] -mx-4 -mt-4 sm:-mx-5 sm:-mt-5 p-2.5 px-4 mb-1">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#00ffff] animate-pulse" />
                 <span className="text-xs sm:text-sm font-mono font-black text-[#00ffff] tracking-widest uppercase flex items-center gap-2">
@@ -326,12 +326,19 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
               </span>
             </div>
 
-            {/* Banner Main Body - Expanded Height Layout */}
+            {/* Banner Main Body — horizontal strip
+              *
+              * Laid across rather than stacked. The dossier and the roster
+              * cards below carry the same six facts about the same fighter,
+              * and stacking both meant the page ran past one screen while the
+              * portraits were squeezed to fit. Reading in columns keeps every
+              * text and returns the height to the cards.
+              */}
             {mode === 'SINGLE' ? (
-              <div className="flex flex-col md:flex-row items-center md:items-stretch gap-5 sm:gap-8 w-full flex-1 py-2">
-                {/* Large Fighter Portrait Stage (Expanded Height) */}
+              <div className="flex flex-col md:flex-row items-center md:items-stretch gap-4 w-full py-1">
+                {/* Large Fighter Portrait Stage */}
                 <div className="relative shrink-0 flex flex-col items-center justify-center">
-                  <div className="w-32 h-32 sm:w-40 sm:h-40 md:w-44 md:h-44 rounded-full border-4 border-[#00ffff] p-1.5 bg-black shadow-[0_0_25px_rgba(0,255,255,0.6)] overflow-hidden relative">
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-[#00ffff] p-1.5 bg-black shadow-[0_0_25px_rgba(0,255,255,0.6)] overflow-hidden relative">
                     {featuredChar.portraitUrl && (
                       <img
                         src={featuredChar.portraitUrl}
@@ -341,56 +348,55 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                       />
                     )}
                   </div>
-                  <span className="mt-2.5 bg-[#ff00ff] text-black text-xs font-black px-3 py-1 rounded-full border border-white font-mono shadow-md uppercase tracking-wider">
+                  <span className="mt-2 bg-[#ff00ff] text-black text-[10px] font-black px-2.5 py-0.5 rounded-full border border-white font-mono shadow-md uppercase tracking-wider">
                     1P CHAMPION
                   </span>
                 </div>
 
-                {/* Character Meta & Stats - Generous Vertical Spacing */}
-                <div className="flex-1 w-full flex flex-col justify-between space-y-3 text-center md:text-left">
-                  <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-2 border-b border-[#3b1252] pb-3">
-                    <div>
-                      <h2 className={`text-3xl sm:text-4xl md:text-5xl font-black italic uppercase tracking-tight ${theme.text}`}>
-                        {featuredChar.name}
-                      </h2>
-                      <p className="text-sm text-amber-400 font-mono font-bold italic mt-0.5">{featuredChar.archetype}</p>
-                    </div>
+                {/* Character Meta & Stats */}
+                <div className="flex-1 min-w-0 w-full flex flex-col justify-center gap-2 text-center md:text-left">
+                  <div>
+                    <h2 className={`text-2xl sm:text-3xl font-black italic uppercase tracking-tight leading-none ${theme.text}`}>
+                      {featuredChar.name}
+                    </h2>
+                    <p className="text-xs text-amber-400 font-mono font-bold italic mt-0.5">{featuredChar.archetype}</p>
+                  </div>
 
-                    {/* Stat Progress Bars */}
-                    <div className="bg-[#120a21] border border-[#ff00ff]/50 p-3 rounded-lg text-right space-y-2 w-full sm:w-56 shadow-inner mt-2 sm:mt-0">
-                      <div className="flex justify-between items-center text-xs font-mono text-zinc-300">
-                        <span className="font-bold text-[#ff00ff]">POWER</span>
-                        <div className="w-28 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                          <div className="h-full bg-[#ff00ff]" style={{ width: `${(featuredChar.stats.power / 5) * 100}%` }} />
-                        </div>
+                  {/* Stat Progress Bars */}
+                  <div className="bg-[#120a21] border border-[#ff00ff]/50 p-2.5 rounded-lg space-y-1.5 shadow-inner">
+                    <div className="flex justify-between items-center gap-3 text-[11px] font-mono text-zinc-300">
+                      <span className="font-bold text-[#ff00ff]">POWER</span>
+                      <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                        <div className="h-full bg-[#ff00ff]" style={{ width: `${(featuredChar.stats.power / 5) * 100}%` }} />
                       </div>
-                      <div className="flex justify-between items-center text-xs font-mono text-zinc-300">
-                        <span className="font-bold text-[#00ffff]">DEFENSE</span>
-                        <div className="w-28 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                          <div className="h-full bg-[#00ffff]" style={{ width: `${(featuredChar.stats.defense / 5) * 100}%` }} />
-                        </div>
+                    </div>
+                    <div className="flex justify-between items-center gap-3 text-[11px] font-mono text-zinc-300">
+                      <span className="font-bold text-[#00ffff]">DEFENSE</span>
+                      <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                        <div className="h-full bg-[#00ffff]" style={{ width: `${(featuredChar.stats.defense / 5) * 100}%` }} />
                       </div>
-                      <div className="flex justify-between items-center text-xs font-mono text-zinc-300">
-                        <span className="font-bold text-[#ffff00]">SPEED</span>
-                        <div className="w-28 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                          <div className="h-full bg-[#ffff00]" style={{ width: `${(featuredChar.stats.speed / 5) * 100}%` }} />
-                        </div>
+                    </div>
+                    <div className="flex justify-between items-center gap-3 text-[11px] font-mono text-zinc-300">
+                      <span className="font-bold text-[#ffff00]">SPEED</span>
+                      <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                        <div className="h-full bg-[#ffff00]" style={{ width: `${(featuredChar.stats.speed / 5) * 100}%` }} />
                       </div>
                     </div>
                   </div>
+                </div>
 
+                {/* Quote and Special Move, side by side with the stats */}
+                <div className="flex-[1.2] min-w-0 w-full flex flex-col justify-center gap-2">
                   {/* Character Quote Box */}
-                  <p className="text-xs sm:text-sm text-zinc-200 font-mono italic bg-[#170c2a] p-3 border border-[#3b1e5d] rounded-md text-left leading-relaxed">
+                  <p className="text-xs text-zinc-200 font-mono italic bg-[#170c2a] p-2.5 border border-[#3b1e5d] rounded-md text-left leading-relaxed">
                     "{featuredChar.quote}"
                   </p>
 
                   {/* Special Move Banner */}
-                  <div className="bg-[#18092a] p-3 border-l-4 border-[#00ffff] rounded-r-md text-left flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <div>
-                      <span className="text-[10px] text-[#00ffff] font-mono font-bold uppercase block tracking-wider">SPECIAL OVERDRIVE ATTACK</span>
-                      <span className="font-black text-sm sm:text-base text-white uppercase font-mono">{featuredChar.powerMoveName}</span>
-                    </div>
-                    <p className="text-xs text-zinc-300 font-mono leading-normal max-w-md">{featuredChar.powerMoveDesc}</p>
+                  <div className="bg-[#18092a] p-2.5 border-l-4 border-[#00ffff] rounded-r-md text-left">
+                    <span className="text-[10px] text-[#00ffff] font-mono font-bold uppercase block tracking-wider">SPECIAL OVERDRIVE ATTACK</span>
+                    <span className="font-black text-sm text-white uppercase font-mono">{featuredChar.powerMoveName}</span>
+                    <p className="text-[11px] text-zinc-300 font-mono leading-normal mt-1">{featuredChar.powerMoveDesc}</p>
                   </div>
                 </div>
               </div>
@@ -444,17 +450,14 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         );
       })()}
 
-      {/* Visual Section Divider with clear wording */}
-      <div className="my-5 flex items-center gap-3">
-        <div className="flex-1 h-0.5 bg-gradient-to-r from-transparent via-[#ff00ff] to-transparent opacity-80" />
-        <span className="text-xs sm:text-sm font-mono font-black text-[#00ffff] tracking-widest uppercase bg-[#161026] px-4 py-1.5 border-2 border-[#ff00ff]/60 flex items-center gap-2 shadow-[0_0_10px_rgba(255,0,255,0.3)] rounded-full">
-          <Flame className="w-4 h-4 text-[#ff00ff]" /> CHOOSE FROM ROSTER BELOW
-        </span>
-        <div className="flex-1 h-0.5 bg-gradient-to-r from-transparent via-[#ff00ff] to-transparent opacity-80" />
-      </div>
-
-      {/* Main Character Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+      {/* Main Character Cards Grid
+        *
+        * The "CHOOSE FROM ROSTER BELOW" divider that used to sit here was
+        * removed: with the dossier immediately above and the cards immediately
+        * below, it labelled something already obvious and cost a row of height
+        * the cards needed.
+        */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {charList.map((char, index) => {
           const isP1 = selectedP1 === char.id;
           const isP2 = selectedP2 === char.id;
@@ -488,14 +491,22 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                 )}
               </div>
 
-              {/* Character Card Header with Large Arcade Portrait Banner */}
-              <div className="relative w-full h-36 bg-[#000] border-b-2 border-[#333] group-hover:border-[#ff00ff] overflow-hidden mb-3 transition-colors">
+              {/* Character Card Header with Large Arcade Portrait Banner
+                *
+                * Square, because the art is square. A fixed 144px band against
+                * a 512x512 source meant object-cover filled the width and threw
+                * the rest away, and object-top anchored the crop so everything
+                * below the face was the part discarded. Matching the frame to
+                * the source shows the whole illustration and spends the empty
+                * vertical space the screen already had.
+                */}
+              <div className="relative w-full aspect-square bg-[#000] border-b-2 border-[#333] group-hover:border-[#ff00ff] overflow-hidden mb-3 transition-colors">
                 {char.portraitUrl ? (
                   <img
                     src={char.portraitUrl}
                     alt={char.name}
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover object-top filter brightness-95 group-hover:brightness-110 group-hover:scale-105 transition-all duration-300"
+                    className="w-full h-full object-cover filter brightness-95 group-hover:brightness-110 group-hover:scale-105 transition-all duration-300"
                   />
                 ) : (
                   <div className="w-full h-full bg-[#1a1a1a] flex items-center justify-center text-zinc-600 font-mono text-xs">
