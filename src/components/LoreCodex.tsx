@@ -93,6 +93,9 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
                       <h4 className="font-black text-[#00ffff] text-xl uppercase italic leading-none">{hero.name}</h4>
                       <span className="text-[10px] text-amber-400 font-mono block uppercase tracking-widest font-bold">{hero.archetype}</span>
                       <p className="text-xs text-gray-300 leading-relaxed font-mono mt-2">{hero.origin}</p>
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-mono italic mt-1">
+                        "{hero.visualDesc}"
+                      </p>
                     </div>
                   </div>
 

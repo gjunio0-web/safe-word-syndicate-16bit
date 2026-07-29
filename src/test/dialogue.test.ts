@@ -291,6 +291,22 @@ describe('codex descriptions', () => {
     }
   });
 
+  it('keeps the profile inside the three-line clamp the card gives it', () => {
+    // The card swapped visualDesc for origin and went from clamp-2 to clamp-3.
+    for (const id of HEROES) {
+      expect(CHARACTERS[id].origin.length, id).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('says who the fighter is rather than repeating the move list', () => {
+    // The old origin spent half its length restating the power move that is
+    // printed directly underneath it on the same card.
+    for (const id of HEROES) {
+      const { origin, powerMoveName } = CHARACTERS[id];
+      expect(origin, id).not.toContain(powerMoveName);
+    }
+  });
+
   it('describes what the art actually shows', () => {
     // Each of these was in the illustration and missing from the description.
     expect(CHARACTERS.FEET_MASTER.visualDesc).toMatch(/boot and skull/i);

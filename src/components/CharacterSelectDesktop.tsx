@@ -568,8 +568,8 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                   </button>
                 </div>
               ) : (
-                <p className="text-xs leading-relaxed text-gray-300 italic mb-3 line-clamp-2">
-                  "{char.visualDesc}"
+                <p className="text-xs leading-relaxed text-gray-300 italic mb-3 line-clamp-3">
+                  {char.origin}
                 </p>
               )}
 

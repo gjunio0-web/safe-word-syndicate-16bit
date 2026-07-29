@@ -12,7 +12,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     archetype: 'Tank / Grappler',
     visualDesc:
       'Spiked auburn hair, full beard, dark shades. Black tee stamped with a boot and skull, studded cuffs and belt, worn blue jeans.',
-    origin: 'Name inspired by his feet fetish. Unleashes devastating ground slams and human bat swings.',
+    origin:
+      'Bouncer at the Rainbow Lounge before the raids started, and the reason it stayed open three months longer than any club on the block. Takes the first hit so nobody behind him has to.',
     powerMoveName: 'Human Bat Swing',
     powerMoveDesc: 'Grabs enemies by their feet and swings them in a 360° whirlpool, wiping out all nearby foes with massive AoE damage!',
     portraitUrl: feetMasterImg,
@@ -38,7 +39,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     archetype: 'Combo / Aerial Specialist',
     visualDesc:
       'Spiked blond-tipped hair, spiked leather chest harness, studded fingerless gloves, pouch belt with a hip chain, olive cargos.',
-    origin: 'Inspired by his love for European Fun Fairs. Combines flashiness with airborne juggling combos.',
+    origin:
+      'Ran the last unlicensed funfair in the city until the Protocol called joy a disorder. Still fights like the crowd is watching, because somebody has to keep the noise up.',
     powerMoveName: 'Rollercoaster Hurricane',
     powerMoveDesc: 'Soars into the air in a spinning corkscrew dive, dragging enemies into a high-speed skyward juggling cyclone!',
     portraitUrl: funMakerImg,
@@ -64,7 +66,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     archetype: 'Striker / Guard Breaker',
     visualDesc:
       'Angular black armor threaded with amber light, orange omega on the chest, full helmet with a burning red visor. No face, ever.',
-    origin: 'Leather and biker enthusiast. "Omega" represents absolute finality and brutal martial arts impact.',
+    origin:
+      'Nobody has seen his face and nobody asks twice. Rode courier for the resistance before the resistance had a name, and reads a room by working out who signed what.',
     powerMoveName: 'Omega Knockback Boot',
     powerMoveDesc: 'Delivers a high-velocity armoured kick accompanied by a kinetic shockwave that smashes through guards and launches enemies across the stage!',
     portraitUrl: omegaBikerImg,
@@ -90,7 +93,8 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     archetype: 'Berserker / Rushdown',
     visualDesc:
       'Grey camo pup mask, mohawk crest, PUNK on his forearm. Spiked collar, chain and X-harness, one dog tag, skull-and-flame ink.',
-    origin: 'Dedicated PupPlay enthusiast of the powerful Cani Corso breed. Fast gap-closing bites that leech health.',
+    origin:
+      "Ran with Sayonara's pack before the collar. Answers to nobody now, which is the whole point, and has not stopped looking for her since the night they took her.",
     powerMoveName: 'Feral Pup Rush & Bite',
     powerMoveDesc: 'Leaps over target enemy with aggressive speed, pinning them down for a ferocious bite attack that leeches health back to Corso!',
     portraitUrl: angryCorsoImg,
