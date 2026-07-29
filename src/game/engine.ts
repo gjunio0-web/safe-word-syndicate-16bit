@@ -654,14 +654,20 @@ export class GameEngine {
         }
       });
 
-      const hasBoss = wave.enemies.some((e) => e.type.startsWith('BOSS'));
+      const bosses = wave.enemies.filter((e) => e.type.startsWith('BOSS'));
+      const hasBoss = bosses.length > 0;
       const isFinalWave = this.currentWaveIndex === this.stage.waves.length - 1;
 
       if (hasBoss || isFinalWave) {
         sound.playBossAlarm();
         if (hasBoss) {
           sound.playBgm(this.stage.bossTrack);
-          this.bossWarningTitle = '⚠️ BOSS ENCOUNTER: DESTROY THE PURITY LEADERS ⚠️';
+          // Named off the field rather than hardcoded. The old banner told the
+          // player to destroy the Purity Leaders, who are not in this game:
+          // the bosses are Sayonara and the Matriarch, and one of them is
+          // supposed to be rescued.
+          const names = bosses.map((e) => ENEMIES[e.type].name.toUpperCase()).join(' & ');
+          this.bossWarningTitle = `⚠️ BOSS ENCOUNTER: ${names} ⚠️`;
         } else {
           this.bossWarningTitle = '⚠️ WARNING: HEAVY ENEMY SURGE ⚠️';
         }
@@ -1210,7 +1216,9 @@ export class GameEngine {
               [
                 {
                   speaker: 'Sayonara',
-                  portrait: 'SAYONARA',
+                  // Not the collared face. She is saying the collar is quiet;
+                  // wearing it lit while she says so undoes the whole beat.
+                  portrait: 'SAYONARA_FREED',
                   text: "The collar... it's quiet. Her voice is gone from my head.",
                   side: 'RIGHT',
                 },

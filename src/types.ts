@@ -209,7 +209,9 @@ export type PortraitId =
   | 'PURITY_PATROL'
   | 'TRAD_WIFE_STRIKER'
   | 'MADAM_MIZYDIA'
-  | 'SAYONARA';
+  | 'SAYONARA'
+  /** Same dog, open collar. The ending is the one place she is not wearing it. */
+  | 'SAYONARA_FREED';
 
 /** A line with a fixed speaker: enemies, bosses, anyone who isn't the player. */
 export interface DialogueLine {

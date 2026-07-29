@@ -4,6 +4,7 @@ import { heroLine, isHeroLine, resolveDialogue } from '../game/dialogue';
 import { STAGES } from '../game/stageData';
 import { BARK_DURATION_FRAMES } from '../game/constants';
 import { portraitFor } from '../game/portraits';
+import { CHARACTERS } from '../game/characterData';
 import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
 
 const FIXED: DialogueLine = {
@@ -221,15 +222,87 @@ describe('portraits', () => {
     }
   });
 
-  it('returns nothing for villains rather than inventing a face', () => {
-    expect(portraitFor('MADAM_MIZYDIA')).toBeUndefined();
-    expect(portraitFor('SAYONARA')).toBeUndefined();
-    expect(portraitFor('PURITY_PATROL')).toBeUndefined();
-    expect(portraitFor('TRAD_WIFE_STRIKER')).toBeUndefined();
+  it('has a face for every villain who speaks', () => {
+    for (const id of ['MADAM_MIZYDIA', 'SAYONARA', 'PURITY_PATROL', 'TRAD_WIFE_STRIKER'] as const) {
+      expect(portraitFor(id)).toBeTruthy();
+    }
+  });
+
+  it('leaves nobody in the campaign faceless', () => {
+    const speakers = STAGES.flatMap((stage) =>
+      stage.waves.flatMap((wave) =>
+        [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ? [wave.barkOnSpawn] : [])].flatMap(
+          (entry) =>
+            isHeroLine(entry)
+              ? Object.values(entry.variants).map((v) => v.portrait)
+              : [entry.portrait]
+        )
+      )
+    );
+    for (const id of speakers) expect(portraitFor(id), id).toBeTruthy();
   });
 
   it('gives the player their own face when a hero line resolves', () => {
     const line = resolveDialogue([variantLine('FEET_MASTER')], ['ANGRY_CORSO'])[0];
     expect(portraitFor(line.portrait)).toBe(portraitFor('ANGRY_CORSO'));
+  });
+});
+
+describe('boss warning banner', () => {
+  const NEUTRAL_IN = {
+    left: false, right: false, up: false, down: false,
+    punch: false, kick: false, special: false, jump: false, grab: false,
+  };
+
+  function bannerFor(types: ('BOSS_MADAM_MIZYDIA' | 'BOSS_SAYONARA')[]) {
+    const stage = {
+      ...STAGES[2],
+      waves: [{ triggerX: 0, enemies: types.map((type) => ({ type, count: 1 })) }],
+    };
+    const engine = new GameEngine(stage, 'FEET_MASTER');
+    engine.update(NEUTRAL_IN);
+    return engine.bossWarningTitle;
+  }
+
+  it('names the boss on the field', () => {
+    expect(bannerFor(['BOSS_SAYONARA'])).toContain('SAYONARA');
+  });
+
+  it('names both when both turn up', () => {
+    const banner = bannerFor(['BOSS_MADAM_MIZYDIA', 'BOSS_SAYONARA']);
+    expect(banner).toContain('MADAM MIZYDIA');
+    expect(banner).toContain('SAYONARA');
+  });
+
+  it('no longer sends the player after people who are not in this game', () => {
+    expect(bannerFor(['BOSS_MADAM_MIZYDIA'])).not.toContain('PURITY');
+  });
+});
+
+describe('codex descriptions', () => {
+  const HEROES = ['FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER', 'ANGRY_CORSO'] as const;
+
+  it('stays inside the two-line clamp the character card gives it', () => {
+    // The card renders visualDesc at text-xs with line-clamp-2. The longest
+    // description that shipped before this was 116 characters and fitted, so
+    // that is the budget these have to live in, give or take a few.
+    for (const id of HEROES) {
+      expect(CHARACTERS[id].visualDesc.length, id).toBeLessThanOrEqual(130);
+    }
+  });
+
+  it('describes what the art actually shows', () => {
+    // Each of these was in the illustration and missing from the description.
+    expect(CHARACTERS.FEET_MASTER.visualDesc).toMatch(/boot and skull/i);
+    expect(CHARACTERS.FUN_MAKER.visualDesc).toMatch(/spiked/i);
+    expect(CHARACTERS.OMEGA_BIKER.visualDesc).toMatch(/omega/i);
+    expect(CHARACTERS.ANGRY_CORSO.visualDesc).toMatch(/PUNK/);
+  });
+
+  it('no longer promises things the art does not have', () => {
+    expect(CHARACTERS.FEET_MASTER.visualDesc, 'he wears shades').not.toMatch(/specs/i);
+    expect(CHARACTERS.FUN_MAKER.visualDesc, 'the harness has spikes').not.toMatch(/O-ring/i);
+    expect(CHARACTERS.OMEGA_BIKER.visualDesc, 'the visor is lit').not.toMatch(/reflective/i);
+    expect(CHARACTERS.ANGRY_CORSO.visualDesc, 'exactly one tag').not.toMatch(/dog tags/i);
   });
 });

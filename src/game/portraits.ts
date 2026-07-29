@@ -1,21 +1,28 @@
 import { PortraitId } from '../types';
 import { CHARACTERS } from './characterData';
+import purityPatrolImg from '../assets/images/purity_patrol_portrait.webp';
+import tradWifeImg from '../assets/images/trad_wife_striker_portrait.webp';
+import sayonaraImg from '../assets/images/sayonara_portrait.webp';
+import sayonaraFreedImg from '../assets/images/sayonara_freed_portrait.webp';
+import mizydiaImg from '../assets/images/madam_mizydia_portrait.webp';
 
 /**
- * Face for a speaker, when there is one.
+ * Face for a speaker.
  *
- * The four heroes already had portrait art loaded for the select screen, the
- * HUD and the codex, so putting them in the dialogue box costs nothing but the
- * lookup. The villains have no art yet, and this map is deliberately partial
- * rather than pretending otherwise: a missing face falls back to the name tag
- * the box has always drawn, so Mizydia and the patrol can be filled in one at
- * a time without touching the component again.
+ * Kept partial rather than total on purpose: a speaker without a face falls
+ * back to the name tag the box has always drawn, so a new one can be written
+ * before its art exists. Nothing here assumes the map is complete.
  */
 export const PORTRAITS: Partial<Record<PortraitId, string>> = {
   FEET_MASTER: CHARACTERS.FEET_MASTER.portraitUrl,
   FUN_MAKER: CHARACTERS.FUN_MAKER.portraitUrl,
   OMEGA_BIKER: CHARACTERS.OMEGA_BIKER.portraitUrl,
   ANGRY_CORSO: CHARACTERS.ANGRY_CORSO.portraitUrl,
+  PURITY_PATROL: purityPatrolImg,
+  TRAD_WIFE_STRIKER: tradWifeImg,
+  SAYONARA: sayonaraImg,
+  SAYONARA_FREED: sayonaraFreedImg,
+  MADAM_MIZYDIA: mizydiaImg,
 };
 
 export function portraitFor(id: PortraitId): string | undefined {
