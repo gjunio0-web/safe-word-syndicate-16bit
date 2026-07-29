@@ -221,11 +221,24 @@ describe('portraits', () => {
     }
   });
 
-  it('returns nothing for villains rather than inventing a face', () => {
-    expect(portraitFor('MADAM_MIZYDIA')).toBeUndefined();
-    expect(portraitFor('SAYONARA')).toBeUndefined();
-    expect(portraitFor('PURITY_PATROL')).toBeUndefined();
-    expect(portraitFor('TRAD_WIFE_STRIKER')).toBeUndefined();
+  it('has a face for every villain who speaks', () => {
+    for (const id of ['MADAM_MIZYDIA', 'SAYONARA', 'PURITY_PATROL', 'TRAD_WIFE_STRIKER'] as const) {
+      expect(portraitFor(id)).toBeTruthy();
+    }
+  });
+
+  it('leaves nobody in the campaign faceless', () => {
+    const speakers = STAGES.flatMap((stage) =>
+      stage.waves.flatMap((wave) =>
+        [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ? [wave.barkOnSpawn] : [])].flatMap(
+          (entry) =>
+            isHeroLine(entry)
+              ? Object.values(entry.variants).map((v) => v.portrait)
+              : [entry.portrait]
+        )
+      )
+    );
+    for (const id of speakers) expect(portraitFor(id), id).toBeTruthy();
   });
 
   it('gives the player their own face when a hero line resolves', () => {
