@@ -10,7 +10,7 @@ import {
   startEngine,
 } from './helpers';
 import { STAGES } from '../game/stageData';
-import { ARENA_MAX_Y, ARENA_MIN_Y, STREET_TOP_Y } from '../game/constants';
+import { ARENA_MAX_Y, ARENA_MIN_Y, OUTRO_MAX_FRAMES, STREET_TOP_Y } from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
 
@@ -516,12 +516,49 @@ describe('Sayonara', () => {
       engine.update(input(near ? { punch: i % 8 < 2 } : boss.x > engine.player1!.x ? { right: true } : { left: true }));
     }
 
-    expect(engine.bossDefeated).toBe(true);
+    // The campaign is not won on the frame Mizydia drops any more. She walks
+    // out first, and the victory screen waits for her.
+    expect(engine.bossDefeated, 'the ending holds while she leaves').toBe(false);
     expect(engine.sayonaraKilled, 'knocking her out is not killing her').toBe(false);
     expect(dog.downed, 'the collar breaks and she gets up').toBe(false);
     // Checked by action rather than velocity: physics keeps rewriting vx.
     expect(dog.action).toBe('WALK');
     expect(dog.facing).toBe('RIGHT');
+
+    // Landing by the ceiling alone proves nothing: a Sayonara stuck bouncing
+    // off the arena's own boundary clamp (which reverses vx on anything that
+    // crosses cameraX + 830, with no exemption for a scripted exit) hits
+    // bossDefeated at exactly this timeout too, having never actually left.
+    // Advancing in a tight loop and checking after each frame is what tells
+    // the two apart.
+    let framesToClear = 0;
+    while (!engine.bossDefeated && framesToClear < OUTRO_MAX_FRAMES) {
+      engine.update(NEUTRAL);
+      framesToClear++;
+    }
+    expect(engine.bossDefeated, 'and then it lands').toBe(true);
+    expect(framesToClear, 'she leaves well before the timeout, not because of it').toBeLessThan(
+      OUTRO_MAX_FRAMES / 2
+    );
+  });
+
+  it('does not stall the ending when there is nobody left to free', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 60);
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 200 }]);
+    advance(engine, 2);
+
+    const boss = engine.entities.find(
+      (e: { enemyType?: string }) => e.enemyType === 'BOSS_MADAM_MIZYDIA'
+    )!;
+    boss.shieldHp = 0;
+    for (let i = 0; i < 1200 && boss.hp > 0; i++) {
+      boss.hp = 1;
+      const near = Math.abs(boss.x - engine.player1!.x) < 90;
+      engine.update(input(near ? { punch: i % 8 < 2 } : boss.x > engine.player1!.x ? { right: true } : { left: true }));
+    }
+
+    expect(engine.bossDefeated, 'no walk to wait for').toBe(true);
   });
 });
 

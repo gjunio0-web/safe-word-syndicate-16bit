@@ -10,13 +10,15 @@ import {
   StageStats,
   GameSettings,
 } from '../types';
-import { resolveDialogue } from './dialogue';
+import { heroLine, resolveDialogue } from './dialogue';
 import { CHARACTERS, ENEMIES } from './characterData';
 import {
   maxCameraX,
   maxWaveTriggerX,
   WAVE_TRIGGER_LOOKAHEAD,
   BARK_DURATION_FRAMES,
+  OUTRO_MAX_FRAMES,
+  VIEWPORT_WIDTH,
   PLAYER_BODY_SEPARATION_X,
   PLAYER_BODY_SEPARATION_Y,
   ENEMY_BODY_SEPARATION_X,
@@ -123,6 +125,11 @@ export class GameEngine {
   private _activeBark: import('../types').DialogueLine | null = null;
   private barkListeners: Set<() => void> = new Set();
   private barkTimer = 0;
+  /**
+   * Counts down while Sayonara walks out. Zero means no outro is running; the
+   * campaign is only declared won when it lapses or she leaves the field.
+   */
+  private outroTimer = 0;
 
   private hudSnapshot: HudSnapshot;
   private hudListeners: Set<() => void> = new Set();
@@ -421,6 +428,16 @@ export class GameEngine {
       this.barkTimer--;
       if (this.barkTimer === 0) this.setActiveBark(null);
     }
+    if (this.outroTimer > 0) {
+      this.outroTimer--;
+      const sayonara = this.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
+      // Off the right edge of the camera, or out of patience. The ceiling
+      // matters: an outro that can hang is worse than one that ends early.
+      if (!sayonara || sayonara.x > this.cameraX + VIEWPORT_WIDTH + 80 || this.outroTimer === 0) {
+        this.outroTimer = 0;
+        this.bossDefeated = true;
+      }
+    }
 
     // Check wave triggers based on camera position
     this.updateWaveTriggers();
@@ -462,8 +479,15 @@ export class GameEngine {
       if (ent.isPlayer) {
         ent.x = Math.max(this.cameraX + 20, Math.min(this.cameraX + 760, ent.x));
         ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y)); // Y depth bounds
-      } else if (ent.hp > 0) {
-        // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out
+      } else if (ent.hp > 0 && !ent.freed) {
+        // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out.
+        //
+        // A freed Sayonara is exempt: she is not being knocked around, she is
+        // making a scripted exit, and this clamp used to catch her at cameraX
+        // + 830 -- short of the outro's own cameraX + VIEWPORT_WIDTH + 80 exit
+        // threshold -- reversing her vx and sending her walking back in.
+        // Every ending hit the outro's timeout ceiling because of it; none of
+        // them ever actually saw her leave.
         const minX = this.cameraX - 30;
         const maxX = this.cameraX + 830;
         if (ent.x < minX) {
@@ -473,6 +497,8 @@ export class GameEngine {
           ent.x = maxX - 60;
           ent.vx = -4;
         }
+        ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
+      } else if (ent.hp > 0) {
         ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y));
       }
     });
@@ -1158,9 +1184,6 @@ export class GameEngine {
       // Mizydia is the boss of stage 2 as well, where the fiction calls her a
       // hologram. Without this gate, beating her there set bossDefeated and the
       // campaign ended two stages early — the final stage was unreachable.
-      if (this.stage.isFinalStage) {
-        this.bossDefeated = true;
-      }
       // Free Sayonara!
       // The collar breaks whether she is standing or on the floor. Only a
       // killing blow puts her past saving, and that takes her off the field —
@@ -1173,6 +1196,39 @@ export class GameEngine {
         sayonara.facing = 'RIGHT';
         sayonara.vx = 4; // Sayonara breaks control and walks away freely!
         sayonara.actionTimer = 0;
+      }
+
+      if (this.stage.isFinalStage) {
+        // She has walked away since the day this was written and nobody has
+        // ever seen it: bossDefeated used to be set right here, App routed to
+        // the victory screen on the same frame, and the walk rendered on
+        // exactly zero of them. Hold the ending open until she is gone.
+        if (sayonara) {
+          this.outroTimer = OUTRO_MAX_FRAMES;
+          this.setActiveDialogue(
+            resolveDialogue(
+              [
+                {
+                  speaker: 'Sayonara',
+                  portrait: 'SAYONARA',
+                  text: "The collar... it's quiet. Her voice is gone from my head.",
+                  side: 'RIGHT',
+                },
+                heroLine('ANGRY_CORSO', {
+                  ANGRY_CORSO: "Go on, girl. Nobody's holding your leash now.",
+                  FEET_MASTER: 'Walk, Sayonara. Nobody gives you orders ever again.',
+                  FUN_MAKER: 'There she is. Go find somewhere loud, sweetheart.',
+                  OMEGA_BIKER: "Road's open, girl. Take it.",
+                }),
+              ],
+              this.roster()
+            )
+          );
+        } else {
+          // Nobody left to free. The victory is mechanical, and the screen
+          // that follows says so.
+          this.bossDefeated = true;
+        }
       }
     }
 
