@@ -124,21 +124,38 @@ export default function App() {
         return;
       }
 
-      // Suppress the browser's own handling of the game keys, but only while a
-      // match is actually running. The arrows scroll the page and Space
-      // activates whatever button holds focus — both belong to the document,
-      // not to a game using those keys to move and jump.
+      const isArrow = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k);
+      const inMatch = screenRef.current === 'GAMEPLAY' && !isPausedRef.current;
+
+      // Suppress the browser's own handling of the game keys while a match is
+      // running: the arrows scroll the page and Space activates whatever button
+      // holds focus, and both belong to the document rather than to a game
+      // using those keys to move and jump.
+      if (inMatch) {
+        if (e.code === 'Space' || isArrow) e.preventDefault();
+      }
+
+      // Off the field, the arrows drive menu navigation.
       //
-      // Scoped rather than global on purpose: on every other screen those same
-      // defaults are the keyboard menu navigation. Tab to a button and press
-      // Space is browser behaviour this game relies on and does not reimplement,
-      // so suppressing it everywhere would leave the menus unreachable without
-      // a mouse.
-      if (screenRef.current === 'GAMEPLAY' && !isPausedRef.current) {
-        const isGameKey =
-          e.code === 'Space' ||
-          ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k);
-        if (isGameKey) e.preventDefault();
+      // This was gamepad-only: `applyMenuNavigation` was wired to the pad
+      // poller and nothing ever called it from a key event, so a player without
+      // a controller was left with Tab and Enter — which the browser provides
+      // for free and which nobody expects to be the whole story on an arcade
+      // title screen. Character select is excluded because it owns the arrows
+      // for its own purpose there, changing the highlighted fighter rather than
+      // moving a focus ring between buttons.
+      if (!inMatch && isArrow && screenRef.current !== 'CHAR_SELECT') {
+        e.preventDefault();
+        const action =
+          k === 'arrowup'
+            ? 'UP'
+            : k === 'arrowdown'
+              ? 'DOWN'
+              : k === 'arrowleft'
+                ? 'LEFT'
+                : 'RIGHT';
+        applyMenuNavigation(action);
+        return;
       }
 
       applyKey(e, true);
@@ -535,40 +552,51 @@ export default function App() {
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 max-w-lg mx-auto w-full pb-4">
+          {/* Actions
+            *
+            * START BRAWL sits on its own row rather than sharing one with the
+            * rest. It used to be one row of three, and adding difficulty as a
+            * fourth squeezed every label until the words wrapped mid-button —
+            * "START / BRAWL" stacked into a magenta square, "JUKEBOX / MUSIC"
+            * broken across two lines. Splitting by importance keeps the
+            * primary action full width and lets the three secondary buttons
+            * divide the row evenly, so they stay the same size as each other.
+            */}
+          <div className="flex flex-col gap-3 max-w-lg mx-auto w-full pb-4">
             <button
               onClick={handleStartBrawl}
-              className="w-full sm:flex-1 py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
+              className="w-full py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
             >
               <Play className="w-5 h-5 fill-current" /> START BRAWL
             </button>
 
-            <button
-              onClick={() => setShowDifficultyModal(true)}
-              className="w-full sm:w-auto px-5 py-4 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
-            >
-              <Gauge className="w-4 h-4 text-[#ffff00]" />
-              {settings.difficulty === 'PUNK_HARD'
-                ? 'PUNK HARD'
-                : settings.difficulty === 'EASY'
-                  ? 'EASY'
-                  : 'NORMAL'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <button
+                onClick={() => setShowDifficultyModal(true)}
+                className="w-full sm:flex-1 px-3 py-3 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <Gauge className="w-4 h-4 shrink-0 text-[#ffff00]" />
+                {settings.difficulty === 'PUNK_HARD'
+                  ? 'PUNK HARD'
+                  : settings.difficulty === 'EASY'
+                    ? 'EASY'
+                    : 'NORMAL'}
+              </button>
 
-            <button
-              onClick={() => setShowAudioModal(true)}
-              className="w-full sm:w-auto px-5 py-4 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all"
-            >
-              <Disc className="w-4 h-4 text-[#00ffff] animate-spin-slow" /> JUKEBOX / MUSIC
-            </button>
+              <button
+                onClick={() => setShowAudioModal(true)}
+                className="w-full sm:flex-1 px-3 py-3 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all whitespace-nowrap"
+              >
+                <Disc className="w-4 h-4 shrink-0 text-[#00ffff] animate-spin-slow" /> JUKEBOX
+              </button>
 
-            <button
-              onClick={() => setShowCodex(true)}
-              className="w-full sm:w-auto px-5 py-4 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
-            >
-              <BookOpen className="w-4 h-4 text-[#ffff00]" /> CODEX
-            </button>
+              <button
+                onClick={() => setShowCodex(true)}
+                className="w-full sm:flex-1 px-3 py-3 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <BookOpen className="w-4 h-4 shrink-0 text-[#ffff00]" /> CODEX
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -54,6 +54,23 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
       if (k === '2' && charList[1]) selectCharacterForActiveSlot(charList[1].id);
       if (k === '3' && charList[2]) selectCharacterForActiveSlot(charList[2].id);
       if (k === '4' && charList[3]) selectCharacterForActiveSlot(charList[3].id);
+      // Arrows mirror the pad axes described below — left/right walks the
+      // roster, up/down changes mode — rather than moving a focus ring between
+      // buttons the way they do on every other screen. Here the arrows already
+      // mean something, and a player switching between keyboard and controller
+      // should not have to learn two different answers for the same key.
+      if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') {
+        e.preventDefault();
+        const action =
+          k === 'ArrowLeft'
+            ? 'LEFT'
+            : k === 'ArrowRight'
+              ? 'RIGHT'
+              : k === 'ArrowUp'
+                ? 'UP'
+                : 'DOWN';
+        applyMenuAction(action, mode === 'SINGLE' ? 'P1' : activeSlot, true);
+      }
       if (k === 'Tab' && mode !== 'SINGLE') {
         e.preventDefault();
         setActiveSlot((prev) => (prev === 'P1' ? 'P2' : 'P1'));
