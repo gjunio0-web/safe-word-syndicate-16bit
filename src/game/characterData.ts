@@ -89,7 +89,7 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     title: 'The Feral Pup Berserker',
     archetype: 'Berserker / Rushdown',
     visualDesc:
-      'Grey camo pup mask, mohawk crest, spiked collar and chain. X-harness with one dog tag, skull-and-flame ink, PUNK on his forearm.',
+      'Grey camo pup mask, mohawk crest, PUNK on his forearm. Spiked collar, chain and X-harness, one dog tag, skull-and-flame ink.',
     origin: 'Dedicated PupPlay enthusiast of the powerful Cani Corso breed. Fast gap-closing bites that leech health.',
     powerMoveName: 'Feral Pup Rush & Bite',
     powerMoveDesc: 'Leaps over target enemy with aggressive speed, pinning them down for a ferocious bite attack that leeches health back to Corso!',
