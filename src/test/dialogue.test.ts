@@ -306,3 +306,19 @@ describe('codex descriptions', () => {
     expect(CHARACTERS.ANGRY_CORSO.visualDesc, 'exactly one tag').not.toMatch(/dog tags/i);
   });
 });
+
+describe('hero busts', () => {
+  const HEROES = ['FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER', 'ANGRY_CORSO'] as const;
+
+  it('does not reuse the character-select poster in the dialogue box', () => {
+    for (const id of HEROES) {
+      expect(portraitFor(id), id).not.toBe(CHARACTERS[id].portraitUrl);
+    }
+  });
+
+  it('gives each hero their own bust', () => {
+    const faces = HEROES.map((id) => portraitFor(id));
+    expect(faces.every(Boolean)).toBe(true);
+    expect(new Set(faces).size, 'no two heroes share a face').toBe(HEROES.length);
+  });
+});

@@ -1,8 +1,8 @@
 import { CharacterInfo, CharacterId, EnemyType } from '../types';
-import feetMasterImg from '../assets/images/feet_master_portrait_1784833325496.jpg';
-import funMakerImg from '../assets/images/fun_maker_portrait_1784833339232.jpg';
-import omegaBikerImg from '../assets/images/omega_biker_portrait_1784833348944.jpg';
-import angryCorsoImg from '../assets/images/angry_corso_portrait_1784833357693.jpg';
+import feetMasterImg from '../assets/images/feet_master_portrait.webp';
+import funMakerImg from '../assets/images/fun_maker_portrait.webp';
+import omegaBikerImg from '../assets/images/omega_biker_portrait.webp';
+import angryCorsoImg from '../assets/images/angry_corso_portrait.webp';
 
 export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
   FEET_MASTER: {
@@ -11,7 +11,7 @@ export const CHARACTERS: Record<CharacterId, CharacterInfo> = {
     title: 'The Unbreakable Grappler',
     archetype: 'Tank / Grappler',
     visualDesc:
-      'Spiked auburn hair, full beard, dark shades. Black tee stamped with a boot and skull, studded belt, worn jeans, scuffed boots.',
+      'Spiked auburn hair, full beard, dark shades. Black tee stamped with a boot and skull, studded cuffs and belt, worn blue jeans.',
     origin: 'Name inspired by his feet fetish. Unleashes devastating ground slams and human bat swings.',
     powerMoveName: 'Human Bat Swing',
     powerMoveDesc: 'Grabs enemies by their feet and swings them in a 360° whirlpool, wiping out all nearby foes with massive AoE damage!',

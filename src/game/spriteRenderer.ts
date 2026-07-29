@@ -1,8 +1,8 @@
 import { EntityState, CharacterId, EnemyType } from '../types';
-import feetMasterImg from '../assets/images/feet_master_portrait_1784833325496.jpg';
-import funMakerImg from '../assets/images/fun_maker_portrait_1784833339232.jpg';
-import omegaBikerImg from '../assets/images/omega_biker_portrait_1784833348944.jpg';
-import angryCorsoImg from '../assets/images/angry_corso_portrait_1784833357693.jpg';
+import feetMasterImg from '../assets/images/feet_master_portrait.webp';
+import funMakerImg from '../assets/images/fun_maker_portrait.webp';
+import omegaBikerImg from '../assets/images/omega_biker_portrait.webp';
+import angryCorsoImg from '../assets/images/angry_corso_portrait.webp';
 
 // Pre-cached Roster Portrait Images for In-Game Cut-Ins
 const portraitImages: Partial<Record<CharacterId, HTMLImageElement>> = {};
