@@ -185,15 +185,54 @@ export interface WaveConfig {
     count: number;
     spawnSide?: 'LEFT' | 'RIGHT' | 'BOTH';
   }[];
-  dialogueBefore?: DialogueLine[];
+  dialogueBefore?: ScriptEntry[];
 }
 
+export type PortraitId =
+  | 'FEET_MASTER'
+  | 'FUN_MAKER'
+  | 'OMEGA_BIKER'
+  | 'ANGRY_CORSO'
+  /**
+   * Retired. There is no Purity Leader in the game and there never was: three
+   * orphan names survive for a mini-boss that was designed and never built.
+   * The opening ultimatum belongs to the patrol that actually walks on screen,
+   * and this member leaves with the rename. Kept only because stageData still
+   * points at it, and content moves in its own patch.
+   */
+  | 'PURITY_LEADER'
+  | 'MADAM_MIZYDIA'
+  | 'SAYONARA';
+
+/** A line with a fixed speaker: enemies, bosses, anyone who isn't the player. */
 export interface DialogueLine {
   speaker: string;
-  portrait: 'FEET_MASTER' | 'FUN_MAKER' | 'OMEGA_BIKER' | 'ANGRY_CORSO' | 'PURITY_LEADER' | 'MADAM_MIZYDIA' | 'SAYONARA';
+  portrait: PortraitId;
   text: string;
   side: 'LEFT' | 'RIGHT';
 }
+
+export interface HeroVariant {
+  speaker: string;
+  portrait: PortraitId;
+  text: string;
+}
+
+/**
+ * A line the heroes answer with, written once per hero and picked at runtime.
+ *
+ * The `Record` is deliberately complete rather than partial: every hero gets a
+ * variant or the build fails. Four rebels who refused to fade away, and one of
+ * them going quiet because nobody wrote him a line is not the vibe.
+ */
+export interface HeroLine {
+  /** Whose wave this is. Falls through to whoever actually showed up. */
+  prefer?: CharacterId;
+  variants: Record<CharacterId, HeroVariant>;
+}
+
+/** What a wave's script holds before the roster resolves it down to flat lines. */
+export type ScriptEntry = DialogueLine | HeroLine;
 
 export interface PlayerInput {
   left: boolean;

@@ -10,6 +10,7 @@ import {
   StageStats,
   GameSettings,
 } from '../types';
+import { resolveDialogue } from './dialogue';
 import { CHARACTERS, ENEMIES } from './characterData';
 import {
   maxCameraX,
@@ -122,6 +123,13 @@ export class GameEngine {
 
   public player1: EntityState | null = null;
   public player2: EntityState | null = null;
+  /**
+   * Whether the second fighter is a person. Until now the difference between
+   * "2P CO-OP" and "1P + AI BUDDY" lived entirely in whether App passed a p2
+   * input object each frame, which the dialogue resolver cannot see. It needs
+   * to: the AI companion should never be the one answering the villains.
+   */
+  private p2IsHuman: boolean;
 
   public stats: StageStats = {
     score: 0,
@@ -239,9 +247,11 @@ export class GameEngine {
     stage: StageConfig,
     p1Char: CharacterId,
     p2Char?: CharacterId,
-    settings?: GameSettings
+    settings?: GameSettings,
+    p2IsHuman = false
   ) {
     this.stage = stage;
+    this.p2IsHuman = p2IsHuman;
     this.settings = settings || {
       soundEnabled: true,
       musicEnabled: true,
@@ -252,10 +262,6 @@ export class GameEngine {
     };
 
     this.stageStartBannerTimer = 90;
-    if (stage.waves[0]?.dialogueBefore) {
-      this.setActiveDialogue(stage.waves[0].dialogueBefore);
-      this.shownWaveDialogues.add(0);
-    }
 
     // Spawn Player 1
     this.player1 = this.createPlayerEntity('p1', 1, p1Char, 100, 300);
@@ -267,12 +273,32 @@ export class GameEngine {
       this.entities.push(this.player2);
     }
 
+    // Wave one's dialogue is published after the fighters exist, not before.
+    // Hero lines resolve against whoever is on the roster, and resolving that
+    // against an empty arena silently handed every stage opener to the default
+    // hero no matter who the player picked.
+    if (stage.waves[0]?.dialogueBefore) {
+      this.setActiveDialogue(resolveDialogue(stage.waves[0].dialogueBefore, this.roster()));
+      this.shownWaveDialogues.add(0);
+    }
+
     // Stage one used to be special-cased here because its declared musicTrack,
     // NEON_BEAT, was an alias nothing could reach. The stage now names its own
     // track like the other two.
     sound.playBgm(stage.musicTrack);
 
     this.hudSnapshot = this.buildHudSnapshot();
+  }
+
+  /**
+   * Who may answer a hero line, in priority order. Player 1 first, then a human
+   * player 2. The AI companion is omitted: it fights, it does not talk back.
+   */
+  private roster(): CharacterId[] {
+    const ids: CharacterId[] = [];
+    if (this.player1?.charId) ids.push(this.player1.charId);
+    if (this.p2IsHuman && this.player2?.charId) ids.push(this.player2.charId);
+    return ids;
   }
 
   private createPlayerEntity(
@@ -537,7 +563,7 @@ export class GameEngine {
     if (this.cameraX >= this.effectiveTriggerX(wave) - WAVE_TRIGGER_LOOKAHEAD) {
       // Check if wave has dialogue that hasn't been shown yet
       if (wave.dialogueBefore && !this.shownWaveDialogues.has(this.currentWaveIndex)) {
-        this.setActiveDialogue(wave.dialogueBefore);
+        this.setActiveDialogue(resolveDialogue(wave.dialogueBefore, this.roster()));
         this.shownWaveDialogues.add(this.currentWaveIndex);
         return; // wait until dialogue is dismissed before spawning enemies
       }

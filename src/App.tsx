@@ -406,7 +406,13 @@ export default function App() {
     const p1 = p1Override ?? p1Char;
     const p2 = p2Override !== undefined ? p2Override : p2Char;
     const stage = STAGES[stageIdx];
-    engineRef.current = new GameEngine(stage, p1, p2, settingsOverride ?? settings);
+    engineRef.current = new GameEngine(
+      stage,
+      p1,
+      p2,
+      settingsOverride ?? settings,
+      gameMode === 'COOP'
+    );
     // Slots are not inherited between matches: co-op and solo assign them
     // differently, and a stale assignment would survive the mode change.
     resetPadAssignments();
