@@ -206,11 +206,21 @@ class SoundEngine {
    * Restoration is asynchronous and almost always finishes after the title
    * screen has already called `playBgm('INTRO')` — without this the synth keeps
    * playing until the next screen change and the user's file is never heard.
+   *
+   * Reads `currentTrack` only, not `lastRequestedTrack`: the two agree
+   * whenever bgm is genuinely playing, but they diverge on purpose right
+   * after a full stop with reset — entering the INTRO cutscene calls
+   * `stopBgm()` to go silent while its own theme plays, which nulls
+   * `currentTrack` but leaves `lastRequestedTrack` at 'INTRO' from ATTRACT.
+   * Falling back to it here meant a slow manifest fetch or IndexedDB read
+   * that resolved mid-cutscene (exactly what the retry backoff above is
+   * built to allow) would start the title theme playing right on top of the
+   * cutscene's own track — a real, audible overlap of two different songs.
    */
   private refreshActiveTrack() {
     if (!this.musicEnabled) return;
 
-    const active = this.currentTrack || this.lastRequestedTrack;
+    const active = this.currentTrack;
     if (!active || !this.customTrackUrls[active]) return;
 
     // A file is already playing: do not interrupt it.
@@ -794,6 +804,11 @@ class SoundEngine {
       this.activeAudioElement &&
       !this.activeAudioElement.paused
     );
+  }
+
+  /** Whether *some* bgm is actually audible right now, file or synth. */
+  public isBgmPlaying(): boolean {
+    return !!(this.activeAudioElement && !this.activeAudioElement.paused) || this.bgmInterval !== null;
   }
 
   public playBgm(track: BgmTrack, forceRestart: boolean = false) {

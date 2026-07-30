@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Music, Upload, Play, Square, Check, RotateCcw, Volume2, X, Disc, Sparkles } from 'lucide-react';
-import { sound } from '../game/sound';
+import { sound, isBgmTrack } from '../game/sound';
 import { BGM_TRACKS, BGM_TRACK_IDS, type BgmTrack } from '../game/bgmTracks';
 
 interface CustomAudioModalProps {
@@ -22,13 +22,38 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
     ...Object.fromEntries(BGM_TRACK_IDS.map((id) => [id, sound.getCustomTrackName(id) || ''])),
   });
 
+  /**
+   * Whatever was genuinely playing (title theme, stage music, ...) before the
+   * jukebox touched anything. TEST/STOP and RESET all interrupt that track
+   * through the same shared player the real bgm uses, and closing this modal
+   * doesn't change `screen` — nothing elsewhere ever notices the interruption
+   * and restarts it, so without this the screen the jukebox was opened from
+   * goes silent for good the moment a preview is stopped.
+   */
+  const preOpenTrackRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (isOpen) {
       setFileNames(
         Object.fromEntries(BGM_TRACK_IDS.map((id) => [id, sound.getCustomTrackName(id) || '']))
       );
+      preOpenTrackRef.current = sound.getActiveTrack();
     }
   }, [isOpen]);
+
+  /** Puts the real bgm back if a preview left it stopped or on the wrong track. */
+  const restorePreOpenTrack = () => {
+    const shouldBe = preOpenTrackRef.current;
+    if (shouldBe && isBgmTrack(shouldBe) && (sound.getActiveTrack() !== shouldBe || !sound.isBgmPlaying())) {
+      sound.playBgm(shouldBe, true);
+    }
+  };
+
+  const handleClose = () => {
+    restorePreOpenTrack();
+    setPlayingTrack(null);
+    onClose();
+  };
 
   // The banner is dashed-bordered, says "drop all 4 audio files" and calls
   // itself a drag and drop area, but nothing ever listened for a drop: the only
@@ -80,8 +105,13 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
   const handleResetTrack = async (trackId: BgmTrack) => {
     await sound.resetCustomTrack(trackId);
     setFileNames((prev) => ({ ...prev, [trackId]: '' }));
-    sound.stopBgm();
-    setPlayingTrack(null);
+    // resetCustomTrack already restarts the slot as its synth fallback if it
+    // was the one actually playing — an unconditional stopBgm() here used to
+    // silence whatever bgm was live even when the reset track had nothing to
+    // do with it.
+    if (playingTrack === trackId) {
+      setPlayingTrack(null);
+    }
   };
 
   const handleDragOver = (event: React.DragEvent) => {
@@ -111,7 +141,9 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
 
   const handleTogglePlay = (trackId: BgmTrack) => {
     if (playingTrack === trackId) {
-      sound.stopBgm();
+      // Stopping a preview should put the real bgm back immediately rather
+      // than leaving the screen silent for as long as the jukebox stays open.
+      restorePreOpenTrack();
       setPlayingTrack(null);
     } else {
       sound.playBgm(trackId);
@@ -137,7 +169,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
           >
             <X className="w-6 h-6" />
@@ -286,7 +318,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
         <div className="mt-4 pt-3 border-t border-[#00ffff]/20 flex justify-between items-center shrink-0">
           <span className="text-[11px] text-zinc-400 font-mono">Supports .MP3, .WAV, .OGG, .M4A, .FLAC, .AAC, .WEBM</span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="bg-[#00ffff] text-black font-mono font-black text-xs px-5 py-2 rounded-lg hover:bg-[#00cccc] transition-all uppercase shadow-[0_0_15px_rgba(0,255,255,0.4)]"
           >
             DONE / APPLY

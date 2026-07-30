@@ -125,7 +125,12 @@ export default function App() {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
 
       const k = e.key.toLowerCase();
-      if (k === 'p' || e.key === 'Escape') {
+      // Escape used to double as pause, but the Fullscreen API reserves it as
+      // the one key a page can never override: pressing it always exits
+      // fullscreen first, browser-side, no matter what a keydown handler
+      // does. Binding it here meant every pause kicked the player out of
+      // fullscreen along with it. 'p' remains, plus the on-screen pause button.
+      if (k === 'p') {
         setIsPaused((prev) => !prev);
         return;
       }
