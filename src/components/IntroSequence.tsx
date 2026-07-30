@@ -29,6 +29,14 @@ const LOOP_END = 32 * BAR;      // 59.077s
 /** One character per 1/48 note — readable, and still on the grid. */
 const CHAR_TIME = BEAT / 12;
 
+/**
+ * Exactly the `.sws-rotate` CSS trigger below, duplicated in JS. Kept as one
+ * named constant rather than two hand-copied strings so the gate that holds
+ * playback and the overlay that explains why can't drift out of sync with
+ * each other.
+ */
+const ROTATE_QUERY = '(orientation: portrait) and (max-width: 900px)';
+
 /* ---------- Assets ---------- */
 export interface IntroAssets {
   scene1: string;
@@ -139,6 +147,33 @@ interface Props {
 export default function IntroSequence({ onComplete, assets: overrides }: Props) {
   const assets = useMemo(() => ({ ...DEFAULT_ASSETS, ...overrides }), [overrides]);
 
+  /**
+   * Nothing about the intro starts - audio doesn't fetch or play, no timer
+   * ticks, no input is read - while the device still needs to be rotated.
+   * There is no sync to protect by starting early: the audio clock the rest
+   * of the sequence reads doesn't exist until playback begins, so waiting
+   * costs nothing and arriving mid-scene (the old behaviour) is strictly
+   * worse than arriving at the top once the picture can actually be seen.
+   *
+   * One-way, and matched exactly to `.sws-rotate`'s CSS trigger below: once
+   * unlocked by a landscape/wide-enough viewport, a later rotate back to
+   * portrait doesn't re-pause a sequence already underway, the same as the
+   * overlay itself has always just re-covered whatever's still running.
+   */
+  const [waitingForRotation, setWaitingForRotation] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(ROTATE_QUERY).matches
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia(ROTATE_QUERY);
+    const onChange = () => {
+      if (!mql.matches) setWaitingForRotation(false);
+    };
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
   const [elapsed, setElapsed] = useState(0);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const finishedRef = useRef(false);
@@ -199,6 +234,8 @@ export default function IntroSequence({ onComplete, assets: overrides }: Props) 
 
   /* ---- Audio, and the clock that comes with it ---- */
   useEffect(() => {
+    if (waitingForRotation) return;
+
     let cancelled = false;
     let frame = 0;
 
@@ -287,7 +324,7 @@ export default function IntroSequence({ onComplete, assets: overrides }: Props) 
       }
       sourceRef.current = null;
     };
-  }, [assets.music]);
+  }, [assets.music, waitingForRotation]);
 
   /* ---- Input ---- */
   const finish = useCallback(() => {
@@ -317,17 +354,22 @@ export default function IntroSequence({ onComplete, assets: overrides }: Props) 
   }, [climax, finish, playFrom]);
 
   useEffect(() => {
+    // A tap on the "TURN YOUR DEVICE" overlay itself still reaches this
+    // window-level listener, and `handle` calls `playFrom`, which starts
+    // real playback directly - bypassing the gate above entirely if left
+    // wired up while still waiting.
+    if (waitingForRotation) return;
     window.addEventListener('keydown', handle);
     window.addEventListener('pointerdown', handle);
     return () => {
       window.removeEventListener('keydown', handle);
       window.removeEventListener('pointerdown', handle);
     };
-  }, [handle]);
+  }, [handle, waitingForRotation]);
 
   // Any button or direction, matching the breadth of the keyboard/pointer
   // listeners above — the prompt says "press ANY key", not "press confirm".
-  useGamepadMenu(() => handle());
+  useGamepadMenu(() => handle(), !waitingForRotation);
 
   /* ---- Narration ---- */
   const narration = useMemo(() => {
