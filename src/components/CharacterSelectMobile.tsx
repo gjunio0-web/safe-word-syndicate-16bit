@@ -33,6 +33,8 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
 
   const char = roster[index];
   const theme = charColors[char.id];
+  const prevChar = roster[(index - 1 + roster.length) % roster.length];
+  const nextChar = roster[(index + 1) % roster.length];
 
   const go = (delta: number) => {
     sound.playSelect();
@@ -96,10 +98,11 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         */}
       <div
         id="selected-fighter-banner"
-        className="shrink-0 mt-3 landscape:mt-1 bg-[#0d0718] border-3 border-[#ff00ff] rounded-xl shadow-[0_0_30px_rgba(255,0,255,0.5)] p-4 landscape:p-2 relative overflow-hidden flex flex-col gap-4 landscape:gap-2"
+        className="shrink-0 mt-3 landscape:mt-1 bg-[#0d0718] portrait:bg-transparent border-3 portrait:border-0 border-[#ff00ff] rounded-xl portrait:rounded-none shadow-[0_0_30px_rgba(255,0,255,0.5)] portrait:shadow-none p-4 landscape:p-2 relative overflow-hidden flex flex-col gap-4 landscape:gap-2"
       >
-        {/* Top Arcade Marquee Header Bar */}
-        <div className="flex justify-between items-center bg-[#240038] border-b-2 border-[#ff00ff] -mx-4 landscape:-mx-2 -mt-4 landscape:-mt-2 p-2.5 landscape:p-1 px-4 landscape:px-2 mb-1 landscape:mb-0">
+        {/* Top Arcade Marquee Header Bar — dropped in portrait per the
+            redesign mockup; the landscape dossier keeps it. */}
+        <div className="portrait:hidden flex justify-between items-center bg-[#240038] border-b-2 border-[#ff00ff] -mx-4 landscape:-mx-2 -mt-4 landscape:-mt-2 p-2.5 landscape:p-1 px-4 landscape:px-2 mb-1 landscape:mb-0">
           <div className="flex items-center gap-2 landscape:gap-1">
             <span className="w-2.5 h-2.5 landscape:w-2 landscape:h-2 rounded-full bg-[#00ffff] animate-pulse" />
             <span className="text-xs landscape:text-[9px] font-mono font-black text-[#00ffff] tracking-widest uppercase flex items-center gap-1.5 landscape:gap-1">
@@ -112,27 +115,11 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         </div>
 
         <div className="flex flex-col landscape:flex-row items-center gap-3 landscape:gap-4 w-full">
-          {/* Left column in landscape: portrait, identity badge, name. */}
+          {/* Portrait column — landscape gives it a dedicated column with
+              nothing else in it; the nav arrows live at the screen's own
+              edges now (below), not pinned next to the portrait. */}
           <div className="flex flex-col items-center gap-3 landscape:gap-1.5 landscape:shrink-0 landscape:w-32">
-            {/* Portrait, with tap zones on either side to browse the roster —
-                this is the one genuinely new interaction; everything it
-                contains is the existing portrait treatment. */}
             <div className="relative flex items-center justify-center w-full py-1 landscape:py-0">
-              <button
-                onClick={() => go(-1)}
-                className="absolute left-0 z-20 p-2 landscape:p-1 text-zinc-500 active:text-white"
-                aria-label="Previous fighter"
-              >
-                <ChevronLeft className="w-7 h-7 landscape:w-5 landscape:h-5" />
-              </button>
-              <button
-                onClick={() => go(1)}
-                className="absolute right-0 z-20 p-2 landscape:p-1 text-zinc-500 active:text-white"
-                aria-label="Next fighter"
-              >
-                <ChevronRight className="w-7 h-7 landscape:w-5 landscape:h-5" />
-              </button>
-
               <div className="w-32 h-32 landscape:w-20 landscape:h-20 rounded-full border-4 landscape:border-2 border-[#00ffff] p-1.5 landscape:p-1 bg-black shadow-[0_0_25px_rgba(0,255,255,0.6)] overflow-hidden relative">
                 {char.portraitUrl && (
                   <img
@@ -147,33 +134,39 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
             <span className="bg-[#ff00ff] text-black text-xs landscape:text-[9px] font-black px-3 landscape:px-2 py-1 landscape:py-0.5 rounded-full border border-white font-mono shadow-md uppercase tracking-wider -mt-1 landscape:mt-0 whitespace-nowrap">
               1P CHAMPION
             </span>
-
-            <div className="text-center">
-              <h2 className={`text-3xl landscape:text-lg font-black italic uppercase tracking-tight ${theme.text}`}>{char.name}</h2>
-              <p className="text-sm landscape:text-[10px] text-amber-400 font-mono font-bold italic mt-0.5 landscape:mt-0">{char.archetype}</p>
-            </div>
           </div>
 
-          {/* Right column in landscape: stats, quote, special move. */}
+          {/* Info column — name/archetype, stats, quote, special move.
+              landscape:flex-row on the top row puts the name+archetype
+              beside the stat bars instead of stacking them above; portrait
+              keeps the original vertical stack, where there's height to
+              spare for it. */}
           <div className="flex flex-col gap-3 landscape:gap-1.5 w-full landscape:flex-1 landscape:min-w-0">
-            {/* Stat Progress Bars — same bars, same math, as desktop */}
-            <div className="bg-[#120a21] border border-[#ff00ff]/50 p-3 landscape:p-1.5 rounded-lg space-y-2 landscape:space-y-1 w-full shadow-inner">
-              <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
-                <span className="font-bold text-[#ff00ff]">POWER</span>
-                <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                  <div className="h-full bg-[#ff00ff]" style={{ width: `${(char.stats.power / 5) * 100}%` }} />
-                </div>
+            <div className="flex flex-col landscape:flex-row landscape:items-center gap-3 landscape:gap-3 w-full">
+              <div className="text-center landscape:text-left landscape:shrink-0">
+                <h2 className={`text-3xl landscape:text-lg font-black italic uppercase tracking-tight landscape:whitespace-nowrap ${theme.text}`}>{char.name}</h2>
+                <p className="text-sm landscape:text-[10px] text-amber-400 font-mono font-bold italic mt-0.5 landscape:mt-0 landscape:whitespace-nowrap">{char.archetype}</p>
               </div>
-              <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
-                <span className="font-bold text-[#00ffff]">DEFENSE</span>
-                <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                  <div className="h-full bg-[#00ffff]" style={{ width: `${(char.stats.defense / 5) * 100}%` }} />
+
+              {/* Stat Progress Bars — same bars, same math, as desktop */}
+              <div className="bg-[#120a21] border border-[#ff00ff]/50 p-3 landscape:p-1.5 rounded-lg space-y-2 landscape:space-y-1 w-full landscape:flex-1 landscape:min-w-0 shadow-inner">
+                <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
+                  <span className="font-bold text-[#ff00ff]">POWER</span>
+                  <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                    <div className="h-full bg-[#ff00ff]" style={{ width: `${(char.stats.power / 5) * 100}%` }} />
+                  </div>
                 </div>
-              </div>
-              <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
-                <span className="font-bold text-[#ffff00]">SPEED</span>
-                <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-                  <div className="h-full bg-[#ffff00]" style={{ width: `${(char.stats.speed / 5) * 100}%` }} />
+                <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
+                  <span className="font-bold text-[#00ffff]">DEFENSE</span>
+                  <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                    <div className="h-full bg-[#00ffff]" style={{ width: `${(char.stats.defense / 5) * 100}%` }} />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
+                  <span className="font-bold text-[#ffff00]">SPEED</span>
+                  <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                    <div className="h-full bg-[#ffff00]" style={{ width: `${(char.stats.speed / 5) * 100}%` }} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -208,6 +201,47 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
           ◄ BACK TO TITLE
         </button>
       </footer>
+
+      {/* Carousel nav — arrows at the screen's own edges, with a dimmed
+          peek of the neighboring roster entry behind each one, reading as
+          a swipeable strip instead of two buttons pinned next to the
+          portrait. */}
+      <div className="absolute left-0 top-[19%] landscape:top-1/2 -translate-y-1/2 h-24 landscape:h-20 w-14 landscape:w-12 flex items-center overflow-hidden pointer-events-none z-30">
+        {prevChar.portraitUrl && (
+          <img
+            src={prevChar.portraitUrl}
+            alt=""
+            aria-hidden="true"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover object-top opacity-30 grayscale brightness-50 -translate-x-1/3"
+          />
+        )}
+        <button
+          onClick={() => go(-1)}
+          aria-label="Previous fighter"
+          className="relative ml-1 landscape:ml-0.5 p-2 landscape:p-1.5 rounded-full bg-black/60 border border-white/25 text-zinc-200 active:text-white active:scale-95 pointer-events-auto transition-all"
+        >
+          <ChevronLeft className="w-6 h-6 landscape:w-4 landscape:h-4" />
+        </button>
+      </div>
+      <div className="absolute right-0 top-[19%] landscape:top-1/2 -translate-y-1/2 h-24 landscape:h-20 w-14 landscape:w-12 flex items-center justify-end overflow-hidden pointer-events-none z-30">
+        {nextChar.portraitUrl && (
+          <img
+            src={nextChar.portraitUrl}
+            alt=""
+            aria-hidden="true"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover object-top opacity-30 grayscale brightness-50 translate-x-1/3"
+          />
+        )}
+        <button
+          onClick={() => go(1)}
+          aria-label="Next fighter"
+          className="relative mr-1 landscape:mr-0.5 p-2 landscape:p-1.5 rounded-full bg-black/60 border border-white/25 text-zinc-200 active:text-white active:scale-95 pointer-events-auto transition-all"
+        >
+          <ChevronRight className="w-6 h-6 landscape:w-4 landscape:h-4" />
+        </button>
+      </div>
     </div>
   );
 };
