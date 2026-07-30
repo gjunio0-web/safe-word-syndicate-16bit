@@ -601,10 +601,10 @@ export default function App() {
           <div className="flex flex-col landscape:flex-row landscape:flex-1 landscape:min-h-0 landscape:items-center landscape:justify-center landscape:gap-6 my-auto landscape:my-0">
             {/* Main Title Logo */}
             <div className="space-y-4 landscape:space-y-1.5 max-w-3xl landscape:max-w-none mx-auto landscape:mx-0 landscape:flex-1 landscape:text-left">
-              <h1 className="text-4xl md:text-6xl landscape:text-2xl font-black italic tracking-tighter uppercase leading-none text-white drop-shadow-[0_0_25px_rgba(255,0,255,0.5)]">
+              <h1 className="text-4xl md:text-6xl landscape:text-5xl font-black italic tracking-tighter uppercase leading-none text-white drop-shadow-[0_0_25px_rgba(255,0,255,0.5)]">
                 THE SAFE-WORD SYNDICATE<span className="text-[#ff00ff]">.</span>
               </h1>
-              <p className="text-lg md:text-2xl landscape:text-sm font-black italic text-[#00ffff] font-mono uppercase tracking-wider">
+              <p className="text-lg md:text-2xl landscape:text-xl font-black italic text-[#00ffff] font-mono uppercase tracking-wider">
                 VS THE ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS
               </p>
               {/* Flavor text, not information the player needs to start -
@@ -627,7 +627,7 @@ export default function App() {
             <div className="flex flex-col gap-3 landscape:gap-1.5 max-w-lg landscape:max-w-xs mx-auto landscape:mx-0 landscape:shrink-0 w-full pb-4 landscape:pb-0">
               <button
                 onClick={handleStartBrawl}
-                className="w-full py-4 landscape:py-2 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg landscape:text-sm italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-all"
+                className="w-full py-4 landscape:py-2 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg landscape:text-sm italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-[background-color,transform]"
               >
                 <Play className="w-5 h-5 landscape:w-4 landscape:h-4 fill-current" /> START BRAWL
               </button>
@@ -647,7 +647,7 @@ export default function App() {
 
                 <button
                   onClick={() => setShowAudioModal(true)}
-                  className="w-full sm:flex-1 px-3 py-3 landscape:py-1.5 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-[11px] landscape:text-[9px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-all whitespace-nowrap"
+                  className="w-full sm:flex-1 px-3 py-3 landscape:py-1.5 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-[11px] landscape:text-[9px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-colors whitespace-nowrap"
                 >
                   <Disc className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-[#00ffff] animate-spin-slow" /> JUKEBOX
                 </button>
