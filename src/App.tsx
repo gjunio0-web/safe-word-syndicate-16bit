@@ -36,7 +36,7 @@ import { LoreCodex } from './components/LoreCodex';
 import { CustomAudioModal } from './components/CustomAudioModal';
 import { DifficultyModal } from './components/DifficultyModal';
 import { sound } from './game/sound';
-import { Play, BookOpen, Award, Disc, Gauge } from 'lucide-react';
+import { Play, BookOpen, Award, Disc, Gauge, Volume2, VolumeX } from 'lucide-react';
 
 // Kept module-level: useSyncExternalStore resubscribes on every render if the
 // accessors are recreated.
@@ -475,6 +475,18 @@ export default function App() {
     setScreen('CHAR_SELECT');
   };
 
+  // GameHeader's own mute toggle only exists during GAMEPLAY. Muting there
+  // and then returning to the title screen used to leave the title theme
+  // silent for good: `musicEnabled` stays false and nothing on this screen
+  // could flip it back — the only way out was to start another match and
+  // un-mute from inside it.
+  const toggleTitleSound = () => {
+    const nextSound = !settings.soundEnabled;
+    setSettings((prev) => ({ ...prev, soundEnabled: nextSound, musicEnabled: nextSound }));
+    sound.setEnabled(nextSound, nextSound);
+    if (nextSound) sound.playSelect();
+  };
+
   // Gamepad navigation for every screen except CHAR_SELECT, which owns its own
   // cursor and handles it internally.
   useGamepadMenu(
@@ -564,6 +576,22 @@ export default function App() {
         */}
       {screen === 'TITLE' && (
         <div className="relative w-full h-full bg-[#0a0a0a] flex flex-col justify-between landscape:justify-start overflow-y-auto p-8 landscape:p-3 text-white text-center border-[12px] border-[#ff00ff]/10">
+          {/* Mute toggle. GameHeader has its own, but that only exists
+              during GAMEPLAY — this is the only way to undo a mute from
+              here without starting another match. */}
+          <button
+            onClick={toggleTitleSound}
+            className="absolute top-3 right-3 landscape:top-1.5 landscape:right-1.5 z-10 p-2 landscape:p-1.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#00ffff] text-zinc-300 transition-colors"
+            title="Toggle Sound"
+            aria-label="Toggle Sound"
+          >
+            {settings.soundEnabled ? (
+              <Volume2 className="w-4 h-4 landscape:w-3.5 landscape:h-3.5 text-[#00ffff]" />
+            ) : (
+              <VolumeX className="w-4 h-4 landscape:w-3.5 landscape:h-3.5 text-[#ff00ff]" />
+            )}
+          </button>
+
           {/* Header Banner - Artistic Flair */}
           <div className="flex flex-col md:flex-row landscape:flex-row justify-between items-center bg-[#1a1a1a] border-b-4 border-[#ff00ff] px-6 landscape:px-4 py-4 landscape:py-2 rounded-none max-w-4xl mx-auto w-full gap-2 landscape:shrink-0">
             <div className="text-left">
