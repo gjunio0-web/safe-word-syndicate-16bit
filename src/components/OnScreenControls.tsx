@@ -39,7 +39,14 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
         * cover (e.g. a taller header, a software nav bar). Portrait is
         * untouched; only orientation, not screen width, gates this. */}
       <div className="flex justify-between items-end w-full pb-2 landscape:pb-1">
-        {/* Virtual D-Pad */}
+        {/* Virtual D-Pad.
+          * landscape:w-8/h-8 on the four direction buttons (down from w-9/h-9
+          * originally): the fixed 4px inset each button sits at (top-1 etc.)
+          * doesn't scale with the container, so shrinking the 144px circle to
+          * 112px for landscape left too little room between Up/Down and
+          * Left/Right at the old 36px button size - they overlapped by a
+          * measured 4x4px at every corner. One step smaller reopens a clean
+          * gap without touching the offsets or the circle itself. */}
         <div className="pointer-events-auto relative w-36 h-36 landscape:w-28 landscape:h-28 bg-zinc-900/80 backdrop-blur-md rounded-full border-2 border-zinc-700 p-2 shadow-2xl flex items-center justify-center">
           {/* Up */}
           <button
@@ -48,7 +55,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('up')}
             onMouseDown={handleTouchStart('up')}
             onMouseUp={handleTouchEnd('up')}
-            className={`absolute top-1 left-1/2 -translate-x-1/2 w-11 h-11 landscape:w-9 landscape:h-9 rounded-t-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute top-1 left-1/2 -translate-x-1/2 w-11 h-11 landscape:w-8 landscape:h-8 rounded-t-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.up ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -61,7 +68,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('down')}
             onMouseDown={handleTouchStart('down')}
             onMouseUp={handleTouchEnd('down')}
-            className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-11 h-11 landscape:w-9 landscape:h-9 rounded-b-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-11 h-11 landscape:w-8 landscape:h-8 rounded-b-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.down ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -74,7 +81,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('left')}
             onMouseDown={handleTouchStart('left')}
             onMouseUp={handleTouchEnd('left')}
-            className={`absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 landscape:w-9 landscape:h-9 rounded-l-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 landscape:w-8 landscape:h-8 rounded-l-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.left ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -87,7 +94,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('right')}
             onMouseDown={handleTouchStart('right')}
             onMouseUp={handleTouchEnd('right')}
-            className={`absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 landscape:w-9 landscape:h-9 rounded-r-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 landscape:w-8 landscape:h-8 rounded-r-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.right ? 'bg-amber-500 text-black' : ''
             }`}
           >
