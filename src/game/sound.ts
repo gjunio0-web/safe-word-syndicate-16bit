@@ -889,8 +889,18 @@ class SoundEngine {
       return;
     }
 
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.setUserGesture(false);
+    // `ctx.state` is the wrong signal here: `initCtx()`/`unlock()` call
+    // `ctx.resume()` without awaiting it, so a real gesture that just fired
+    // can still read back 'suspended' for a moment before the promise
+    // settles — even though playback is genuinely permitted. Trusting that
+    // stale read bailed out of a legitimate play, wrongly told the rest of
+    // the app audio had re-locked (`setUserGesture(false)`), and re-armed
+    // the capture-phase unlock listeners on `window`. Those then caught the
+    // *next* keydown/pointerdown anywhere on the page — including a skip tap
+    // inside the intro cutscene — and replayed `lastRequestedTrack` right on
+    // top of the cutscene's own track. `hasUserGesture` is the reliable
+    // signal: `unlock()` always sets it before calling into here.
+    if (!this.hasUserGesture) {
       this.armUnlock();
       return;
     }
