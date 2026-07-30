@@ -534,7 +534,12 @@ export default function App() {
   );
 
   return (
-    <div className="relative w-screen h-screen bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
+    // h-dvh, not h-screen: 100vh is computed as if the browser's address/nav
+    // bar didn't exist, so in landscape on a real phone (a shorter viewport
+    // to begin with) the bottom-anchored touch controls rendered below the
+    // actually-visible area and were cropped. dvh tracks the real visible
+    // height as that chrome shows/hides.
+    <div className="relative w-screen h-dvh bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
       {/* 0. ATTRACT MODE */}
       {screen === 'ATTRACT' && <AttractMode onInsertCoin={handleInsertCoin} />}
 
@@ -674,7 +679,17 @@ export default function App() {
             stageName={STAGES[currentStageIdx].name}
           />
 
-          <div className="relative flex-1 w-full h-full">
+          {/* min-h-0: a flex item's default minimum main size is 'auto' —
+            * effectively its content's size — not 0, so flex-1 alone
+            * couldn't actually shrink this below GameCanvas's natural
+            * height even though the header above it needed some of that
+            * space too. It rendered at the full screen height instead of
+            * "screen minus header", so its absolutely-positioned bottom
+            * controls (D-pad, action buttons) sat below the actually
+            * visible area on short landscape screens and got clipped by
+            * the root's overflow-hidden. Same fix, same underlying
+            * flexbox default, as the char-select dossier's min-w-0 case. */}
+          <div className="relative flex-1 min-h-0 w-full h-full">
             <GameCanvas
               engine={engineRef.current}
               crtFilter={settings.crtFilter}
