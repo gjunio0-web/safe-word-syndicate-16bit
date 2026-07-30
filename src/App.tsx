@@ -475,6 +475,19 @@ export default function App() {
     setScreen('CHAR_SELECT');
   };
 
+  /**
+   * Leaves a match (or its GAME_OVER/VICTORY aftermath) for the title
+   * screen. The mute toggle only exists on GameHeader, reachable during
+   * GAMEPLAY — so it is scoped to the match: walking away un-mutes rather
+   * than leaving the rest of the game silently stuck the way the player
+   * left it, with no control anywhere else to undo it.
+   */
+  const returnToTitle = () => {
+    setSettings((prev) => ({ ...prev, soundEnabled: true, musicEnabled: true }));
+    sound.setEnabled(true, true);
+    setScreen('TITLE');
+  };
+
   // Gamepad navigation for every screen except CHAR_SELECT, which owns its own
   // cursor and handles it internally.
   useGamepadMenu(
@@ -526,13 +539,13 @@ export default function App() {
       }
       if (screen === 'GAME_OVER') {
         if (action === 'START') return startStage(currentStageIdx);
-        if (action === 'BACK') return setScreen('TITLE');
+        if (action === 'BACK') return returnToTitle();
         if (!applyMenuNavigation(action) && action === 'CONFIRM') startStage(currentStageIdx);
         return;
       }
       if (screen === 'VICTORY') {
-        if (action === 'START' || action === 'BACK') return setScreen('TITLE');
-        if (!applyMenuNavigation(action) && action === 'CONFIRM') setScreen('TITLE');
+        if (action === 'START' || action === 'BACK') return returnToTitle();
+        if (!applyMenuNavigation(action) && action === 'CONFIRM') returnToTitle();
       }
     },
     screen !== 'CHAR_SELECT'
@@ -665,7 +678,7 @@ export default function App() {
           onSelect={handleSelectFighter}
           onBack={() => {
             sound.stopBgm();
-            setScreen('TITLE');
+            returnToTitle();
           }}
         />
       )}
@@ -696,7 +709,7 @@ export default function App() {
             onOpenAudioModal={() => setShowAudioModal(true)}
             onReturnToTitle={() => {
               sound.stopAll();
-              setScreen('TITLE');
+              returnToTitle();
             }}
             onRestartStage={() => startStage(currentStageIdx)}
             stageName={STAGES[currentStageIdx].name}
@@ -751,7 +764,7 @@ export default function App() {
           onRetry={() => startStage(currentStageIdx)}
           onQuit={() => {
             sound.stopBgm();
-            setScreen('TITLE');
+            returnToTitle();
           }}
         />
       )}
@@ -780,7 +793,7 @@ export default function App() {
           <button
             onClick={() => {
               sound.stopBgm();
-              setScreen('TITLE');
+              returnToTitle();
             }}
             className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-sm italic uppercase tracking-wider mx-auto shadow-xl"
           >
