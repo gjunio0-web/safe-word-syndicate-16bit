@@ -866,9 +866,17 @@ class SoundEngine {
         .catch((err: unknown) => {
           if (this.playbackToken !== currentToken) return;
 
+          // Same fix as playSynthBgm's ctx.state check below: only treat this
+          // as "still locked" (and re-arm the global unlock listener) when no
+          // gesture has actually landed yet. A NotAllowedError that arrives
+          // *after* hasUserGesture is already true isn't a lock — re-arming
+          // here anyway caught the next keydown/pointerdown anywhere on the
+          // page (a skip tap inside the intro cutscene, for one) and replayed
+          // this track right over whatever was already playing. Once a
+          // gesture is confirmed, a failed file just falls back to the synth
+          // like any other playback error.
           const isAutoplayBlocked = (err as { name?: string } | null)?.name === 'NotAllowedError';
-          if (isAutoplayBlocked) {
-            this.hasUserGesture = false;
+          if (isAutoplayBlocked && !this.hasUserGesture) {
             this.activeAudioElement = null;
             this.armUnlock();
             return;
