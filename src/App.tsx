@@ -17,6 +17,7 @@ import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
 import { KeyboardHints } from './components/KeyboardHints';
+import { RotateDevicePrompt } from './components/RotateDevicePrompt';
 import { AttractMode } from './components/AttractMode';
 import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
@@ -25,6 +26,7 @@ import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
 import { useIsMobileDevice } from './hooks/useDeviceType';
+import { useIsPortrait } from './hooks/useOrientation';
 import { DialogueOverlay } from './components/DialogueOverlay';
 import { BarkOverlay } from './components/BarkOverlay';
 import { StageClearScreen } from './components/StageClearScreen';
@@ -93,6 +95,7 @@ export default function App() {
   // jukebox — stays mouse-operable; only the fighter's own controls move to
   // keyboard alone.
   const isMobile = useIsMobileDevice();
+  const isPortrait = useIsPortrait();
   const [showAudioModal, setShowAudioModal] = useState(false);
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
 
@@ -551,7 +554,7 @@ export default function App() {
               <div className="text-xs font-mono text-gray-400">VS ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS</div>
               <button
                 onClick={handleStartBrawl}
-                className={`bg-transparent border-0 p-0 cursor-pointer text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
+                className={`bg-transparent border-0 py-2.5 px-0 -my-2.5 cursor-pointer text-lg font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
               >
                 CREDIT 99 ► PRESS START
               </button>
@@ -679,6 +682,8 @@ export default function App() {
             />
 
             {activeBark && !activeDialogue && <BarkOverlay line={activeBark} />}
+
+            {isMobile && isPortrait && <RotateDevicePrompt />}
 
             {isMobile ? (
               <OnScreenControls

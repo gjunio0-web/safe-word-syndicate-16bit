@@ -59,17 +59,25 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         </div>
       </header>
 
-      {/* Roster position, above the dossier it now doubles for */}
-      <div className="shrink-0 flex justify-center gap-1.5 mt-3">
+      {/* Roster position, above the dossier it now doubles for.
+        * The visual pill stays a thin 6px dot, but the button around it
+        * carries real padding so the tap target isn't the same 6x6px box —
+        * a hit area that small on a phone means missing the dot more often
+        * than hitting it. */}
+      <div className="shrink-0 flex justify-center gap-0.5 mt-3">
         {roster.map((c, i) => (
           <button
             key={c.id}
             onClick={() => setIndex(i)}
-            className={`h-1.5 rounded-full transition-all ${
-              i === index ? `w-6 ${charColors[c.id].text.replace('text-', 'bg-')}` : 'w-1.5 bg-zinc-700'
-            }`}
+            className="p-2.5 flex items-center justify-center"
             aria-label={c.name}
-          />
+          >
+            <span
+              className={`h-1.5 rounded-full transition-all block ${
+                i === index ? `w-6 ${charColors[c.id].text.replace('text-', 'bg-')}` : 'w-1.5 bg-zinc-700'
+              }`}
+            />
+          </button>
         ))}
       </div>
 

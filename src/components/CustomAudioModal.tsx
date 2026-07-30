@@ -194,7 +194,13 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
                   isPlaying ? 'border-[#00ffff] shadow-[0_0_20px_rgba(0,255,255,0.3)]' : 'border-[#2d164d]'
                 } rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all`}
               >
-                <div className="flex items-start gap-3 flex-1 min-w-0">
+                {/* w-full: the card row above is `items-start` in its
+                  * flex-col (mobile) layout, not `items-stretch`, so without
+                  * an explicit width this block sized to its own content
+                  * instead of the card's — min-w-0 further down had nothing
+                  * to constrain against, and the title just grew past the
+                  * card edge and pushed the badge off-screen with it. */}
+                <div className="flex items-start gap-3 flex-1 min-w-0 w-full">
                   <div
                     className="p-2 rounded-lg bg-black/60 border shrink-0 mt-0.5"
                     style={{ borderColor: slot.accent }}
@@ -202,16 +208,24 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
                     <Music className="w-5 h-5" style={{ color: slot.accent }} />
                   </div>
                   <div className="min-w-0 flex-1">
+                    {/* min-w-0 on the title is load-bearing: without it, a flex
+                      * item's default min-width is its content's natural
+                      * width, so `truncate` never actually clips a long slot
+                      * label (e.g. "Stage 2 Boss — Madam Mizydia (Hologram)")
+                      * and it pushes the status badge off the right edge of
+                      * the screen instead of the title itself eliding. shrink-0
+                      * on the badge keeps it from being squeezed as a result.
+                      */}
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm sm:text-base font-black text-white font-mono uppercase tracking-wide truncate">
+                      <h3 className="text-sm sm:text-base font-black text-white font-mono uppercase tracking-wide truncate min-w-0">
                         {slot.label}
                       </h3>
                       {hasCustom ? (
-                        <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 rounded flex items-center gap-1">
+                        <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-2 py-0.5 rounded flex items-center gap-1 shrink-0">
                           <Check className="w-3 h-3" /> CUSTOM FILE
                         </span>
                       ) : (
-                        <span className="text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded shrink-0">
                           16-BIT SYNTH
                         </span>
                       )}
@@ -230,7 +244,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
                   {/* Test Play/Stop */}
                   <button
                     onClick={() => handleTogglePlay(slot.id)}
-                    className={`p-2 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    className={`min-h-11 px-2 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 transition-all ${
                       isPlaying
                         ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
                         : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500'
@@ -242,7 +256,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
                   </button>
 
                   {/* Upload Audio File */}
-                  <label className="bg-[#00ffff] hover:bg-[#00cccc] text-black text-xs font-mono font-bold px-3 py-2 rounded-lg cursor-pointer transition-all flex items-center gap-1 shadow">
+                  <label className="min-h-11 bg-[#00ffff] hover:bg-[#00cccc] text-black text-xs font-mono font-bold px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1 shadow">
                     <Upload className="w-3.5 h-3.5" /> CHOOSE
                     <input
                       type="file"
@@ -256,7 +270,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
                   {hasCustom && (
                     <button
                       onClick={() => handleResetTrack(slot.id)}
-                      className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
+                      className="min-h-11 min-w-11 flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
                       title="Reset to 16-bit Synth"
                     >
                       <RotateCcw className="w-4 h-4" />

@@ -41,7 +41,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('up')}
             onMouseDown={handleTouchStart('up')}
             onMouseUp={handleTouchEnd('up')}
-            className={`absolute top-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-t-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute top-1 left-1/2 -translate-x-1/2 w-11 h-11 rounded-t-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.up ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -54,7 +54,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('down')}
             onMouseDown={handleTouchStart('down')}
             onMouseUp={handleTouchEnd('down')}
-            className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-b-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-11 h-11 rounded-b-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.down ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -67,7 +67,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('left')}
             onMouseDown={handleTouchStart('left')}
             onMouseUp={handleTouchEnd('left')}
-            className={`absolute left-1 top-1/2 -translate-y-1/2 w-10 h-10 rounded-l-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-l-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.left ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -80,7 +80,7 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             onTouchEnd={handleTouchEnd('right')}
             onMouseDown={handleTouchStart('right')}
             onMouseUp={handleTouchEnd('right')}
-            className={`absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 rounded-r-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
+            className={`absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-r-lg bg-zinc-800 border border-zinc-600 flex items-center justify-center text-white font-bold text-lg active:bg-amber-500 active:scale-95 transition-all ${
               input.right ? 'bg-amber-500 text-black' : ''
             }`}
           >
@@ -92,7 +92,9 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
 
         {/* Action Buttons */}
         <div className="pointer-events-auto grid grid-cols-2 gap-3">
-          {/* Punch (J) */}
+          {/* Punch. No keybind label: a touch player has no keyboard to read
+              it against, so it used to just print noise ("[J]") on a button
+              whose only real affordance is being tapped. */}
           <button
             id="btn-action-punch"
             onTouchStart={handleTouchStart('punch')}
@@ -102,10 +104,9 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             className="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-lg border-2 border-rose-400 flex flex-col items-center justify-center active:scale-90 transition-transform"
           >
             <span>PUNCH</span>
-            <span className="text-[10px] text-rose-200">[J]</span>
           </button>
 
-          {/* Kick (K) */}
+          {/* Kick */}
           <button
             id="btn-action-kick"
             onTouchStart={handleTouchStart('kick')}
@@ -115,10 +116,11 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             className="w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-lg border-2 border-blue-400 flex flex-col items-center justify-center active:scale-90 transition-transform"
           >
             <span>KICK</span>
-            <span className="text-[10px] text-blue-200">[K]</span>
           </button>
 
-          {/* Power Move (L) */}
+          {/* Power Move. The sub-label still earns its space here: charging,
+              it counts up toward 30; ready, it says so, rather than naming
+              keys a touch player never presses. */}
           <button
             id="btn-action-special"
             onTouchStart={handleTouchStart('special')}
@@ -132,10 +134,10 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             }`}
           >
             <span>SPECIAL</span>
-            <span className="text-[10px]">{powerMeter >= 30 ? '[L/E/F]' : `${Math.floor(powerMeter)}/30`}</span>
+            <span className="text-[10px]">{powerMeter >= 30 ? 'READY!' : `${Math.floor(powerMeter)}/30`}</span>
           </button>
 
-          {/* Jump (Space) */}
+          {/* Jump */}
           <button
             id="btn-action-jump"
             onTouchStart={handleTouchStart('jump')}
@@ -145,7 +147,6 @@ export const OnScreenControls: React.FC<OnScreenControlsProps> = ({
             className="w-16 h-16 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-lg border-2 border-emerald-400 flex flex-col items-center justify-center active:scale-90 transition-transform"
           >
             <span>JUMP</span>
-            <span className="text-[10px] text-emerald-200">[SPACE]</span>
           </button>
         </div>
       </div>

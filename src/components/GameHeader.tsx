@@ -50,24 +50,30 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
   return (
     <>
-      <div className="w-full bg-[#1a1a1a] border-b-4 border-[#ff00ff] px-4 py-2.5 flex justify-between items-center text-white font-mono select-none z-30">
-        {/* Stage Info */}
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 bg-[#00ffff] animate-pulse" />
-          <span className="text-xs font-black text-[#00ffff] uppercase tracking-tighter">
-            STAGE STATUS: <span className="text-[#ffff00]">{stageName}</span>
+      <div className="w-full bg-[#1a1a1a] border-b-4 border-[#ff00ff] px-2 sm:px-4 py-2.5 flex justify-between items-center text-white font-mono select-none z-30 gap-2">
+        {/* Stage Info. min-w-0 + truncate: without a width to shrink into, a
+            long stage name (e.g. "Neon Nightlife District") wrapped one or
+            two words per line on a narrow phone, some six lines of the
+            header eaten by a label nobody needed to re-read every frame. The
+            "STAGE STATUS:" prefix drops first on narrow screens since the
+            name alone still says the same thing. */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="w-2.5 h-2.5 bg-[#00ffff] animate-pulse shrink-0" />
+          <span className="text-xs font-black text-[#00ffff] uppercase tracking-tighter truncate">
+            <span className="hidden sm:inline">STAGE STATUS: </span>
+            <span className="text-[#ffff00]">{stageName}</span>
           </span>
         </div>
 
         {/* Control Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Reset / Home Button */}
           <button
             onClick={() => {
               sound.stopAll();
               onReturnToTitle();
             }}
-            className="p-2 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 hover:border-red-400 text-red-200 transition-colors flex items-center gap-1.5 text-xs font-black shadow-md"
+            className="p-1.5 sm:p-2 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 hover:border-red-400 text-red-200 transition-colors flex items-center gap-1.5 text-xs font-black shadow-md"
             title="Reset Game & Return to Title Screen"
           >
             <Home className="w-4 h-4 text-red-400" />
@@ -78,7 +84,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {onOpenAudioModal && (
             <button
               onClick={onOpenAudioModal}
-              className="p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ff00ff] text-[#ff00ff] transition-colors flex items-center gap-1.5 text-xs font-black"
+              className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ff00ff] text-[#ff00ff] transition-colors flex items-center gap-1.5 text-xs font-black"
               title="Open Jukebox / Custom Audio Tracks"
             >
               <Disc className="w-4 h-4 animate-spin-slow text-[#ff00ff]" />
@@ -89,7 +95,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* Pause Button */}
           <button
             onClick={onTogglePause}
-            className="p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-zinc-300 transition-colors"
+            className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-zinc-300 transition-colors"
             title={isPaused ? 'Resume' : 'Pause'}
           >
             {isPaused ? <Play className="w-4 h-4 text-[#ffff00]" /> : <Pause className="w-4 h-4" />}
@@ -98,7 +104,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* Mute Toggle */}
           <button
             onClick={toggleSound}
-            className="p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#00ffff] text-zinc-300 transition-colors"
+            className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#00ffff] text-zinc-300 transition-colors"
             title="Toggle Sound"
           >
             {settings.soundEnabled ? (
@@ -146,7 +152,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               ring enemies hold while waiting for an attack slot. */}
           <button
             onClick={toggleHitboxes}
-            className={`p-2 border-2 transition-colors ${
+            className={`p-1.5 sm:p-2 border-2 transition-colors ${
               settings.showHitboxes
                 ? 'bg-[#00ff88]/20 border-[#00ff88] text-[#00ff88]'
                 : 'bg-[#111] border-[#333] text-zinc-500'
@@ -159,7 +165,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* CRT Scanlines Toggle */}
           <button
             onClick={toggleCrt}
-            className={`p-2 border-2 transition-colors ${
+            className={`p-1.5 sm:p-2 border-2 transition-colors ${
               settings.crtFilter
                 ? 'bg-[#ff00ff]/20 border-[#ff00ff] text-[#ff00ff]'
                 : 'bg-[#111] border-[#333] text-zinc-500'
@@ -172,7 +178,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* Codex Button */}
           <button
             onClick={onOpenCodex}
-            className="p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] transition-colors"
+            className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] transition-colors"
             title="Open Lore Codex"
           >
             <BookOpen className="w-4 h-4" />
@@ -203,7 +209,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
                     onTogglePause();
                     onRestartStage();
                   }}
-                  className="w-full py-2.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#ff00ff] text-[#ff00ff] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-3 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#ff00ff] text-[#ff00ff] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
                 >
                   <RotateCcw className="w-4 h-4" /> RESTART STAGE
                 </button>
@@ -215,7 +221,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
                   onTogglePause();
                   onReturnToTitle();
                 }}
-                className="w-full py-2.5 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 text-red-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-3 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 text-red-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
               >
                 <Home className="w-4 h-4 text-red-400" /> MAIN MENU / TITLE SCREEN
               </button>

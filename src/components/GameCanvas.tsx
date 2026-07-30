@@ -534,10 +534,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
         </div>
       )}
 
-      {/* Arcade "GO! ➔" Navigation Prompt when wave is cleared */}
+      {/* Arcade "GO! ➔" Navigation Prompt when wave is cleared
+        *
+        * Excludes showStageBanner: both are absolutely positioned and
+        * vertically centered, and the stage-start banner already says
+        * "READY... GO!!" itself, so on a narrow screen where the banner's
+        * text runs close to the right edge (a long stage name), the two
+        * collided and the GO! pill visibly overlapped the stage name.
+        */}
       {!hud.isWaveActive &&
         hud.currentWaveIndex < engine.stage.waves.length &&
-        !hud.stageCleared && (
+        !hud.stageCleared &&
+        !hud.showStageBanner && (
           <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none z-30 font-mono select-none flex flex-col items-end gap-1.5 animate-bounce">
             <div className="bg-gradient-to-r from-[#ff00ff] via-[#00ffff] to-[#ffff00] text-black font-black text-sm md:text-base px-4 py-2 rounded-xl border-2 border-white shadow-[0_0_25px_rgba(0,255,255,0.9)] flex items-center gap-2">
               <span className="tracking-widest">GO!</span>
