@@ -444,7 +444,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         * below, it labelled something already obvious and cost a row of height
         * the cards needed.
         */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 mb-1">
         {charList.map((char, index) => {
           const isP1 = selectedP1 === char.id;
           const isP2 = selectedP2 === char.id;
