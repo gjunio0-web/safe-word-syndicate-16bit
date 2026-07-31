@@ -640,7 +640,7 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
     // of ever settling. Comparing against the last actually-seen size
     // filters that out; a real resize still updates it and still resets.
     const lastSize = lastSizeRef;
-    const ro = new ResizeObserver(() => {
+    const checkForResize = () => {
       const w = root.clientWidth;
       const h = root.clientHeight;
       const last = lastSize.current;
@@ -652,14 +652,29 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       tierSettledRef.current = false;
       filledRef.current = false;
       recalcSettled();
-    });
+    };
+    const ro = new ResizeObserver(checkForResize);
     ro.observe(root);
     lastSize.current = { w: root.clientWidth, h: root.clientHeight };
     recalcSettled();
+    // Real fullscreen on Android Chrome isn't atomic: the address bar
+    // animates out over the following few hundred ms as it engages, and
+    // ResizeObserver doesn't reliably fire for every step of that
+    // animation on every device — root.clientHeight can end up read (and
+    // locked in) mid-transition, before the space it actually settles
+    // into exists yet. A few delayed re-checks after mount, plus one right
+    // on the Fullscreen API's own change event, catch whatever the
+    // observer missed; checkForResize is a no-op if the size genuinely
+    // hasn't moved, so this doesn't add jank on a device where the first
+    // reading was already final.
+    const settleTimers = [150, 400, 800, 1500].map((delay) => window.setTimeout(checkForResize, delay));
+    document.addEventListener('fullscreenchange', checkForResize);
     return () => {
       ro.disconnect();
       cancelAnimationFrame(rafA);
       cancelAnimationFrame(rafB);
+      settleTimers.forEach((id) => window.clearTimeout(id));
+      document.removeEventListener('fullscreenchange', checkForResize);
     };
   }, [tier]);
 
