@@ -148,7 +148,22 @@ interface DossierProps {
   portraitWrapRef?: React.Ref<HTMLDivElement>;
   portraitSize?: number | null;
   tier: SpacingTier;
+  extraSpacing?: number;
 }
+
+// The px equivalents of each tier's own padding/gap classes above. Phase 4
+// grows continuously from whichever tier actually settled, rather than
+// treating the roomiest tier as a ceiling — the tiers are three coarse
+// steps, and a screen with real slack left over usually can't afford the
+// whole next step but can easily afford part of one. Growing from the
+// settled tier's own baseline is what turns those three fixed choices
+// into continuous, measured growth of the same real properties.
+const TIER_BASE_PX: Record<SpacingTier, { pad: number; gap: number; leading: number }> = {
+  tight: { pad: 4, gap: 4, leading: 1.25 },
+  medium: { pad: 6, gap: 8, leading: 1.375 },
+  roomy: { pad: 12, gap: 12, leading: 1.625 },
+};
+const STATS_PAD_PX: Record<SpacingTier, number> = { tight: 6, medium: 8, roomy: 12 };
 
 /**
  * One fighter's dossier card. Rendered three at a time (previous / current /
@@ -165,11 +180,29 @@ interface DossierProps {
  * prints on top of the name below it. Measuring the real leftover space in
  * JS and setting a plain pixel size sidesteps both failure modes.
  */
-const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSize, tier }) => {
+const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSize, tier, extraSpacing }) => {
   const theme = charColors[char.id];
   const sp = DOSSIER_SPACING[tier];
   const circleStyle: React.CSSProperties | undefined =
     portraitSize != null ? { width: portraitSize, height: portraitSize } : undefined;
+  // Continuous growth on top of whichever tier settled — the same real
+  // padding/gap/line-height the tiers themselves grow, never a separate
+  // blank space. Vertical padding only, so no box's width changes and
+  // text wrapping stays exactly as the tier left it.
+  const extra = extraSpacing ?? 0;
+  const base = TIER_BASE_PX[tier];
+  const extraLineHeight = Math.min(extra * 0.004, 0.35);
+  const infoColumnGapStyle: React.CSSProperties | undefined = extra > 0 ? { gap: base.gap + extra } : undefined;
+  const statsPadStyle: React.CSSProperties | undefined =
+    extra > 0 ? { paddingTop: STATS_PAD_PX[tier] + extra, paddingBottom: STATS_PAD_PX[tier] + extra } : undefined;
+  const quoteStyle: React.CSSProperties | undefined =
+    extra > 0
+      ? { paddingTop: base.pad + extra, paddingBottom: base.pad + extra, lineHeight: base.leading + extraLineHeight }
+      : undefined;
+  const specialPadStyle: React.CSSProperties | undefined =
+    extra > 0 ? { paddingTop: base.pad + extra, paddingBottom: base.pad + extra } : undefined;
+  const specialDescStyle: React.CSSProperties | undefined =
+    extra > 0 ? { lineHeight: base.leading + extraLineHeight } : undefined;
   return (
     <div
       id={id}
@@ -219,7 +252,10 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSi
             landscape:flex-row on the top row puts the name+archetype
             beside the stat bars instead of stacking them above; portrait
             keeps the original vertical stack. */}
-        <div className={`flex flex-col ${sp.infoColumnGap} landscape:gap-1.5 w-full landscape:flex-1 landscape:min-w-0`}>
+        <div
+          className={`flex flex-col ${sp.infoColumnGap} landscape:gap-1.5 w-full landscape:flex-1 landscape:min-w-0`}
+          style={infoColumnGapStyle}
+        >
           <div className={`flex flex-col landscape:flex-row landscape:items-center ${sp.topRowGap} landscape:gap-3 w-full`}>
             <div className="text-center landscape:text-left landscape:shrink-0">
               <h2 className={`text-3xl landscape:text-lg font-black italic uppercase tracking-tight landscape:whitespace-nowrap ${theme.text}`}>{char.name}</h2>
@@ -227,7 +263,10 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSi
             </div>
 
             {/* Stat Progress Bars — same bars, same math, as desktop */}
-            <div className={`bg-[#120a21] border border-[#ff00ff]/50 ${sp.statsPadding} landscape:p-1.5 rounded-lg ${sp.statsSpaceY} landscape:space-y-1 w-full landscape:flex-1 landscape:min-w-0 shadow-inner`}>
+            <div
+              className={`bg-[#120a21] border border-[#ff00ff]/50 ${sp.statsPadding} landscape:p-1.5 rounded-lg ${sp.statsSpaceY} landscape:space-y-1 w-full landscape:flex-1 landscape:min-w-0 shadow-inner`}
+              style={statsPadStyle}
+            >
               <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
                 <span className="font-bold text-[#ff00ff]">POWER</span>
                 <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
@@ -250,15 +289,23 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSi
           </div>
 
           {/* Character Quote Box */}
-          <p className={`text-xs landscape:text-[10px] text-zinc-200 font-mono italic bg-[#170c2a] ${sp.quotePadding} landscape:p-1.5 border border-[#3b1e5d] rounded-md text-left ${sp.quoteLeading} landscape:leading-snug w-full`}>
+          <p
+            className={`text-xs landscape:text-[10px] text-zinc-200 font-mono italic bg-[#170c2a] ${sp.quotePadding} landscape:p-1.5 border border-[#3b1e5d] rounded-md text-left ${sp.quoteLeading} landscape:leading-snug w-full`}
+            style={quoteStyle}
+          >
             "{char.quote}"
           </p>
 
           {/* Special Move Banner */}
-          <div className={`bg-[#18092a] ${sp.specialPadding} landscape:p-1.5 border-l-4 landscape:border-l-2 border-[#00ffff] rounded-r-md text-left w-full`}>
+          <div className={`bg-[#18092a] ${sp.specialPadding} landscape:p-1.5 border-l-4 landscape:border-l-2 border-[#00ffff] rounded-r-md text-left w-full`} style={specialPadStyle}>
             <span className="text-[10px] landscape:text-[8px] text-[#00ffff] font-mono font-bold uppercase block tracking-wider">SPECIAL OVERDRIVE ATTACK</span>
             <span className="font-black text-sm landscape:text-xs text-white uppercase font-mono block">{char.powerMoveName}</span>
-            <p className={`text-xs landscape:text-[10px] text-zinc-300 font-mono ${sp.specialLeading} landscape:leading-snug mt-0.5 landscape:mt-0.5`}>{char.powerMoveDesc}</p>
+            <p
+              className={`text-xs landscape:text-[10px] text-zinc-300 font-mono ${sp.specialLeading} landscape:leading-snug mt-0.5 landscape:mt-0.5`}
+              style={specialDescStyle}
+            >
+              {char.powerMoveDesc}
+            </p>
           </div>
         </div>
       </div>
@@ -507,6 +554,19 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
   const filledRef = useRef(false);
   const lastSizeRef = useRef<{ w: number; h: number } | null>(null);
 
+  // Phase 4: once the portrait is capped by its own width safety limit
+  // (see below) with the spacing tier already at 'roomy', real vertical
+  // slack can still be unspent — a tall-but-narrow phone has far more
+  // spare height than width. That slack keeps growing the same real
+  // properties the tiers already grow (box padding, the gap between
+  // boxes, line-height) rather than stopping at 'roomy' as a hard
+  // ceiling. Never a separate blank spacer — always more room inside
+  // elements that already exist.
+  const [extraSpacing, setExtraSpacing] = useState(0);
+  const extraSpacingRef = useRef(0);
+  extraSpacingRef.current = extraSpacing;
+  const spacingFilledRef = useRef(false);
+
   const TIER_FALLBACK: SpacingTier[] = ['roomy', 'medium', 'tight'];
   const [tier, setTier] = useState<SpacingTier>('tight');
   const tierRef = useRef<SpacingTier>('tight');
@@ -521,9 +581,11 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       if (!window.matchMedia('(orientation: portrait)').matches) {
         if (portraitSizeRef.current !== null) setPortraitSize(null);
         if (tierRef.current !== 'tight') setTier('tight');
+        if (extraSpacingRef.current !== 0) setExtraSpacing(0);
         portraitLockedRef.current = false;
         tierSettledRef.current = false;
         filledRef.current = false;
+        spacingFilledRef.current = false;
         return;
       }
       const footer = root.querySelector('footer');
@@ -615,6 +677,32 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         }
         filledRef.current = true;
       }
+
+      if (filledRef.current && !spacingFilledRef.current) {
+        // Phase 4: the portrait hit its own width-safety ceiling (phase 3
+        // above) before the vertical slack that produced it ran out — a
+        // tall-but-narrow phone has far more spare height than width.
+        // Keep growing the same real padding/gap/line-height the tiers
+        // themselves grow, continuously from whichever tier settled,
+        // rather than treating the tiers' three coarse steps as a
+        // ceiling: a screen with slack left usually can't afford a whole
+        // next step but can easily afford part of one. Vertical padding
+        // only (top/bottom, never left/right) so it can't change any
+        // box's width and perturb text wrapping — that keeps the
+        // relationship between extraSpacing and height exact: 3 boxes'
+        // padding-top + padding-bottom (6) plus 2 gaps between them (2)
+        // = 8px of height per 1px of extraSpacing, solvable directly
+        // instead of creeping toward it.
+        const remainingSlack = available - totalNow - SAFETY_MARGIN;
+        if (remainingSlack > 1) {
+          const nextExtra = extraSpacingRef.current + Math.round(remainingSlack / 8);
+          if (nextExtra > extraSpacingRef.current) {
+            setExtraSpacing(nextExtra);
+            return;
+          }
+        }
+        spacingFilledRef.current = true;
+      }
     };
     const recalcSettled = () => {
       recalc();
@@ -651,6 +739,7 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       portraitLockedRef.current = false;
       tierSettledRef.current = false;
       filledRef.current = false;
+      spacingFilledRef.current = false;
       recalcSettled();
     };
     const ro = new ResizeObserver(checkForResize);
@@ -755,13 +844,20 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
           }}
         >
           <div className="shrink-0" style={slideStyle}>
-            <Dossier char={prevChar} portraitSize={portraitSize} tier={tier} />
+            <Dossier char={prevChar} portraitSize={portraitSize} tier={tier} extraSpacing={extraSpacing} />
           </div>
           <div className="shrink-0" style={slideStyle}>
-            <Dossier char={char} id="selected-fighter-banner" portraitWrapRef={portraitWrapRef} portraitSize={portraitSize} tier={tier} />
+            <Dossier
+              char={char}
+              id="selected-fighter-banner"
+              portraitWrapRef={portraitWrapRef}
+              portraitSize={portraitSize}
+              tier={tier}
+              extraSpacing={extraSpacing}
+            />
           </div>
           <div className="shrink-0" style={slideStyle}>
-            <Dossier char={nextChar} portraitSize={portraitSize} tier={tier} />
+            <Dossier char={nextChar} portraitSize={portraitSize} tier={tier} extraSpacing={extraSpacing} />
           </div>
         </div>
       </div>
