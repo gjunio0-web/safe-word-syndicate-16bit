@@ -285,37 +285,6 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
   const prevChar = roster[(index - 1 + roster.length) % roster.length];
   const nextChar = roster[(index + 1) % roster.length];
 
-  // TEMP DEBUG — diagnosing a real-device-only gap at the bottom of this
-  // screen that doesn't reproduce in headless testing. Remove this block
-  // (state, effect, and the overlay div in the JSX below) once diagnosed.
-  const [debugInfo, setDebugInfo] = useState('');
-  useLayoutEffect(() => {
-    const update = () => {
-      const root = document.querySelector('[data-debug-root="char-select-mobile"]') as HTMLElement | null;
-      const vv = window.visualViewport;
-      setDebugInfo(
-        [
-          `fullscreen=${document.fullscreenElement ? document.fullscreenElement.tagName : 'null'}`,
-          `innerH=${window.innerHeight} innerW=${window.innerWidth}`,
-          `screenH=${window.screen?.height} screenW=${window.screen?.width}`,
-          `dpr=${window.devicePixelRatio}`,
-          `vvH=${vv ? Math.round(vv.height) : 'n/a'} vvOffTop=${vv ? Math.round(vv.offsetTop) : 'n/a'}`,
-          `rootClientH=${root ? root.clientHeight : 'n/a'} rootRectH=${root ? Math.round(root.getBoundingClientRect().height) : 'n/a'}`,
-          `docClientH=${document.documentElement.clientHeight}`,
-        ].join(' | '),
-      );
-    };
-    update();
-    window.addEventListener('resize', update);
-    document.addEventListener('fullscreenchange', update);
-    const id = setInterval(update, 500);
-    return () => {
-      window.removeEventListener('resize', update);
-      document.removeEventListener('fullscreenchange', update);
-      clearInterval(id);
-    };
-  }, []);
-
   const go = useCallback(
     (delta: number) => {
       sound.playSelect();
@@ -712,14 +681,8 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
     // (which has no address bar to shrink) never reproduces.
     <div
       ref={rootRef}
-      data-debug-root="char-select-mobile"
       className={`relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-start ${rs.rootPadding} landscape:px-1.5 landscape:py-1.5 select-none font-sans overflow-y-auto border-2 border-[#ff00ff]/10`}
     >
-      {/* TEMP DEBUG overlay — see the block near the top of this component. */}
-      <div className="fixed top-0 left-0 right-0 z-[9999] pointer-events-none bg-black/80 text-[#0f0] font-mono text-[8px] leading-tight p-1 break-all">
-        {debugInfo}
-      </div>
-
       {/* Top Header — identical to desktop's, minus the mode selector: mobile
           has nothing to choose there, it is always SOLO. */}
       <header className={`shrink-0 flex flex-col justify-between items-center px-3 landscape:px-2 ${rs.headerPy} landscape:py-1 bg-[#1a1a1a] ${rs.headerBorder} landscape:border-b-2 border-[#ff00ff] gap-2 landscape:gap-0`}>
