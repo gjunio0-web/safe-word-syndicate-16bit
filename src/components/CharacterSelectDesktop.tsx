@@ -311,7 +311,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         return (
           <div
             id="selected-fighter-banner"
-            className="mt-4 bg-[#0d0718] border-3 sm:border-4 border-[#ff00ff] rounded-xl shadow-[0_0_30px_rgba(255,0,255,0.5)] p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between gap-3 min-h-[248px]"
+            className="mt-4 shrink-0 bg-[#0d0718] border-3 sm:border-4 border-[#ff00ff] rounded-xl shadow-[0_0_30px_rgba(255,0,255,0.5)] p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between gap-3"
           >
             {/* Banner Main Body — horizontal strip
               *
@@ -444,7 +444,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         * below, it labelled something already obvious and cost a row of height
         * the cards needed.
         */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-1">
         {charList.map((char, index) => {
           const isP1 = selectedP1 === char.id;
           const isP2 = selectedP2 === char.id;
@@ -594,7 +594,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
       </div>
 
       {/* Bottom Action Footer */}
-      <footer className="bg-black p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <footer className="bg-black px-4 pb-4 pt-1 flex flex-col sm:flex-row justify-between items-center gap-4">
         <button
           onClick={onBack}
           className="px-5 py-2.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] text-zinc-300 font-black text-xs uppercase tracking-wider transition-colors cursor-pointer"
