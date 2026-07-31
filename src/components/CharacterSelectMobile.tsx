@@ -726,6 +726,13 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       ref={rootRef}
       className={`relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-start ${rs.rootPadding} landscape:px-1.5 landscape:py-1.5 select-none font-sans overflow-y-auto border-2 border-[#ff00ff]/10`}
     >
+      {/* Phase 4 spacer, top half — see the effect above. Split rather
+          than dumped entirely above the footer: one lump sum there reads
+          as an obvious blank rectangle sitting right before the CTA
+          button, while splitting it top and bottom centers the whole
+          card in the extra room instead. */}
+      {extraGap > 0 && <div className="shrink-0" style={{ height: Math.floor(extraGap / 2) }} />}
+
       {/* Top Header — identical to desktop's, minus the mode selector: mobile
           has nothing to choose there, it is always SOLO. */}
       <header className={`shrink-0 flex flex-col justify-between items-center px-3 landscape:px-2 ${rs.headerPy} landscape:py-1 bg-[#1a1a1a] ${rs.headerBorder} landscape:border-b-2 border-[#ff00ff] gap-2 landscape:gap-0`}>
@@ -794,10 +801,9 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         </div>
       </div>
 
-      {/* Phase 4 spacer — see the effect above. Only ever non-zero in
-          portrait, and only once the portrait and spacing tier have both
-          hit their own ceilings with room still left over. */}
-      {extraGap > 0 && <div className="shrink-0" style={{ height: extraGap }} />}
+      {/* Phase 4 spacer, bottom half — see the top half above; the two
+          together add up to the full measured leftover. */}
+      {extraGap > 0 && <div className="shrink-0" style={{ height: Math.ceil(extraGap / 2) }} />}
 
       {/* Bottom Action Footer — same buttons/classes as desktop's, minus the
           bottom accent line in portrait, to reclaim vertical room for the
