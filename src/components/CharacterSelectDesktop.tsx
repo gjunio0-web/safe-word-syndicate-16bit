@@ -3,7 +3,7 @@ import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
 import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
 import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { Crosshair, Users, Bot, UserCheck, Play, User } from 'lucide-react';
+import { Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface CharacterSelectDesktopProps {
@@ -313,19 +313,6 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
             id="selected-fighter-banner"
             className="mt-4 bg-[#0d0718] border-3 sm:border-4 border-[#ff00ff] rounded-xl shadow-[0_0_30px_rgba(255,0,255,0.5)] p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between gap-3 min-h-[248px]"
           >
-            {/* Top Arcade Marquee Header Bar */}
-            <div className="flex justify-between items-center bg-[#240038] border-b-2 border-[#ff00ff] -mx-4 -mt-4 sm:-mx-5 sm:-mt-5 p-2.5 px-4 mb-1">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00ffff] animate-pulse" />
-                <span className="text-xs sm:text-sm font-mono font-black text-[#00ffff] tracking-widest uppercase flex items-center gap-2">
-                  <Crosshair className="w-4 h-4 text-[#ff00ff]" /> SELECTED FIGHTER DOSSIER
-                </span>
-              </div>
-              <span className="text-xs font-mono font-black text-black bg-[#ff00ff] px-3 py-1 rounded italic uppercase shadow">
-                {mode === 'SINGLE' ? 'READY FOR BRAWL' : mode === 'AI_COMPANION' ? '1P + AI TEAM' : '2P CO-OP TEAM'}
-              </span>
-            </div>
-
             {/* Banner Main Body — horizontal strip
               *
               * Laid across rather than stacked. The dossier and the roster
@@ -597,16 +584,6 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                 </div>
               </div>
 
-              {/* Power Move Box */}
-              <div className="bg-[#0a0a0a] p-2 border border-[#333] text-[11px] font-mono mt-auto z-10">
-                <div className={`font-bold flex items-center gap-1 ${theme.text}`}>
-                  <Crosshair className="w-3.5 h-3.5" /> {char.powerMoveName}
-                </div>
-                <p className="text-zinc-400 mt-0.5 leading-tight text-[10px]">
-                  {char.powerMoveDesc}
-                </p>
-              </div>
-
               {/* Numbering */}
               <div className="absolute bottom-1 right-2 text-4xl font-black text-zinc-800 select-none pointer-events-none opacity-20">
                 0{index + 1}
@@ -617,7 +594,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
       </div>
 
       {/* Bottom Action Footer */}
-      <footer className="bg-black p-4 border-t-4 border-[#00ffff] flex flex-col sm:flex-row justify-between items-center gap-4">
+      <footer className="bg-black p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
         <button
           onClick={onBack}
           className="px-5 py-2.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] text-zinc-300 font-black text-xs uppercase tracking-wider transition-colors cursor-pointer"
