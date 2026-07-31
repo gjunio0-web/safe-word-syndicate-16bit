@@ -507,16 +507,6 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
   const filledRef = useRef(false);
   const lastSizeRef = useRef<{ w: number; h: number } | null>(null);
 
-  // Phase 4: on a tall-but-narrow phone, phase 3's own width safety cap
-  // (see below) can be reached while plenty of vertical slack is still
-  // unspent — the portrait can't grow any further, but the screen still
-  // can. That remaining slack becomes extra breathing room above the
-  // footer instead of being stranded as dead space beneath it.
-  const [extraGap, setExtraGap] = useState(0);
-  const extraGapRef = useRef(0);
-  extraGapRef.current = extraGap;
-  const spacerFilledRef = useRef(false);
-
   const TIER_FALLBACK: SpacingTier[] = ['roomy', 'medium', 'tight'];
   const [tier, setTier] = useState<SpacingTier>('tight');
   const tierRef = useRef<SpacingTier>('tight');
@@ -531,11 +521,9 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       if (!window.matchMedia('(orientation: portrait)').matches) {
         if (portraitSizeRef.current !== null) setPortraitSize(null);
         if (tierRef.current !== 'tight') setTier('tight');
-        if (extraGapRef.current !== 0) setExtraGap(0);
         portraitLockedRef.current = false;
         tierSettledRef.current = false;
         filledRef.current = false;
-        spacerFilledRef.current = false;
         return;
       }
       const footer = root.querySelector('footer');
@@ -627,21 +615,6 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         }
         filledRef.current = true;
       }
-
-      if (filledRef.current && !spacerFilledRef.current) {
-        // Phase 4: portrait and spacing are both maxed out — often because
-        // phase 3's width cap was reached (a tall-but-narrow phone has far
-        // more spare height than width) well before the vertical slack
-        // that produced it ran out. totalNow already reflects any extraGap
-        // already applied (it's live DOM, not a stored assumption), so
-        // this converges the same iterative way phase 1 does.
-        const remainingSlack = available - totalNow - SAFETY_MARGIN;
-        if (remainingSlack > 1) {
-          setExtraGap(extraGapRef.current + remainingSlack);
-          return;
-        }
-        spacerFilledRef.current = true;
-      }
     };
     const recalcSettled = () => {
       recalc();
@@ -667,7 +640,7 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
     // of ever settling. Comparing against the last actually-seen size
     // filters that out; a real resize still updates it and still resets.
     const lastSize = lastSizeRef;
-    const checkForResize = () => {
+    const ro = new ResizeObserver(() => {
       const w = root.clientWidth;
       const h = root.clientHeight;
       const last = lastSize.current;
@@ -678,31 +651,15 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       portraitLockedRef.current = false;
       tierSettledRef.current = false;
       filledRef.current = false;
-      spacerFilledRef.current = false;
       recalcSettled();
-    };
-    const ro = new ResizeObserver(checkForResize);
+    });
     ro.observe(root);
     lastSize.current = { w: root.clientWidth, h: root.clientHeight };
     recalcSettled();
-    // Real fullscreen on Android Chrome isn't atomic: the address bar
-    // animates out over the following few hundred ms as it engages, and
-    // ResizeObserver doesn't reliably fire for every step of that
-    // animation on every device — root.clientHeight can end up read (and
-    // locked in) mid-transition, before the space it actually settles
-    // into exists yet. A few delayed re-checks after mount, plus one right
-    // on the Fullscreen API's own change event, catch whatever the
-    // observer missed; checkForResize is a no-op if the size genuinely
-    // hasn't moved, so this doesn't add jank on a device where the first
-    // reading was already final.
-    const settleTimers = [150, 400, 800, 1500].map((delay) => window.setTimeout(checkForResize, delay));
-    document.addEventListener('fullscreenchange', checkForResize);
     return () => {
       ro.disconnect();
       cancelAnimationFrame(rafA);
       cancelAnimationFrame(rafB);
-      settleTimers.forEach((id) => window.clearTimeout(id));
-      document.removeEventListener('fullscreenchange', checkForResize);
     };
   }, [tier]);
 
@@ -793,11 +750,6 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
           </div>
         </div>
       </div>
-
-      {/* Phase 4 spacer — see the effect above. Only ever non-zero in
-          portrait, and only once the portrait and spacing tier have both
-          hit their own ceilings with room still left over. */}
-      {extraGap > 0 && <div className="shrink-0" style={{ height: extraGap }} />}
 
       {/* Bottom Action Footer — same buttons/classes as desktop's, minus the
           bottom accent line in portrait, to reclaim vertical room for the
