@@ -479,20 +479,33 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
   // Spacing is dynamic too (see the tiers above), and that's exactly what
   // went wrong the first time this was tried: growing the spacing shrinks
   // how much height is left for everything else, including the portrait,
-  // if both are solved for at once. So they aren't solved at once. Phase 1
-  // below computes portraitSize against the tightest spacing tier ONLY —
-  // the same value this screen already shipped with — and locks it via
-  // portraitLockedRef. Only once locked does phase 2 try roomier spacing
-  // tiers, falling back a tier at a time if one doesn't fit, but strictly
-  // spending leftover room the locked portrait didn't need. It can grow
-  // spacing; it can never claim room back from the portrait.
+  // if both are solved for at once. So they aren't solved at once, and now
+  // there's a third phase besides — a spacing tier only ever spends room
+  // in small, discrete jumps, so on a screen tall enough it can settle on
+  // "roomy" (the most generous tier) while a large, genuinely dead gap
+  // still sits below the footer. Phase 3 below closes exactly that gap by
+  // growing the portrait again — never spacing — since spacing tiers are
+  // meant to read as deliberate breathing room, not stretch to arbitrary
+  // amounts, while a bigger hero image only ever looks better.
+  //
+  // Phase 1 computes portraitSize against the tightest spacing tier ONLY —
+  // the same value this screen already shipped with — and locks it as a
+  // FLOOR via portraitLockedRef. Phase 2 then tries roomier spacing tiers
+  // against that floor, falling back a tier at a time if one doesn't fit.
+  // Phase 3 takes whatever tier phase 2 settled on and, if there's still
+  // slack beyond it, grows the (already-floored) portrait to absorb it.
+  // Every phase can only push portraitSize up from here on — never down.
   const PORTRAIT_SIZE_MIN = 48;
-  const PORTRAIT_SIZE_MAX = 240;
+  const PORTRAIT_SIZE_SOFT_MAX = 240; // phase 1's cap, before spacing gets a turn
+  const PORTRAIT_SIZE_HARD_MAX = 640; // phase 3's cap, once spacing is maxed too
   const PORTRAIT_SIZE_DEFAULT = 176; // matches the landscape/desktop w-44 fallback
   const [portraitSize, setPortraitSize] = useState<number | null>(null);
   const portraitSizeRef = useRef<number | null>(null);
   portraitSizeRef.current = portraitSize;
   const portraitLockedRef = useRef(false);
+  const tierSettledRef = useRef(false);
+  const filledRef = useRef(false);
+  const lastSizeRef = useRef<{ w: number; h: number } | null>(null);
 
   const TIER_FALLBACK: SpacingTier[] = ['roomy', 'medium', 'tight'];
   const [tier, setTier] = useState<SpacingTier>('tight');
@@ -509,6 +522,8 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         if (portraitSizeRef.current !== null) setPortraitSize(null);
         if (tierRef.current !== 'tight') setTier('tight');
         portraitLockedRef.current = false;
+        tierSettledRef.current = false;
+        filledRef.current = false;
         return;
       }
       const footer = root.querySelector('footer');
@@ -532,25 +547,28 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       // font metrics, border/content-box conversions) means this can land
       // a couple of px optimistic. Erring small avoids a scroll; erring
       // big defeats the entire point of measuring in the first place.
-      const SAFETY_MARGIN = 10;
+      const SAFETY_MARGIN = 16;
 
       if (!portraitLockedRef.current) {
-        // Phase 1: lock the portrait's size under the tightest spacing.
+        // Phase 1: establish the portrait's floor under the tightest
+        // spacing — from here on it is a floor, never a fixed value.
         if (tierRef.current !== 'tight') {
           setTier('tight');
           return;
         }
         const currentCircle = portraitSizeRef.current ?? PORTRAIT_SIZE_DEFAULT;
         const fixedHeight = totalNow - currentCircle;
-        const next = Math.min(PORTRAIT_SIZE_MAX, Math.max(PORTRAIT_SIZE_MIN, Math.round(available - fixedHeight - SAFETY_MARGIN)));
+        const next = Math.min(PORTRAIT_SIZE_SOFT_MAX, Math.max(PORTRAIT_SIZE_MIN, Math.round(available - fixedHeight - SAFETY_MARGIN)));
         if (portraitSizeRef.current === null || Math.abs(portraitSizeRef.current - next) > 1) {
           setPortraitSize(next);
           return;
         }
         portraitLockedRef.current = true;
-        if (next < PORTRAIT_SIZE_MAX - 1) {
+        if (next < PORTRAIT_SIZE_SOFT_MAX - 1) {
           // The portrait absorbed every bit of available room on its own —
-          // nothing left over to spend on more generous spacing.
+          // nothing left over for spacing or further growth to spend.
+          tierSettledRef.current = true;
+          filledRef.current = true;
           return;
         }
         // The portrait capped out with room to spare; let phase 2 try to
@@ -559,15 +577,43 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         return;
       }
 
-      // Phase 2: portraitSize is locked and untouchable from here on.
-      // Confirm the current tier's spacing still fits it; if not, fall
-      // back a tier and re-check — never touching portraitSize again.
-      if (totalNow <= available - SAFETY_MARGIN) {
-        return; // fits; this tier is the final answer.
+      if (!tierSettledRef.current) {
+        // Phase 2: the portrait floor is locked. Confirm the current
+        // tier's spacing still fits above it; if not, fall back a tier
+        // and re-check — never touching the portrait floor itself.
+        if (totalNow <= available - SAFETY_MARGIN) {
+          tierSettledRef.current = true;
+        } else {
+          const idx = TIER_FALLBACK.indexOf(tierRef.current);
+          if (idx >= 0 && idx < TIER_FALLBACK.length - 1) {
+            setTier(TIER_FALLBACK[idx + 1]);
+          } else {
+            tierSettledRef.current = true; // already at 'tight'; nothing further to fall back to
+          }
+          return;
+        }
       }
-      const idx = TIER_FALLBACK.indexOf(tierRef.current);
-      if (idx >= 0 && idx < TIER_FALLBACK.length - 1) {
-        setTier(TIER_FALLBACK[idx + 1]);
+
+      if (!filledRef.current) {
+        // Phase 3: the spacing tier is settled. Spend whatever's still
+        // left over by growing the (already-floored) portrait further —
+        // this is what actually closes a large dead gap at the bottom
+        // instead of just leaving it once a tier happens to "fit". Capped
+        // by width too, not just PORTRAIT_SIZE_HARD_MAX: a tall-but-narrow
+        // phone has plenty of vertical slack but nowhere near 640px of
+        // width, and letting the circle outgrow the screen's width sends
+        // the card into horizontal overflow — which then measures as an
+        // ever-changing footer position, so this never converges at all.
+        const current = portraitSizeRef.current ?? PORTRAIT_SIZE_DEFAULT;
+        const widthCap = Math.floor(root.clientWidth * 0.62);
+        const hardMax = Math.min(PORTRAIT_SIZE_HARD_MAX, widthCap);
+        const slack = available - totalNow - SAFETY_MARGIN;
+        const next = Math.min(hardMax, Math.max(current, Math.round(current + slack)));
+        if (next - current > 1) {
+          setPortraitSize(next);
+          return;
+        }
+        filledRef.current = true;
       }
     };
     const recalcSettled = () => {
@@ -580,15 +626,35 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       });
     };
     // A genuine resize (rotation, address bar showing/hiding) invalidates
-    // any previous lock — re-derive from scratch for the new available
+    // every phase above — re-derive from scratch for the new available
     // height. Re-runs of this same effect triggered by its OWN setTier
-    // calls (the [tier] dependency below) must NOT reset the lock, or
+    // calls (the [tier] dependency below) must NOT reset any of them, or
     // phase 2's tier search would restart phase 1 on every attempt.
+    //
+    // ResizeObserver is not a reliable enough signal for "did it change"
+    // on its own here: observed in practice re-firing on root every frame
+    // with the exact same contentRect, seemingly triggered by this same
+    // effect's own setState-driven layout passes rather than any genuine
+    // size change — which reset every phase back to phase 1 each time and
+    // produced a permanent oscillation between two portrait sizes instead
+    // of ever settling. Comparing against the last actually-seen size
+    // filters that out; a real resize still updates it and still resets.
+    const lastSize = lastSizeRef;
     const ro = new ResizeObserver(() => {
+      const w = root.clientWidth;
+      const h = root.clientHeight;
+      const last = lastSize.current;
+      if (last && Math.abs(last.w - w) < 1 && Math.abs(last.h - h) < 1) {
+        return;
+      }
+      lastSize.current = { w, h };
       portraitLockedRef.current = false;
+      tierSettledRef.current = false;
+      filledRef.current = false;
       recalcSettled();
     });
     ro.observe(root);
+    lastSize.current = { w: root.clientWidth, h: root.clientHeight };
     recalcSettled();
     return () => {
       ro.disconnect();
