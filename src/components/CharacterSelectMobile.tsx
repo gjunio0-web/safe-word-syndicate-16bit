@@ -4,11 +4,40 @@ import { CHARACTERS } from '../game/characterData';
 import { ChevronLeft, ChevronRight, Crosshair, Play } from 'lucide-react';
 import { sound } from '../game/sound';
 
-const charColors: Record<CharacterId, { text: string }> = {
-  FEET_MASTER: { text: 'text-[#00ffff]' },
-  FUN_MAKER: { text: 'text-[#ff00ff]' },
-  OMEGA_BIKER: { text: 'text-[#ffff00]' },
-  ANGRY_CORSO: { text: 'text-[#ff4e00]' },
+// One accent per fighter, applied to the name and to the two rings that
+// frame them: the portrait's own circle and the navigation arrows either
+// side of it. Written as whole class strings rather than assembled from a
+// hex value at runtime — Tailwind only emits classes it can see spelled
+// out in the source, so an interpolated `border-[${hex}]` would compile to
+// nothing at all.
+const charColors: Record<
+  CharacterId,
+  { text: string; border: string; portraitGlow: string; arrowGlow: string }
+> = {
+  FEET_MASTER: {
+    text: 'text-[#00ffff]',
+    border: 'border-[#00ffff]',
+    portraitGlow: 'shadow-[0_0_25px_rgba(0,255,255,0.6)]',
+    arrowGlow: 'shadow-[0_0_15px_rgba(0,255,255,0.4)]',
+  },
+  FUN_MAKER: {
+    text: 'text-[#ff00ff]',
+    border: 'border-[#ff00ff]',
+    portraitGlow: 'shadow-[0_0_25px_rgba(255,0,255,0.6)]',
+    arrowGlow: 'shadow-[0_0_15px_rgba(255,0,255,0.4)]',
+  },
+  OMEGA_BIKER: {
+    text: 'text-[#ffff00]',
+    border: 'border-[#ffff00]',
+    portraitGlow: 'shadow-[0_0_25px_rgba(255,255,0,0.6)]',
+    arrowGlow: 'shadow-[0_0_15px_rgba(255,255,0,0.4)]',
+  },
+  ANGRY_CORSO: {
+    text: 'text-[#ff4e00]',
+    border: 'border-[#ff4e00]',
+    portraitGlow: 'shadow-[0_0_25px_rgba(255,78,0,0.6)]',
+    arrowGlow: 'shadow-[0_0_15px_rgba(255,78,0,0.4)]',
+  },
 };
 
 interface CharacterSelectMobileProps {
@@ -230,7 +259,7 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSi
           <div ref={portraitWrapRef} className={`relative flex items-center justify-center w-full ${sp.portraitWrapPy} landscape:py-0`}>
             <div
               style={circleStyle}
-              className="landscape:w-28 landscape:h-28 w-44 h-44 rounded-full border-4 landscape:border-2 border-[#00ffff] p-1.5 landscape:p-1 bg-black shadow-[0_0_25px_rgba(0,255,255,0.6)] overflow-hidden relative"
+              className={`landscape:w-28 landscape:h-28 w-44 h-44 rounded-full border-4 landscape:border-2 ${theme.border} p-1.5 landscape:p-1 bg-black ${theme.portraitGlow} overflow-hidden relative`}
             >
               {char.portraitUrl && (
                 <img
@@ -768,6 +797,9 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
   }, [tier]);
 
   const rs = ROOT_SPACING[tier];
+  // The arrows sit outside the sliding track, so they take their accent from
+  // whichever fighter is currently centred rather than from a card of their own.
+  const arrowTheme = charColors[char.id];
 
   return (
     // landscape:justify-start pairs with overflow-y-auto (the safety net -
@@ -887,7 +919,7 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         onClick={() => handleArrow(-1)}
         aria-label="Previous fighter"
         style={arrowTop === null ? undefined : { top: arrowTop }}
-        className="absolute left-1.5 landscape:left-1 -translate-y-1/2 z-30 p-2.5 landscape:p-1.5 rounded-full bg-[#110826]/90 border-2 border-[#00ffff] text-[#00ffff] shadow-[0_0_15px_rgba(0,255,255,0.4)] active:scale-90 active:bg-[#1f103f] transition-[background-color,transform]"
+        className={`absolute left-1.5 landscape:left-1 -translate-y-1/2 z-30 p-2.5 landscape:p-1.5 rounded-full bg-[#110826]/90 border-2 ${arrowTheme.border} ${arrowTheme.text} ${arrowTheme.arrowGlow} active:scale-90 active:bg-[#1f103f] transition-[background-color,transform]`}
       >
         <ChevronLeft className="w-6 h-6 landscape:w-4 landscape:h-4" />
       </button>
@@ -895,7 +927,7 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         onClick={() => handleArrow(1)}
         aria-label="Next fighter"
         style={arrowTop === null ? undefined : { top: arrowTop }}
-        className="absolute right-1.5 landscape:right-1 -translate-y-1/2 z-30 p-2.5 landscape:p-1.5 rounded-full bg-[#110826]/90 border-2 border-[#00ffff] text-[#00ffff] shadow-[0_0_15px_rgba(0,255,255,0.4)] active:scale-90 active:bg-[#1f103f] transition-[background-color,transform]"
+        className={`absolute right-1.5 landscape:right-1 -translate-y-1/2 z-30 p-2.5 landscape:p-1.5 rounded-full bg-[#110826]/90 border-2 ${arrowTheme.border} ${arrowTheme.text} ${arrowTheme.arrowGlow} active:scale-90 active:bg-[#1f103f] transition-[background-color,transform]`}
       >
         <ChevronRight className="w-6 h-6 landscape:w-4 landscape:h-4" />
       </button>
