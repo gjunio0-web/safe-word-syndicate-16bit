@@ -37,3 +37,32 @@
 .animate-fadeIn {
   animation: fadeIn 0.18s ease-out;
 }
+
+/*
+ * Mobile input hygiene.
+ *
+ * None of this existed anywhere in the tree: no touch-action, no
+ * overscroll-behavior, no callout suppression. On a phone that left the
+ * browser's own gestures sitting on top of the game. Double-tapping PUNCH —
+ * which is just what mashing looks like to a browser — zoomed the viewport
+ * mid-wave. Holding a direction could raise a selection callout on iOS,
+ * which `select-none` does not cover. And an overscroll near the top of the
+ * screen fired pull-to-refresh. There is no save in this game: a refresh
+ * costs the entire run.
+ *
+ * `manipulation`, not `none`: pinch-zoom stays alive for the Codex and the
+ * Jukebox, which are reading screens. The one-word alternative
+ * (user-scalable=no on the viewport meta) would have killed zoom everywhere
+ * and traded a gameplay annoyance for a real accessibility regression. The
+ * playfield's own `touch-action: none` belongs on the control surface, not
+ * here, and lands with the D-pad rewrite.
+ */
+html,
+body {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+body {
+  -webkit-touch-callout: none;
+}

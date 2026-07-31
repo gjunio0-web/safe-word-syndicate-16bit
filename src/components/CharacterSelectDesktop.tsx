@@ -201,8 +201,25 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
     onSelect(selectedP1, selectedP2 || undefined, mode);
   };
 
+  /* The 100vh minimum-height utility that used to sit on this element is
+   * gone. It was inert here: this file only ever renders on desktop —
+   * CharacterSelect picks between it and CharacterSelectMobile by device,
+   * not by width — and on a desktop browser 100vh and the h-dvh root it
+   * lives inside resolve to the same number.
+   *
+   * Removed anyway, because inert is not the same as harmless. The one
+   * device that can reach this file *and* has an address bar that retracts
+   * is a tablet the device test reads as desktop; there a 100vh minimum
+   * would force this screen taller than its own container and push the
+   * footer under the browser chrome. h-full against a definite parent is
+   * the honest height either way, and overflow-y-auto still catches
+   * anything genuinely too tall.
+   *
+   * (Described rather than named: Tailwind's scanner reads comment text as
+   * eagerly as className strings, so spelling the class out here would emit
+   * it straight back into the bundle it was just removed from.) */
   return (
-    <div className="relative w-full h-full min-h-screen bg-[#0a0a0a] text-white flex flex-col justify-between p-2 sm:p-4 md:p-6 select-none font-sans overflow-y-auto border-2 sm:border-8 md:border-[12px] border-[#ff00ff]/10">
+    <div className="relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-between p-2 sm:p-4 md:p-6 select-none font-sans overflow-y-auto border-2 sm:border-8 md:border-[12px] border-[#ff00ff]/10">
       {/* Top Header - Controls & Mode Selector */}
       <header className="flex flex-col md:flex-row justify-between items-center px-3 py-2.5 sm:px-6 sm:py-4 bg-[#1a1a1a] border-b-4 border-[#ff00ff] gap-3 sm:gap-4">
         <div>

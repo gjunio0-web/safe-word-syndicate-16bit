@@ -808,13 +808,18 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
     // instead of hiding content, rather than justify-between spreading
     // things across a height that isn't really there.
     //
-    // h-full only, no min-h-screen: `screen` is min-height:100vh, the large
-    // viewport that ignores the browser's address bar. The parent screen
-    // container is sized with h-dvh (the address-bar-aware height); adding
-    // a 100vh *minimum* on top of that forced this root taller than the
-    // actually-visible viewport on a real phone whenever the address bar
-    // was showing, producing a vertical scroll that a headless viewport
-    // (which has no address bar to shrink) never reproduces.
+    // h-full only, with no minimum-height utility alongside it. The one that
+    // used to be here resolved to a 100vh minimum — the large viewport, which
+    // ignores the browser's address bar. The parent screen container is sized
+    // with h-dvh (the address-bar-aware height); a 100vh *minimum* on top of
+    // that forced this root taller than the actually-visible viewport on a
+    // real phone whenever the address bar was showing, producing a vertical
+    // scroll that a headless viewport (which has no address bar to shrink)
+    // never reproduces.
+    //
+    // Described rather than named on purpose: Tailwind's scanner reads comment
+    // text as eagerly as it reads className strings, so spelling the class out
+    // here put it straight back into the bundle it had just been removed from.
     <div
       ref={rootRef}
       className={`relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-start ${rs.rootPadding} landscape:px-1.5 landscape:py-1.5 select-none font-sans overflow-y-auto border-2 border-[#ff00ff]/10`}
