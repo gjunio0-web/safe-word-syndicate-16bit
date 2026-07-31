@@ -22,19 +22,32 @@ interface DossierProps {
   char: CharacterInfo;
   id?: string;
   portraitWrapRef?: React.Ref<HTMLDivElement>;
+  portraitSize?: number | null;
 }
 
 /**
  * One fighter's dossier card. Rendered three at a time (previous / current /
  * next) side by side inside the sliding track below, so a drag reveals the
  * neighboring fighter's *actual* card rather than a static decoration.
+ *
+ * `portraitSize` (portrait orientation only) is a measured pixel value, not
+ * a CSS trick: nested flexbox "shrink to fill whatever's left, but never
+ * below a sibling's content size" turns out to need the shrinkable item's
+ * automatic minimum removed at exactly the right ancestor level — get that
+ * wrong and either the image balloons past its parent (clipped invisibly
+ * by the card's overflow-hidden, so quote/special-move/footer just vanish)
+ * or a fixed-size sibling (the badge) overflows the image's shrunk box and
+ * prints on top of the name below it. Measuring the real leftover space in
+ * JS and setting a plain pixel size sidesteps both failure modes.
  */
-const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef }) => {
+const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef, portraitSize }) => {
   const theme = charColors[char.id];
+  const circleStyle: React.CSSProperties | undefined =
+    portraitSize != null ? { width: portraitSize, height: portraitSize } : undefined;
   return (
     <div
       id={id}
-      className="w-full flex flex-col bg-[#0d0718] portrait:bg-transparent border-3 portrait:border-0 border-[#ff00ff] rounded-xl portrait:rounded-none shadow-[0_0_30px_rgba(255,0,255,0.5)] portrait:shadow-none p-4 landscape:p-2 relative overflow-hidden gap-4 landscape:gap-2"
+      className="w-full flex flex-col bg-[#0d0718] portrait:bg-transparent border-3 portrait:border-0 border-[#ff00ff] rounded-xl portrait:rounded-none shadow-[0_0_30px_rgba(255,0,255,0.5)] portrait:shadow-none p-2 landscape:p-2 relative overflow-hidden gap-4 landscape:gap-2"
     >
       {/* Top Arcade Marquee Header Bar — dropped in portrait per the
           redesign mockup; the landscape dossier keeps it. */}
@@ -50,13 +63,16 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef }) => {
         </span>
       </div>
 
-      <div className="flex flex-col landscape:flex-row items-center gap-3 landscape:gap-4 w-full">
+      <div className="flex flex-col landscape:flex-row items-center gap-2 landscape:gap-4 w-full">
         {/* Portrait column — landscape gives it a dedicated column with
             nothing else in it; the nav arrows live at the screen's own
             edges (rendered by the parent, aligned to this column). */}
-        <div className="flex flex-col items-center gap-3 landscape:gap-1.5 landscape:shrink-0 landscape:w-36">
-          <div ref={portraitWrapRef} className="relative flex items-center justify-center w-full py-1 landscape:py-0">
-            <div className="w-44 h-44 landscape:w-28 landscape:h-28 rounded-full border-4 landscape:border-2 border-[#00ffff] p-1.5 landscape:p-1 bg-black shadow-[0_0_25px_rgba(0,255,255,0.6)] overflow-hidden relative">
+        <div className="flex flex-col items-center gap-1 landscape:gap-1.5 landscape:shrink-0 landscape:w-36">
+          <div ref={portraitWrapRef} className="relative flex items-center justify-center w-full py-0 landscape:py-0">
+            <div
+              style={circleStyle}
+              className="landscape:w-28 landscape:h-28 w-44 h-44 rounded-full border-4 landscape:border-2 border-[#00ffff] p-1.5 landscape:p-1 bg-black shadow-[0_0_25px_rgba(0,255,255,0.6)] overflow-hidden relative"
+            >
               {char.portraitUrl && (
                 <img
                   src={char.portraitUrl}
@@ -68,7 +84,7 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef }) => {
               )}
             </div>
           </div>
-          <span className="bg-[#ff00ff] text-black text-xs landscape:text-[9px] font-black px-3 landscape:px-2 py-1 landscape:py-0.5 rounded-full border border-white font-mono shadow-md uppercase tracking-wider -mt-1 landscape:mt-0 whitespace-nowrap">
+          <span className="shrink-0 bg-[#ff00ff] text-black text-xs landscape:text-[9px] font-black px-3 landscape:px-2 py-0.5 landscape:py-0.5 rounded-full border border-white font-mono shadow-md uppercase tracking-wider landscape:mt-0 whitespace-nowrap">
             1P CHAMPION
           </span>
         </div>
@@ -76,17 +92,16 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef }) => {
         {/* Info column — name/archetype, stats, quote, special move.
             landscape:flex-row on the top row puts the name+archetype
             beside the stat bars instead of stacking them above; portrait
-            keeps the original vertical stack, where there's height to
-            spare for it. */}
-        <div className="flex flex-col gap-3 landscape:gap-1.5 w-full landscape:flex-1 landscape:min-w-0">
-          <div className="flex flex-col landscape:flex-row landscape:items-center gap-3 landscape:gap-3 w-full">
+            keeps the original vertical stack. */}
+        <div className="flex flex-col gap-1 landscape:gap-1.5 w-full landscape:flex-1 landscape:min-w-0">
+          <div className="flex flex-col landscape:flex-row landscape:items-center gap-2 landscape:gap-3 w-full">
             <div className="text-center landscape:text-left landscape:shrink-0">
               <h2 className={`text-3xl landscape:text-lg font-black italic uppercase tracking-tight landscape:whitespace-nowrap ${theme.text}`}>{char.name}</h2>
               <p className="text-sm landscape:text-[10px] text-amber-400 font-mono font-bold italic mt-0.5 landscape:mt-0 landscape:whitespace-nowrap">{char.archetype}</p>
             </div>
 
             {/* Stat Progress Bars — same bars, same math, as desktop */}
-            <div className="bg-[#120a21] border border-[#ff00ff]/50 p-3 landscape:p-1.5 rounded-lg space-y-2 landscape:space-y-1 w-full landscape:flex-1 landscape:min-w-0 shadow-inner">
+            <div className="bg-[#120a21] border border-[#ff00ff]/50 p-1.5 landscape:p-1.5 rounded-lg space-y-0.5 landscape:space-y-1 w-full landscape:flex-1 landscape:min-w-0 shadow-inner">
               <div className="flex justify-between items-center text-xs landscape:text-[10px] font-mono text-zinc-300">
                 <span className="font-bold text-[#ff00ff]">POWER</span>
                 <div className="w-28 landscape:w-24 h-2 landscape:h-1.5 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
@@ -109,15 +124,15 @@ const Dossier: React.FC<DossierProps> = ({ char, id, portraitWrapRef }) => {
           </div>
 
           {/* Character Quote Box */}
-          <p className="text-xs landscape:text-[10px] text-zinc-200 font-mono italic bg-[#170c2a] p-3 landscape:p-1.5 border border-[#3b1e5d] rounded-md text-left leading-relaxed landscape:leading-snug w-full">
+          <p className="text-xs landscape:text-[10px] text-zinc-200 font-mono italic bg-[#170c2a] p-1 landscape:p-1.5 border border-[#3b1e5d] rounded-md text-left leading-tight landscape:leading-snug w-full">
             "{char.quote}"
           </p>
 
           {/* Special Move Banner */}
-          <div className="bg-[#18092a] p-3 landscape:p-1.5 border-l-4 landscape:border-l-2 border-[#00ffff] rounded-r-md text-left w-full">
+          <div className="bg-[#18092a] p-1 landscape:p-1.5 border-l-4 landscape:border-l-2 border-[#00ffff] rounded-r-md text-left w-full">
             <span className="text-[10px] landscape:text-[8px] text-[#00ffff] font-mono font-bold uppercase block tracking-wider">SPECIAL OVERDRIVE ATTACK</span>
             <span className="font-black text-sm landscape:text-xs text-white uppercase font-mono block">{char.powerMoveName}</span>
-            <p className="text-xs landscape:text-[10px] text-zinc-300 font-mono leading-normal landscape:leading-snug mt-1 landscape:mt-0.5">{char.powerMoveDesc}</p>
+            <p className="text-xs landscape:text-[10px] text-zinc-300 font-mono leading-tight landscape:leading-snug mt-0.5 landscape:mt-0.5">{char.powerMoveDesc}</p>
           </div>
         </div>
       </div>
@@ -317,19 +332,108 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
     };
   }, []);
 
+  // ---- Portrait-mode hero size: measured, not guessed.
+  //
+  // Every other size in this screen is fixed (the fonts are a floor that
+  // must not shrink); the portrait image is the one element that's free to
+  // grow or shrink, and it needs to land on whatever value makes the whole
+  // card's natural height exactly match the root's available height. A
+  // real phone's visible height varies enormously with the browser chrome
+  // (the address bar never auto-hides here, since the page itself never
+  // scrolls) — sizing the image for one assumed viewport height is what
+  // caused this to still overflow on shorter/chrome-visible viewports.
+  //
+  // The relationship between the circle's size and the card's total
+  // natural height is a simple 1:1 addition (nothing else in the layout
+  // reacts to the circle's size), so a single measurement converges
+  // exactly: available - (current total height - current circle size)
+  // gives the exact circle size that makes the total height fit.
+  const PORTRAIT_SIZE_MIN = 48;
+  const PORTRAIT_SIZE_MAX = 240;
+  const PORTRAIT_SIZE_DEFAULT = 176; // matches the landscape/desktop w-44 fallback
+  const [portraitSize, setPortraitSize] = useState<number | null>(null);
+  const portraitSizeRef = useRef<number | null>(null);
+  portraitSizeRef.current = portraitSize;
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    let rafA = 0;
+    let rafB = 0;
+    const recalc = () => {
+      if (!window.matchMedia('(orientation: portrait)').matches) {
+        if (portraitSizeRef.current !== null) setPortraitSize(null);
+        return;
+      }
+      const footer = root.querySelector('footer');
+      if (!footer) return;
+      // root.scrollHeight is the wrong signal here: per spec it's
+      // max(content height, clientHeight) — when the content is SHORTER
+      // than the box (exactly the case we're fixing towards), it silently
+      // reports clientHeight instead of the true, tighter content extent,
+      // which made this always converge back to the CSS default. The
+      // footer's own bottom edge relative to root's top is the real
+      // end-of-content measurement regardless of which side it falls on.
+      // root.clientHeight is the content-box height (border excluded); the
+      // footer's rect is border-box/viewport-relative, so it has to be
+      // measured from root's content-box top (root's own top border offset
+      // by root.clientTop), not root's border-box top, or every reading is
+      // off by the border width.
+      const available = root.clientHeight;
+      const rootContentTop = root.getBoundingClientRect().top + root.clientTop;
+      const totalNow = footer.getBoundingClientRect().bottom - rootContentTop;
+      const currentCircle = portraitSizeRef.current ?? PORTRAIT_SIZE_DEFAULT;
+      const fixedHeight = totalNow - currentCircle;
+      // A few px of deliberate slack: sub-pixel layout rounding (fractional
+      // font metrics, border/content-box conversions) means this can land
+      // a couple of px optimistic. Erring small avoids a scroll; erring
+      // big defeats the entire point of measuring in the first place.
+      const SAFETY_MARGIN = 10;
+      const next = Math.min(PORTRAIT_SIZE_MAX, Math.max(PORTRAIT_SIZE_MIN, Math.round(available - fixedHeight - SAFETY_MARGIN)));
+      if (portraitSizeRef.current === null || Math.abs(portraitSizeRef.current - next) > 1) {
+        setPortraitSize(next);
+      }
+    };
+    const recalcSettled = () => {
+      recalc();
+      cancelAnimationFrame(rafA);
+      cancelAnimationFrame(rafB);
+      rafA = requestAnimationFrame(() => {
+        recalc();
+        rafB = requestAnimationFrame(recalc);
+      });
+    };
+    const ro = new ResizeObserver(recalcSettled);
+    ro.observe(root);
+    recalcSettled();
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(rafA);
+      cancelAnimationFrame(rafB);
+    };
+  }, []);
+
   return (
     // landscape:justify-start pairs with overflow-y-auto (the safety net -
     // present regardless, matching the title screen) so a device where the
     // landscape sizing below still doesn't quite fit falls back to a scroll
     // instead of hiding content, rather than justify-between spreading
     // things across a height that isn't really there.
+    //
+    // h-full only, no min-h-screen: `screen` is min-height:100vh, the large
+    // viewport that ignores the browser's address bar. The parent screen
+    // container is sized with h-dvh (the address-bar-aware height); adding
+    // a 100vh *minimum* on top of that forced this root taller than the
+    // actually-visible viewport on a real phone whenever the address bar
+    // was showing, producing a vertical scroll that a headless viewport
+    // (which has no address bar to shrink) never reproduces.
     <div
       ref={rootRef}
-      className="relative w-full h-full min-h-screen bg-[#0a0a0a] text-white flex flex-col justify-between landscape:justify-start p-2 landscape:p-1.5 select-none font-sans overflow-y-auto border-2 border-[#ff00ff]/10"
+      className="relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-start px-2 landscape:px-1.5 py-1.5 landscape:py-1.5 select-none font-sans overflow-y-auto border-2 border-[#ff00ff]/10"
     >
       {/* Top Header — identical to desktop's, minus the mode selector: mobile
           has nothing to choose there, it is always SOLO. */}
-      <header className="shrink-0 flex flex-col justify-between items-center px-3 landscape:px-2 py-2.5 landscape:py-1 bg-[#1a1a1a] border-b-4 landscape:border-b-2 border-[#ff00ff] gap-2 landscape:gap-0">
+      <header className="shrink-0 flex flex-col justify-between items-center px-3 landscape:px-2 py-1 landscape:py-1 bg-[#1a1a1a] border-b-2 landscape:border-b-2 border-[#ff00ff] gap-2 landscape:gap-0">
         <div className="text-center">
           <span className="text-[#00ffff] font-mono text-[10px] landscape:text-[8px] tracking-tighter uppercase">
             SYSTEM STATUS: RADICAL REBEL SELECT
@@ -345,12 +449,12 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         * carries real padding so the tap target isn't the same 6x6px box —
         * a hit area that small on a phone means missing the dot more often
         * than hitting it. */}
-      <div className="shrink-0 flex justify-center gap-0.5 mt-3 landscape:mt-1">
+      <div className="shrink-0 flex justify-center gap-0.5 mt-1 landscape:mt-1">
         {roster.map((c, i) => (
           <button
             key={c.id}
             onClick={() => setIndex(i)}
-            className="p-2.5 landscape:p-1.5 flex items-center justify-center"
+            className="p-1.5 landscape:p-1.5 flex items-center justify-center"
             aria-label={c.name}
           >
             <span
@@ -368,14 +472,14 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
         * with the others revealed by motion". */}
       <div
         ref={trackWrapRef}
-        className="shrink-0 mt-3 landscape:mt-1 overflow-hidden touch-pan-y cursor-grab active:cursor-grabbing"
+        className="shrink-0 mt-1 landscape:mt-1 overflow-hidden touch-pan-y cursor-grab active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
         <div
-          className="flex"
+          className="flex items-stretch"
           onTransitionEnd={onTrackTransitionEnd}
           style={{
             width: trackWidth ? trackWidth * 3 : '300%',
@@ -384,13 +488,13 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
           }}
         >
           <div className="shrink-0" style={slideStyle}>
-            <Dossier char={prevChar} />
+            <Dossier char={prevChar} portraitSize={portraitSize} />
           </div>
           <div className="shrink-0" style={slideStyle}>
-            <Dossier char={char} id="selected-fighter-banner" portraitWrapRef={portraitWrapRef} />
+            <Dossier char={char} id="selected-fighter-banner" portraitWrapRef={portraitWrapRef} portraitSize={portraitSize} />
           </div>
           <div className="shrink-0" style={slideStyle}>
-            <Dossier char={nextChar} />
+            <Dossier char={nextChar} portraitSize={portraitSize} />
           </div>
         </div>
       </div>
@@ -398,16 +502,16 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
       {/* Bottom Action Footer — same buttons/classes as desktop's, minus the
           bottom accent line in portrait, to reclaim vertical room for the
           hero art above. */}
-      <footer className="shrink-0 mt-3 landscape:mt-1 bg-black p-4 landscape:p-1.5 border-t-4 landscape:border-t-2 portrait:border-t-0 border-[#00ffff] flex flex-col landscape:flex-row gap-3 landscape:gap-1.5">
+      <footer className="shrink-0 mt-1 landscape:mt-1 bg-black p-1 landscape:p-1.5 border-t-4 landscape:border-t-2 portrait:border-t-0 border-[#00ffff] flex flex-col landscape:flex-row gap-1 landscape:gap-1.5">
         <button
           onClick={handleStart}
-          className="w-full px-8 py-3 landscape:py-1.5 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-sm landscape:text-xs uppercase italic tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,0,255,0.4)] active:scale-95 transition-[background-color,transform] cursor-pointer"
+          className="w-full px-8 py-1.5 landscape:py-1.5 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-sm landscape:text-xs uppercase italic tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(255,0,255,0.4)] active:scale-95 transition-[background-color,transform] cursor-pointer"
         >
           START BRAWL <Play className="w-4 h-4 landscape:w-3.5 landscape:h-3.5 fill-current" />
         </button>
         <button
           onClick={onBack}
-          className="w-full px-5 py-2.5 landscape:py-1.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] text-zinc-300 font-black text-xs landscape:text-[10px] uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap"
+          className="w-full px-5 py-1 landscape:py-1.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] text-zinc-300 font-black text-xs landscape:text-[10px] uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap"
         >
           ◄ BACK TO TITLE
         </button>
