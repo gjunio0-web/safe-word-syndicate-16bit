@@ -650,6 +650,7 @@ export default function App() {
               engine={engineRef.current}
               crtFilter={settings.crtFilter}
               showHitboxes={settings.showHitboxes}
+              touchControls={isMobile}
             />
 
             {activeBark && !activeDialogue && <BarkOverlay line={activeBark} />}

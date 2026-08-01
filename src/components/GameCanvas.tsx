@@ -6,11 +6,18 @@ import { renderEntitySprite } from '../game/spriteRenderer';
 import { CHARACTERS, ENEMIES } from '../game/characterData';
 import { ATTACKER_STANDOFF_X, PLAYER_KICK_REACH } from '../game/constants';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitViewport } from '../game/viewport';
+import { hudLayout } from '../game/hudLayout';
 
 interface GameCanvasProps {
   engine: GameEngine;
   crtFilter: boolean;
   showHitboxes?: boolean;
+  /**
+   * Whether the touch controls are mounted over this canvas. The boss bar has
+   * to step around them, and only App knows the device — asking here would put
+   * a device query inside a component that is otherwise pure presentation.
+   */
+  touchControls?: boolean;
 }
 
 // Stable across renders: useSyncExternalStore resubscribes when handed
@@ -18,8 +25,44 @@ interface GameCanvasProps {
 const subscribeGamepads = (onChange: () => void) => subscribeGamepadConnection(onChange);
 const getGamepadCount = () => connectedGamepadCount();
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showHitboxes = false }) => {
+export const GameCanvas: React.FC<GameCanvasProps> = ({
+  engine,
+  crtFilter,
+  showHitboxes = false,
+  touchControls = false,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  /* The boss bar's offset is arithmetic over the container's real size, not a
+   * fixed class, because a fixed class is what put it behind the D-pad on
+   * every phone narrower than ~800px. Measured here and resolved in
+   * hudLayout, which is tested against viewport shapes directly. */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [area, setArea] = React.useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      setArea((prev) =>
+        prev.width === rect.width && prev.height === rect.height
+          ? prev
+          : { width: rect.width, height: rect.height }
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const layout = hudLayout({
+    areaWidth: area.width,
+    areaHeight: area.height,
+    landscape: area.width >= area.height,
+    touchControls,
+  });
 
   useEffect(() => {
     let animationFrameId: number;
@@ -351,7 +394,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
   const gamepadCount = useSyncExternalStore(subscribeGamepads, getGamepadCount, getGamepadCount);
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
+    <div ref={rootRef} className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
       {/* HTML5 Canvas */}
       <canvas
         ref={canvasRef}
@@ -588,7 +631,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, crtFilter, showH
 
         return (
           <div
-            className={`absolute bottom-12 left-1/2 -translate-x-1/2 w-4/5 max-w-lg bg-black/95 border-2 p-3 rounded-xl pointer-events-none z-30 font-mono text-center ${
+            style={{ bottom: layout.bossBarBottom, maxWidth: layout.bossBarMaxWidth }}
+            className={`absolute left-1/2 -translate-x-1/2 w-4/5 bg-black/95 border-2 p-3 rounded-xl pointer-events-none z-30 font-mono text-center ${
               hostage
                 ? 'border-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.6)]'
                 : 'border-red-600 shadow-[0_0_30px_rgba(255,0,0,0.7)]'
