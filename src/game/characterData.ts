@@ -125,7 +125,25 @@ export interface EnemyInfo {
   attackRange: number;
   color: string;
   weaponName?: string;
+  /**
+   * What the fighter looks like and does. The counterpart of a hero's
+   * visualDesc, and like it, no longer rendered anywhere.
+   */
   description: string;
+  /**
+   * Who this is and why they turned up — the counterpart of a hero's `origin`,
+   * and named to match it so the codex can render both tabs from one shape.
+   *
+   * The League had no such field: enemies carried a description of their
+   * clothes and their attack and nothing about the person inside, while every
+   * hero carried a life. A bestiary that says what a uniform looks like but
+   * not who agreed to wear it is thin in a game whose subject is who complies
+   * and why.
+   *
+   * Kept inside the same ~200 character budget the hero profiles are tested
+   * against, because it lands in the same card at the same width.
+   */
+  origin: string;
 }
 
 export const ENEMIES: Record<EnemyType, EnemyInfo> = {
@@ -140,6 +158,8 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     color: '#e5e5ea',
     weaponName: 'Picket Sign',
     description: 'Pressed khakis and polo shirts. March with synchronized, robotic stiffness wielding heavy picket signs.',
+    origin:
+      'Recruited out of the congregation with a uniform allowance and a list of addresses. Marches in step because the man beside him does, and has never once been asked what he thinks.',
   },
   CONVERSION_THERAPIST: {
     type: 'CONVERSION_THERAPIST',
@@ -152,6 +172,8 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     color: '#a29bfe',
     weaponName: 'Guilt Vials / Repression Darts',
     description: 'Throws slowing splash vials and repression darts that disable hero Power Moves temporarily.',
+    origin:
+      'Licensed, credentialed, and paid by the hour to make loving the wrong person sound like a symptom. Keeps his distance because the work only holds while the patient cannot reach him.',
   },
   TRAD_WIFE_STRIKER: {
     type: 'TRAD_WIFE_STRIKER',
@@ -164,6 +186,8 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     color: '#ff7675',
     weaponName: 'Cast-Iron Skillet & Rolling Pin',
     description: 'Fast and nimble. Uses cast-iron skillets to parry heavy attacks and counter with swift rolling pin strikes.',
+    origin:
+      'Trained to defend a household she was assigned, with the only tools she was ever handed. Counters faster than anyone else in the League, and got that quick somewhere nobody asks about.',
   },
   BOSS_MADAM_MIZYDIA: {
     type: 'BOSS_MADAM_MIZYDIA',
@@ -176,6 +200,8 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     color: '#d63031',
     weaponName: 'Status Quo Magic & Censure Barriers',
     description: 'Fights behind a mahogany boardroom altar table. Summons Censure Shields and Excommunication waves.',
+    origin:
+      'Wrote the Purity Covenant, then built a tower to keep it in. Never raises her voice, because she has never had to — anything that argues back is already somebody else\'s file to close.',
   },
   BOSS_SAYONARA: {
     type: 'BOSS_SAYONARA',
@@ -188,5 +214,9 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     color: '#6c5ce7',
     weaponName: 'Heavy Knockback Tackle',
     description: 'An old female dog under Mizydia\'s control. Knocking out Mizydia\'s spell breaks her leash so she walks away freely!',
+    // Stops at the collar. What happens to it is the last beat of the
+    // campaign, and the codex opens from the title screen.
+    origin:
+      'Ran her own pack before the collar, and answered to nobody. What meets you in the broadcast chamber answers to Mizydia: the voice in her head has not been her own for a long time.',
   },
 };

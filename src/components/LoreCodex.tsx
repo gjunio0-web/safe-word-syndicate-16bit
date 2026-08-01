@@ -1,11 +1,112 @@
 import React, { useState } from 'react';
-import { CHARACTERS } from '../game/characterData';
+import { CHARACTERS, ENEMIES } from '../game/characterData';
 import { KEYBOARD_LAYOUT } from '../game/keyboard';
+import { portraitFor } from '../game/portraits';
+import { PortraitId } from '../types';
 import { BookOpen, X, Shield, Zap, Skull, Award } from 'lucide-react';
 
 interface LoreCodexProps {
   onClose: () => void;
 }
+
+/** Rank and file, in the order the campaign first sends them at you. */
+const GRUNTS = ['PURITY_PATROL', 'CONVERSION_THERAPIST', 'TRAD_WIFE_STRIKER'] as const;
+
+/** The two that end a stage. Sayonara stays collared here — see PortraitFrame. */
+const BOSSES = ['BOSS_SAYONARA', 'BOSS_MADAM_MIZYDIA'] as const;
+
+/** EnemyType and PortraitId are separate vocabularies; this is the bridge. */
+const ENEMY_PORTRAITS: Record<(typeof GRUNTS | typeof BOSSES)[number], PortraitId> = {
+  PURITY_PATROL: 'PURITY_PATROL',
+  CONVERSION_THERAPIST: 'CONVERSION_THERAPIST',
+  TRAD_WIFE_STRIKER: 'TRAD_WIFE_STRIKER',
+  // Not SAYONARA_FREED. That face is the last beat of the campaign and this
+  // book opens from the title screen, before a single punch is thrown.
+  BOSS_SAYONARA: 'SAYONARA',
+  BOSS_MADAM_MIZYDIA: 'MADAM_MIZYDIA',
+};
+
+/**
+ * The portrait frame the HEROES tab already used: 112x144, magenta border, CRT
+ * scanline. Pulled out so the tabs cannot drift — a codex that presents faces
+ * two different ways reads as two different books.
+ *
+ * The frame is taller than it is wide while every source image is square, so
+ * object-cover trims roughly 16px from each side rather than squashing the
+ * subject, and object-top spends that budget at the bottom of the image before
+ * it ever reaches a face.
+ */
+const PortraitFrame: React.FC<{ src?: string; alt: string }> = ({ src, alt }) =>
+  src ? (
+    <div className="relative w-full sm:w-28 h-36 bg-black border-2 border-[#ff00ff] overflow-hidden shrink-0 shadow-lg">
+      <img src={src} alt={alt} className="w-full h-full object-cover object-top" />
+      <div
+        className="absolute inset-0 pointer-events-none opacity-40"
+        style={{
+          background: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%)',
+          backgroundSize: '100% 4px',
+        }}
+      />
+    </div>
+  ) : null;
+
+/**
+ * ENEMIES and BOSSES, in the layout the HEROES tab established: a two-column
+ * grid of cards, each a face beside a profile with a stat block underneath
+ * where a hero card carries its Power Move.
+ *
+ * Read from the ENEMIES table rather than written out in JSX. The two tabs
+ * this replaces held their own hand-typed copies of names and descriptions
+ * that had already drifted from the table the fight itself runs on — the
+ * codex called them "Purity Patrols" while the game called them "Purity
+ * Patrol Grunt", and the numbers appeared nowhere at all.
+ */
+const Bestiary: React.FC<{ types: readonly (keyof typeof ENEMY_PORTRAITS)[] }> = ({ types }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {types.map((type) => {
+      const e = ENEMIES[type];
+      return (
+        <div
+          key={type}
+          className="bg-[#111] p-4 border-2 border-[#333] hover:border-[#ff00ff] transition-colors space-y-3"
+        >
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
+            <PortraitFrame src={portraitFor(ENEMY_PORTRAITS[type])} alt={e.name} />
+            <div className="flex-1 space-y-1">
+              <h4
+                className="font-black text-xl uppercase italic leading-none"
+                style={{ color: e.color }}
+              >
+                {e.name}
+              </h4>
+              <span className="text-[10px] text-amber-400 font-mono block uppercase tracking-widest font-bold">
+                {e.role}
+              </span>
+              <p className="text-xs text-gray-300 leading-relaxed font-mono mt-2">{e.origin}</p>
+            </div>
+          </div>
+
+          <div className="bg-[#0a0a0a] p-2.5 border border-[#333] text-xs font-mono">
+            <span className="font-bold text-[#ff00ff] block mb-1">⚡ {e.weaponName}</span>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
+              {([
+                ['HEALTH', String(e.maxHp)],
+                ['DAMAGE', String(e.power)],
+                ['REACH', String(e.attackRange)],
+                ['SPEED', e.speed.toFixed(1)],
+              ] as const).map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-2">
+                  <dt className="text-gray-500">{label}</dt>
+                  <dd className="text-zinc-300">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+);
 
 /**
  * Written out here rather than imported because the engine holds these
@@ -132,9 +233,6 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
                       <h4 className="font-black text-[#00ffff] text-xl uppercase italic leading-none">{hero.name}</h4>
                       <span className="text-[10px] text-amber-400 font-mono block uppercase tracking-widest font-bold">{hero.archetype}</span>
                       <p className="text-xs text-gray-300 leading-relaxed font-mono mt-2">{hero.origin}</p>
-                      <p className="text-[11px] text-gray-500 leading-relaxed font-mono italic mt-1">
-                        "{hero.visualDesc}"
-                      </p>
                     </div>
                   </div>
 
@@ -147,48 +245,9 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
             </div>
           )}
 
-          {tab === 'ENEMIES' && (
-            <div className="space-y-3 font-mono text-xs">
-              <div className="bg-[#111] p-4 border-2 border-[#ff00ff]">
-                <h4 className="font-black text-[#ff00ff] text-sm uppercase">Purity Patrols (Low-Level Grunts)</h4>
-                <p className="text-gray-300 mt-1">
-                  March in pressed khakis and polo shirts with synchronized, robotic stiffness wielding heavy picket signs.
-                </p>
-              </div>
+          {tab === 'ENEMIES' && <Bestiary types={GRUNTS} />}
 
-              <div className="bg-[#111] p-4 border-2 border-[#00ffff]">
-                <h4 className="font-black text-[#00ffff] text-sm uppercase">Conversion Therapists (Ranged Suppressors)</h4>
-                <p className="text-gray-300 mt-1">
-                  Throw splash Guilt Vials and Repression Darts that temporarily slow down fighters and lock out Power Moves!
-                </p>
-              </div>
-
-              <div className="bg-[#111] p-4 border-2 border-[#ffff00]">
-                <h4 className="font-black text-[#ffff00] text-sm uppercase">Trad-Wife Strikers (Agile Counter-Attackers)</h4>
-                <p className="text-gray-300 mt-1">
-                  Nimble fighters wielding weaponized cast-iron skillets and rolling pins. Capable of parrying heavy hits.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {tab === 'BOSSES' && (
-            <div className="space-y-4 font-mono text-xs">
-              <div className="bg-[#111] p-4 border-2 border-[#ff4e00] space-y-2">
-                <h4 className="font-black text-[#ff4e00] text-base uppercase">Madam Mizydia (The Ultimate Matriarch)</h4>
-                <p className="text-gray-300 leading-relaxed">
-                  Fights coldly from behind her mahogany altar-table in the Mega-Church Corporate Tower. Summons "Censure" barrier shields that absorb damage and projects sweeping Excommunication waves that lock out hero Power Moves.
-                </p>
-              </div>
-
-              <div className="bg-[#111] p-4 border-2 border-[#ff00ff] space-y-2">
-                <h4 className="font-black text-[#ff00ff] text-base uppercase">Sayonara (The Old Guard)</h4>
-                <p className="text-gray-300 leading-relaxed">
-                  Madam Mizydia's loyal guard dog. Performs screen-clearing knockback tackles. Depleting Mizydia's health breaks the mind control spell, allowing Sayonara to turn her back on Mizydia and walk away into freedom!
-                </p>
-              </div>
-            </div>
-          )}
+          {tab === 'BOSSES' && <Bestiary types={BOSSES} />}
 
           {tab === 'COMBOS' && (
             <div className="space-y-3 font-mono text-xs text-gray-300">

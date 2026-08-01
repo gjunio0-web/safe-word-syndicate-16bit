@@ -66,3 +66,125 @@ body {
 body {
   -webkit-touch-callout: none;
 }
+
+/*
+ * Scrollbars.
+ *
+ * Every scrolling surface in this game is a modal or a full-screen panel —
+ * the codex, the jukebox, game over, character select, the title screens.
+ * There is no ordinary document scroll anywhere, because the root is
+ * h-dvh overflow-hidden. So the browser's default bar was the one piece of
+ * chrome in the whole interface that had never been dressed: pale, rounded,
+ * and unmistakably a web widget sitting inside a 16-bit cabinet.
+ *
+ * Everything here follows what the panels already do rather than inventing a
+ * look: square corners, because nothing else in this UI is rounded and a
+ * radius is exactly what gives a default widget away; #0a0a0a for the track,
+ * the same value the codex uses behind its content; #ff00ff for the thumb,
+ * the colour of the codex frame and of every portrait border; and the same
+ * glow the panels carry via shadow-[0_0_Npx_rgba(255,0,255,...)].
+ *
+ * 12px, not thin. It has to be grabbable, and it sits in scale with the 2-4px
+ * borders and the 4px scanline the rest of the interface is built from.
+ *
+ * Gated on a fine pointer. Touch platforms draw overlay scrollbars that fade
+ * out on their own and cost no width; defining a webkit scrollbar there can
+ * pin a permanent 12px bar to the edge, which on a 360px phone is width taken
+ * from the content to display something a thumb never needs to grab.
+ */
+@media (pointer: fine) {
+  /*
+   * scrollbar-color and ::-webkit-scrollbar are mutually exclusive in Chrome:
+   * setting the standard property switches the browser to the standard
+   * scrollbar and it ignores every legacy pseudo-element. Applied to `*` with
+   * no guard, this one line silently cancelled the nine rules below and left a
+   * default 15px bar that had merely been repainted — which measuring the
+   * stylesheet could not see, because all ten rules were present and correct.
+   *
+   * So it is offered only to engines that have no pseudo-elements to lose.
+   * Chrome and Safari take the full treatment underneath; Firefox takes the
+   * colours and draws them on its own bar.
+   */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-color: #ff00ff #0a0a0a;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0a0a0a;
+    border-left: 1px solid #333;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #ff00ff;
+    /* The inset dark edge is the bevel the boxes get from their 2px borders,
+     * done with a shadow because a thumb has no border box to spare. */
+    box-shadow:
+      inset 0 0 0 2px #0a0a0a,
+      0 0 8px rgba(255, 0, 255, 0.5);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #ff4ef5;
+    box-shadow:
+      inset 0 0 0 2px #0a0a0a,
+      0 0 14px rgba(255, 0, 255, 0.8);
+  }
+
+  /*
+   * The end arrows, kept rather than lost.
+   *
+   * Styling ::-webkit-scrollbar at all makes Chrome drop these to zero height
+   * unless they are given one, so leaving them out would have quietly deleted
+   * two controls that are on the bar today — a removal by side effect, which
+   * is not a design decision anybody made.
+   *
+   * :single-button matters. Without it the rule also matches the paired
+   * buttons WebKit can place at each end, and a bar that grew extra arrows
+   * would be worse than one that lost them.
+   *
+   * The glyphs are inline SVG data URIs: no external file, nothing for the
+   * strict-CSP artifact path or the offline bundle to fetch, and a triangle
+   * stays a triangle at any device pixel ratio.
+   *
+   * Vertical only. Nothing in this project scrolls horizontally — there is no
+   * overflow-x anywhere in the tree — so the horizontal arrows are left at
+   * their default of nothing rather than styled on speculation.
+   */
+  ::-webkit-scrollbar-button:single-button {
+    background-color: #0a0a0a;
+    border-left: 1px solid #333;
+    height: 12px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 8px 8px;
+  }
+
+  ::-webkit-scrollbar-button:single-button:vertical:decrement {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 1 7 6H1z' fill='%23ff00ff'/%3E%3C/svg%3E");
+  }
+
+  ::-webkit-scrollbar-button:single-button:vertical:increment {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 7 1 2h6z' fill='%23ff00ff'/%3E%3C/svg%3E");
+  }
+
+  ::-webkit-scrollbar-button:single-button:vertical:decrement:hover {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 1 7 6H1z' fill='%23ff4ef5'/%3E%3C/svg%3E");
+  }
+
+  ::-webkit-scrollbar-button:single-button:vertical:increment:hover {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M4 7 1 2h6z' fill='%23ff4ef5'/%3E%3C/svg%3E");
+  }
+
+  /* Where a vertical and a horizontal bar meet. Left as track colour so it
+   * does not read as a third, broken control. */
+  ::-webkit-scrollbar-corner {
+    background: #0a0a0a;
+  }
+}
