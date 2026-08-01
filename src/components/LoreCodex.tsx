@@ -7,6 +7,45 @@ interface LoreCodexProps {
   onClose: () => void;
 }
 
+/**
+ * Written out here rather than imported because the engine holds these
+ * numbers inline at the point of use — performPowerMove() in engine.ts
+ * branches on charId and passes the damage straight to damageEntity(). There
+ * is no table to read from, so if that function changes, this one has to
+ * change with it.
+ *
+ * Reach is described by shape rather than by pixel radius: the radii are real
+ * (200, 180, 150 and a 60px-deep frontal band) but they mean nothing to
+ * someone holding a controller, and the useful distinction between these four
+ * moves is whether they hit all around you or only ahead.
+ */
+const POWER_MOVES = [
+  {
+    hero: 'Feet Master',
+    move: 'Human Bat Swing',
+    colour: '#f5a623',
+    text: '45 damage to everything in a wide circle around you, no facing required. Survivors are thrown outward and lifted off their feet.',
+  },
+  {
+    hero: 'Fun Maker',
+    move: 'Rollercoaster Hurricane',
+    colour: '#e2b036',
+    text: '40 damage in a slightly tighter circle. Everything caught is juggled skyward — and so are you, which sets up an air chase.',
+  },
+  {
+    hero: 'Omega Biker',
+    move: 'Heavy Shockwave Kick',
+    colour: '#ff3b30',
+    text: '50 damage in a straight line ahead of you only. Breaks a shield outright rather than wearing it down, and kicks what it hits across the screen.',
+  },
+  {
+    hero: 'Angry Corso',
+    move: 'Feral Pup Rush & Bite',
+    colour: '#34c759',
+    text: '55 damage, the heaviest in the roster, in a short circle around you. Every enemy bitten returns 25 HP to you, so a crowd is a full heal.',
+  },
+] as const;
+
 export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
   const [tab, setTab] = useState<'HEROES' | 'ENEMIES' | 'BOSSES' | 'COMBOS'>('HEROES');
 
@@ -165,9 +204,49 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
                 <span className="text-[#ff00ff] font-black uppercase block">JUMP ATTACK</span>
                 Press [SPACE] to jump, then press [J] or [K] in mid-air to land a flying dive kick!
               </div>
-              <div className="bg-[#111] p-3 border border-[#333]">
+              <div className="bg-[#111] p-3 border-2 border-[#ff4e00] space-y-2">
                 <span className="text-[#ff4e00] font-black uppercase block">SPECIAL POWER MOVE</span>
-                Press [L] when your Power Meter reaches at least 30% to trigger your character's signature devastation move!
+                <p>
+                  Press [L] with at least 30 points on the Power Meter to trigger your
+                  fighter's signature move. It spends exactly 30 of the 100 the meter
+                  holds, so a full bar is three of them.
+                </p>
+                <p>
+                  The meter fills by itself at about 2.4 points a second, and every
+                  hit you land adds 8 more. Standing still, that is roughly twelve
+                  seconds between moves; fighting, far less. Each stage starts you at
+                  full.
+                </p>
+                <p>
+                  The first two thirds of a second are invulnerable, so the move
+                  trades through an attack already coming at you. Start it standing,
+                  walking, jumping or flying — it also cancels a punch or kick you
+                  have already thrown.
+                </p>
+                <p>
+                  It can be locked out. A Conversion Therapist's guilt vial suppresses
+                  it for three seconds, Madam Mizydia's Excommunication cross for four.
+                </p>
+
+                <dl className="pt-1 space-y-1.5">
+                  {POWER_MOVES.map(({ hero, move, colour, text }) => (
+                    <div key={hero}>
+                      <dt className="font-black uppercase" style={{ color: colour }}>
+                        {hero} — {move}
+                      </dt>
+                      <dd className="text-gray-400">{text}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              <div className="bg-[#111] p-3 border border-[#333]">
+                <span className="text-[#00ffff] font-black uppercase block">FLIGHT (FUN MAKER ONLY)</span>
+                Jump, then press [SPACE] again in mid-air to hover. Climb with [SPACE]
+                or up, drop with down, and keep punching and kicking the whole time.
+                Flight sips the Power Meter instead of spending it in a lump — about
+                1.2 points a second, so a full bar is over a minute aloft — and ends
+                the moment the meter runs dry. A guilt vial grounds it too.
               </div>
 
               {/* The only place the controls are written down inside the game,
