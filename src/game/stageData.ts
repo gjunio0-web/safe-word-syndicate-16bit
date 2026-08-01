@@ -45,12 +45,20 @@ export const STAGES: StageConfig[] = [
         ],
         // First ranged enemy in the game. The line is a tutorial wearing a
         // joke: name the threat and what it does to you.
-        barkOnSpawn: heroLine('FUN_MAKER', {
-          FUN_MAKER: "That's not therapy, that's a dart gun with a diploma!",
-          FEET_MASTER: "Ranged creep in a cardigan — don't let him get comfortable!",
-          OMEGA_BIKER: 'Vials incoming. Close the distance or eat the guilt.',
-          ANGRY_CORSO: 'Bad doctor! BAD doctor! Grrr!',
-        }),
+        barkOnSpawn: [
+          {
+            speaker: 'Conversion Therapist',
+            portrait: 'CONVERSION_THERAPIST',
+            text: "Don't struggle. That urge to fight back is exactly what we treat here.",
+            side: 'RIGHT',
+          },
+          heroLine('FUN_MAKER', {
+            FUN_MAKER: "That's not therapy, that's a dart gun with a diploma!",
+            FEET_MASTER: "Ranged creep in a cardigan — don't let him get comfortable!",
+            OMEGA_BIKER: 'Vials incoming. Close the distance or eat the guilt.',
+            ANGRY_CORSO: 'Bad doctor! BAD doctor! Grrr!',
+          }),
+        ],
       },
       {
         triggerX: 1300,
@@ -137,12 +145,12 @@ export const STAGES: StageConfig[] = [
           { type: 'CONVERSION_THERAPIST', count: 2, spawnSide: 'BOTH' },
           { type: 'TRAD_WIFE_STRIKER', count: 2, spawnSide: 'RIGHT' },
         ],
-        barkOnSpawn: heroLine('OMEGA_BIKER', {
+        barkOnSpawn: [heroLine('OMEGA_BIKER', {
           OMEGA_BIKER: 'Signed the Purity Covenant — or found it under the door at six a.m.?',
           FEET_MASTER: "Therapists and skillets together now. She's mixing her defenses.",
           FUN_MAKER: 'Every curtain shut. Somebody behind one of them is faking it.',
           ANGRY_CORSO: 'This whole block smells like bleach and lies!',
-        }),
+        })],
       },
       {
         triggerX: 1400,
@@ -153,12 +161,12 @@ export const STAGES: StageConfig[] = [
         ],
         // Eight at once, the densest wave in the game. The line justifies the
         // number and puts the boss just off screen.
-        barkOnSpawn: heroLine('FEET_MASTER', {
+        barkOnSpawn: [heroLine('FEET_MASTER', {
           FEET_MASTER: "Eight at once? She's nervous. Good.",
           OMEGA_BIKER: "They only swarm when the boss is watching. She's close.",
           FUN_MAKER: "The whole cul-de-sac turned out! I've never felt so popular!",
           ANGRY_CORSO: 'More of them? GOOD! I was just warming up!',
-        }),
+        })],
       },
       {
         triggerX: 1900, // STAGE 2 BOSS WAVE
@@ -230,12 +238,12 @@ export const STAGES: StageConfig[] = [
         ],
         // Sets up Sayonara without depending on who is in the fight: all four
         // variants carry the hook, each in its own register.
-        barkOnSpawn: heroLine('ANGRY_CORSO', {
+        barkOnSpawn: [heroLine('ANGRY_CORSO', {
           ANGRY_CORSO: "Sayonara's up there. I can smell her. Hold on, girl!",
           FEET_MASTER: "Last hallway. Sayonara's coming home with us, one way or another.",
           FUN_MAKER: "Broadcast chamber's straight up. Thanks for the floor plan, sweetheart!",
           OMEGA_BIKER: 'One door left. Then this city gets its noise back.',
-        }),
+        })],
       },
       {
         triggerX: 1200, // FINAL BOSS ENCOUNTER

@@ -187,12 +187,12 @@ export interface WaveConfig {
   }[];
   dialogueBefore?: ScriptEntry[];
   /**
-   * One line thrown over the fight as the wave lands. Unlike dialogueBefore it
-   * does not hold the spawn or wait on the player: it appears, it is read or it
-   * is not, it goes. Waves that only need a reaction use this so the campaign
-   * can talk without stopping eleven times.
+   * Lines thrown over the fight as the wave lands, shown one after another.
+   * Unlike dialogueBefore they do not hold the spawn or wait on the player:
+   * they appear, they are read or they are not, they go. Keep it to one line
+   * unless the wave is introducing something.
    */
-  barkOnSpawn?: ScriptEntry;
+  barkOnSpawn?: ScriptEntry[];
   /**
    * Opt out of the "every wave speaks" check. Nothing sets this today; it
    * exists so a deliberate silence is a decision someone wrote down rather
@@ -207,6 +207,7 @@ export type PortraitId =
   | 'OMEGA_BIKER'
   | 'ANGRY_CORSO'
   | 'PURITY_PATROL'
+  | 'CONVERSION_THERAPIST'
   | 'TRAD_WIFE_STRIKER'
   | 'MADAM_MIZYDIA'
   | 'SAYONARA'

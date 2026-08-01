@@ -125,6 +125,8 @@ export class GameEngine {
   private _activeBark: import('../types').DialogueLine | null = null;
   private barkListeners: Set<() => void> = new Set();
   private barkTimer = 0;
+  /** Lines still waiting behind the one on screen. */
+  private barkQueue: import('../types').DialogueLine[] = [];
   /**
    * Counts down while Sayonara walks out. Zero means no outro is running; the
    * campaign is only declared won when it lapses or she leaves the field.
@@ -426,7 +428,11 @@ export class GameEngine {
     }
     if (this.barkTimer > 0) {
       this.barkTimer--;
-      if (this.barkTimer === 0) this.setActiveBark(null);
+      if (this.barkTimer === 0) {
+        const next = this.barkQueue.shift();
+        this.setActiveBark(next ?? null);
+        if (next) this.barkTimer = BARK_DURATION_FRAMES;
+      }
     }
     if (this.outroTimer > 0) {
       this.outroTimer--;
@@ -627,11 +633,12 @@ export class GameEngine {
       }
 
       this.isWaveActive = true;
-      if (wave.barkOnSpawn) {
+      if (wave.barkOnSpawn?.length) {
         // Fired as the wave lands, not before it. A bark is a reaction to
         // enemies arriving, so it wants them on screen behind it.
-        const [line] = resolveDialogue([wave.barkOnSpawn], this.roster());
-        this.setActiveBark(line);
+        const [first, ...rest] = resolveDialogue(wave.barkOnSpawn, this.roster());
+        this.barkQueue = rest;
+        this.setActiveBark(first);
         this.barkTimer = BARK_DURATION_FRAMES;
       }
       // Spawn wave enemies

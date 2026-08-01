@@ -5,6 +5,7 @@ import { STAGES } from '../game/stageData';
 import { BARK_DURATION_FRAMES } from '../game/constants';
 import { portraitFor } from '../game/portraits';
 import { CHARACTERS } from '../game/characterData';
+import { assertStagesAreCompletable } from '../game/stageValidation';
 import { CharacterId, DialogueLine, HeroLine, ScriptEntry } from '../types';
 
 const FIXED: DialogueLine = {
@@ -102,7 +103,7 @@ describe('engine roster', () => {
 describe('migrated campaign script', () => {
   const heroLines = STAGES.flatMap((stage) =>
     stage.waves.flatMap((wave) =>
-      [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ? [wave.barkOnSpawn] : [])].filter(
+      [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ?? [])].filter(
         isHeroLine
       )
     )
@@ -112,7 +113,7 @@ describe('migrated campaign script', () => {
     const waves = STAGES.flatMap((stage) => stage.waves);
     expect(waves).toHaveLength(11);
     for (const wave of waves) {
-      expect(Boolean(wave.dialogueBefore || wave.barkOnSpawn)).toBe(true);
+      expect(Boolean(wave.dialogueBefore?.length || wave.barkOnSpawn?.length)).toBe(true);
     }
   });
 
@@ -165,7 +166,7 @@ describe('bark channel', () => {
   })) {
     return {
       ...STAGES[0],
-      waves: [{ triggerX: 0, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }], barkOnSpawn: entry }],
+      waves: [{ triggerX: 0, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }], barkOnSpawn: [entry] }],
     };
   }
 
@@ -175,6 +176,28 @@ describe('bark channel', () => {
 
   it('starts with nothing on screen', () => {
     expect(new GameEngine(barkingStage(), 'FEET_MASTER').activeBark).toBeNull();
+  });
+
+  it('plays a queued second line after the first expires', () => {
+    const engine = new GameEngine(
+      {
+        ...STAGES[0],
+        waves: [
+          {
+            triggerX: 0,
+            enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }],
+            barkOnSpawn: [FIXED, variantLine('FEET_MASTER')],
+          },
+        ],
+      },
+      'FEET_MASTER'
+    );
+    run(engine, 1);
+    expect(engine.activeBark?.speaker).toBe('Purity Patrol');
+    run(engine, BARK_DURATION_FRAMES);
+    expect(engine.activeBark?.text, 'the hero answers next').toBe('line for FEET_MASTER');
+    run(engine, BARK_DURATION_FRAMES);
+    expect(engine.activeBark, 'and then the fight is quiet again').toBeNull();
   });
 
   it('fires the line when the wave lands, resolved for the hero in play', () => {
@@ -223,15 +246,28 @@ describe('portraits', () => {
   });
 
   it('has a face for every villain who speaks', () => {
-    for (const id of ['MADAM_MIZYDIA', 'SAYONARA', 'PURITY_PATROL', 'TRAD_WIFE_STRIKER'] as const) {
+    for (const id of [
+      'MADAM_MIZYDIA', 'SAYONARA', 'PURITY_PATROL', 'TRAD_WIFE_STRIKER', 'CONVERSION_THERAPIST',
+    ] as const) {
       expect(portraitFor(id)).toBeTruthy();
     }
+  });
+
+  it('rejects an empty script as if it were no script at all', () => {
+    // [] is truthy. Before barkOnSpawn became a list this was impossible to
+    // express; afterwards a wave could hold an empty one, pass the mute-wave
+    // check and still say nothing on screen.
+    const rigged = STAGES.map((stage, i) =>
+      i === 0 ? { ...stage, waves: stage.waves.map((w, j) =>
+        j === 1 ? { triggerX: w.triggerX, enemies: w.enemies, barkOnSpawn: [] } : w) } : stage
+    );
+    expect(() => assertStagesAreCompletable(rigged)).toThrow(/no line/);
   });
 
   it('leaves nobody in the campaign faceless', () => {
     const speakers = STAGES.flatMap((stage) =>
       stage.waves.flatMap((wave) =>
-        [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ? [wave.barkOnSpawn] : [])].flatMap(
+        [...(wave.dialogueBefore ?? []), ...(wave.barkOnSpawn ?? [])].flatMap(
           (entry) =>
             isHeroLine(entry)
               ? Object.values(entry.variants).map((v) => v.portrait)

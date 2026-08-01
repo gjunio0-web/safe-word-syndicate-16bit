@@ -75,7 +75,7 @@ export function assertStagesAreCompletable(stages: StageConfig[]): void {
   // accident the way these did.
   const mute = stages.flatMap((stage) =>
     stage.waves.flatMap((wave, waveIndex) =>
-      wave.dialogueBefore || wave.barkOnSpawn || wave.intentionallySilent
+      wave.dialogueBefore?.length || wave.barkOnSpawn?.length || wave.intentionallySilent
         ? []
         : [`stage ${stage.id} wave ${waveIndex + 1} has no line and is not marked intentionallySilent`]
     )
