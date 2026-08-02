@@ -294,8 +294,23 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
 
 
       {/* Active Selection Target Tabs (Only shown in 2P / AI companion modes) */}
+      {/* The bar below has no box of its own: no border, no fill, and a pixel
+        * less breathing room above and below the line than a boxed strip
+        * would want.
+        *
+        * It exists only in the two-player modes, and it is exactly what made
+        * them overflow where solo did not — 52px of slot switcher on a screen
+        * that had 5px to spare at 1536x960, the shape a 16in laptop reports at
+        * the scaling Windows defaults to. The bottom inset had already
+        * collapsed to nothing by then and had no more to give.
+        *
+        * 6px came back: 4 from the border, which counts twice, and 2 from the
+        * padding. The fill contributed nothing to height and went for looks —
+        * without it the label and the two slot buttons line up with the header
+        * directly above and read as part of it. Solo mode is untouched at
+        * every size, since this bar never renders there. */}
       {mode !== 'SINGLE' && (
-        <div className="mt-3 bg-[#141414] border-2 border-[#333] p-2 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3">
+        <div className="mt-3 px-2 py-[7px] flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2 text-[10px] sm:text-xs font-mono text-zinc-400">
             <span className="text-[#00ffff] font-bold">CLICK TAB TO SWITCH SELECTING SLOT:</span>
           </div>
