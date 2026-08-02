@@ -218,8 +218,23 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
    * (Described rather than named: Tailwind's scanner reads comment text as
    * eagerly as className strings, so spelling the class out here would emit
    * it straight back into the bundle it was just removed from.) */
+  /* The bottom inset is a shrinkable child rather than padding on this
+   * element, and the reason is a scrollbar that scrolled to nothing.
+   *
+   * Padding on a scroll container counts toward scrollHeight but sits below
+   * every child, so on a viewport where the content ends a few pixels short
+   * of the fold the browser still offered a scrollbar — and everything it
+   * scrolled to was blank. Measured on a 1920x1200 panel at the 125% scaling
+   * Windows defaults to for a 16in screen, which is a 1536x960 viewport: 16px
+   * of scroll, all of it inside 24px of bottom padding, with the footer
+   * already fully visible.
+   *
+   * As the last flex child the same 24px is content, so it can shrink when
+   * the space is not there and stay put when it is. Nothing is smaller at any
+   * size that fitted before; the inset simply stops manufacturing scroll it
+   * has nothing to show. */
   return (
-    <div className="relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-between p-2 sm:p-4 md:p-6 select-none font-sans overflow-y-auto border-2 sm:border-8 md:border-[12px] border-[#ff00ff]/10">
+    <div className="relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-between px-2 pt-2 sm:px-4 sm:pt-4 md:px-6 md:pt-6 select-none font-sans overflow-y-auto border-2 sm:border-8 md:border-[12px] border-[#ff00ff]/10">
       {/* Top Header - Controls & Mode Selector */}
       <header className="flex flex-col md:flex-row justify-between items-center px-3 py-2.5 sm:px-6 sm:py-4 bg-[#1a1a1a] border-b-4 border-[#ff00ff] gap-3 sm:gap-4">
         <div>
@@ -611,7 +626,8 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
       </div>
 
       {/* Bottom Action Footer */}
-      <footer className="bg-black px-4 pb-4 pt-1 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col min-h-0">
+        <footer className="bg-black px-4 pb-4 pt-1 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
         <button
           onClick={onBack}
           className="px-5 py-2.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] text-zinc-300 font-black text-xs uppercase tracking-wider transition-colors cursor-pointer"
@@ -635,7 +651,16 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
             START BRAWL <Play className="w-4 h-4 fill-current" />
           </button>
         </div>
-      </footer>
+        </footer>
+
+        {/* The bottom inset. See the note above the container. It lives inside
+          * this wrapper rather than as a sibling of the footer because the
+          * container distributes its slack with justify-between: a fifth child
+          * would have divided that slack across four gaps instead of three and
+          * pulled every section 14px closer together. Wrapped, the container
+          * still sees four children and the arrangement above is untouched. */}
+        <div aria-hidden="true" className="h-2 sm:h-4 md:h-6 shrink min-h-0" />
+      </div>
     </div>
   );
 };
