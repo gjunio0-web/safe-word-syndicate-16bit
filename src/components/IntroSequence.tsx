@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { warmIntroAssets } from '../game/introPreload';
 import { sound } from '../game/sound';
 import { useGamepadMenu } from '../hooks/useGamepadMenu';
 
@@ -163,6 +164,27 @@ export default function IntroSequence({ onComplete, assets: overrides }: Props) 
   const [waitingForRotation, setWaitingForRotation] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(ROTATE_QUERY).matches
   );
+
+  /*
+   * Warm every image at mount, in the order they come due.
+   *
+   * Each scene below renders its own <img> only while that scene is current,
+   * which meant the browser first heard about a file at the instant it had to
+   * be painted — including a 3.8MB plate and a 1.2MB overlay, both with zero
+   * seconds of notice. The clock is driven by the music and does not wait, so
+   * a picture that has not arrived is simply skipped: the scene plays as its
+   * fallback colour and the sequence moves on. On a slow link that is a nearly
+   * black minute.
+   *
+   * Nothing here blocks. The sequence is built to degrade rather than stall,
+   * and a loading gate would trade a bad minute for a worse wait. This only
+   * hands the browser the list early, so the 59 seconds of runway that already
+   * existed get used. Fires before the rotation gate clears, deliberately —
+   * a player still turning their phone is time the download can have.
+   */
+  useEffect(() => {
+    void warmIntroAssets(assets);
+  }, [assets]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -434,6 +456,16 @@ export default function IntroSequence({ onComplete, assets: overrides }: Props) 
         </div>
       )}
 
+      {/* The sequence has always been skippable — any key, any tap, any gamepad
+        * button — and has never said so. Someone watching a minute of a story
+        * they have already seen, or a minute of fallback colour because their
+        * connection is slow, had no reason to believe pressing anything would
+        * help. Shown only before the drop, since after it the title block's own
+        * PRESS ANY KEY prompt takes over and two prompts would be one too many. */}
+      {climax < 3 && !waitingForRotation && (
+        <p className="sws-skip">SKIP &#9654;</p>
+      )}
+
       {narration && (
         <div className="sws-narration">
           {narration.split('\n').map((line, i) => (
@@ -624,6 +656,18 @@ const INTRO_CSS = `
   letter-spacing: 0.04em; text-shadow: 3px 3px 0 #000;
 }
 .sws-caret { width: 0.7em; height: 1em; background: #ffe600; animation: sws-blink var(--beat) steps(1) infinite; }
+
+.sws-skip {
+  position: absolute;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  margin: 0;
+  font-size: clamp(0.55rem, 1.4vw, 0.75rem);
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  animation: sws-blink calc(var(--beat) * 4) steps(1) infinite;
+}
 
 /*
  * Portrait leaves the letterbox 73% empty on a phone: a 390px-wide screen gives a
