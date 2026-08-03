@@ -3,6 +3,8 @@ import { GameSettings } from '../types';
 import { Volume2, VolumeX, Tv, BookOpen, Pause, Play, Disc, Home, RotateCcw, Crosshair } from 'lucide-react';
 import { sound } from '../game/sound';
 import { useIsMobileDevice } from '../hooks/useDeviceType';
+import { useIsPortrait } from '../hooks/useOrientation';
+import { currentPlatformHasRingerSwitch } from '../game/ringerSwitch';
 
 interface GameHeaderProps {
   settings: GameSettings;
@@ -35,6 +37,33 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   /* 44px minimum on anything a finger has to hit. Empty on desktop, where the
    * pointer is precise and the header has other things to fit. */
   const touchFloor = isMobile ? 'min-w-11 min-h-11' : '';
+
+  /* Whether to offer the silent-switch line in the pause menu below. The same
+   * sentence exists on the attract screen, but it lands there before audio has
+   * unlocked — nobody has sound yet at that point, on any platform, so it
+   * cannot mean anything. This is the copy that has to do the work: pausing is
+   * what a person does when something seems off, and it is the first moment
+   * where silence is genuinely diagnostic. */
+  const ringerSwitch = currentPlatformHasRingerSwitch();
+
+  /* Whether the pause card runs in its tight form.
+   *
+   * Device and orientation, not the orientation-based Tailwind variant. That
+   * variant is a media query on the viewport's aspect, so it matches every
+   * desktop monitor ever made — the card would have shrunk on machines that
+   * never had the problem. The problem is a phone held sideways, which is a
+   * fact about the device, and this file already asks that question for the
+   * touch floor above. (Describing the variant rather than writing it: the
+   * scanner reads comment text.)
+   *
+   * Both hooks are read into locals before they are combined. Written as
+   * `useIsMobileDevice() && !useIsPortrait()` the && short-circuits, so the
+   * orientation hook goes uncalled on desktop — and the moment the pointer
+   * modality changes at runtime and the first hook flips to true, React sees a
+   * different number of hooks than it saw last render and tears the tree down.
+   * A conditional hook call reads as harmless right up until it is not. */
+  const isPortrait = useIsPortrait();
+  const compact = isMobile && !isPortrait;
 
   const toggleSound = () => {
     const nextSound = !settings.soundEnabled;
@@ -234,18 +263,45 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
       </div>
 
       {/* Pause Menu Modal Overlay */}
+      {/* Pause Overlay.
+        *
+        * overflow-y-auto with m-auto on the card, rather than items-center. A
+        * centred flex child that outgrows its container gets clipped at the
+        * top and cannot be scrolled back to — and this card outgrows a
+        * 300px-tall landscape window even with nothing added to it, which put
+        * MAIN MENU / TITLE SCREEN off the bottom with no way to reach it. That
+        * is the escape route from a paused game, so it cannot be the thing
+        * that falls off the edge. Auto margins centre it while it fits and let
+        * it scroll once it does not.
+        */}
       {isPaused && (
-        <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white font-mono select-none" data-gamepad-scope>
-          <div className="bg-[#111] border-4 border-[#ffff00] p-6 max-w-sm w-full text-center space-y-5 shadow-[0_0_40px_rgba(255,255,0,0.4)]">
+        <div className={`absolute inset-0 bg-black/85 backdrop-blur-md z-50 flex overflow-y-auto ${compact ? 'p-2' : 'p-6'} text-white font-mono select-none`} data-gamepad-scope>
+          {/* Tighter in landscape, where the vertical budget is the whole problem.
+              * The card is 348px and a phone held sideways behind a software
+              * nav bar leaves about 300 — so it needed scrolling to reach
+              * MAIN MENU, and a mobile browser hides its scrollbar until you
+              * already scrolled. The only signal that more existed was a
+              * button clipped by the screen edge, which is not a signal, it
+              * is a coincidence of where the cut landed. Trimming padding and
+              * gaps brings it to roughly 284px and removes the need. The
+              * overflow-y-auto above stays as a net for anything shorter
+              * still, but it is no longer the plan. */}
+            <div className={`m-auto bg-[#111] border-4 border-[#ffff00] max-w-sm w-full text-center shadow-[0_0_40px_rgba(255,255,0,0.4)] ${compact ? 'p-4 space-y-3' : 'p-6 space-y-5'}`}>
             <h2 className="text-3xl font-black italic text-[#ffff00] tracking-tighter uppercase">
               GAME PAUSED
             </h2>
             <p className="text-xs text-zinc-400 font-mono">Select an option to proceed</p>
 
-            <div className="space-y-3 pt-2">
+            {ringerSwitch && (
+              <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider leading-relaxed">
+                No music? The silent switch mutes this page too.
+              </p>
+            )}
+
+            <div className={compact ? 'space-y-2' : 'space-y-3 pt-2'}>
               <button
                 onClick={onTogglePause}
-                className="w-full py-3 bg-[#ffff00] hover:bg-amber-300 text-black font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+                className={`w-full ${compact ? 'py-2.5 min-h-11' : 'py-3'} bg-[#ffff00] hover:bg-amber-300 text-black font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all`}
               >
                 <Play className="w-4 h-4 fill-black" /> RESUME GAME
               </button>
@@ -256,7 +312,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
                     onTogglePause();
                     onRestartStage();
                   }}
-                  className="w-full py-3 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#ff00ff] text-[#ff00ff] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
+                  className={`w-full ${compact ? 'py-2.5 min-h-11' : 'py-3'} bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#ff00ff] text-[#ff00ff] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors`}
                 >
                   <RotateCcw className="w-4 h-4" /> RESTART STAGE
                 </button>
@@ -268,7 +324,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
                   onTogglePause();
                   onReturnToTitle();
                 }}
-                className="w-full py-3 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 text-red-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors"
+                className={`w-full ${compact ? 'py-2.5 min-h-11' : 'py-3'} bg-red-950/80 hover:bg-red-900 border-2 border-red-600 text-red-200 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-colors`}
               >
                 <Home className="w-4 h-4 text-red-400" /> MAIN MENU / TITLE SCREEN
               </button>
