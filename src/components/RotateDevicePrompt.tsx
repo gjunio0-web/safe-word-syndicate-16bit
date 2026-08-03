@@ -33,7 +33,10 @@ export const RotateDevicePrompt: React.FC = () => {
         </span>
         <button
           onClick={() => setDismissed(true)}
-          className="shrink-0 p-1 text-zinc-400 hover:text-white transition-colors"
+          /* 44px, not the 22px the padding alone produced. This is the button
+           * that dismisses an advisory banner — if it is hard to hit, the
+           * banner stops being advice and becomes an obstruction. */
+          className="shrink-0 min-w-11 min-h-11 flex items-center justify-center -m-1 text-zinc-400 hover:text-white transition-colors"
           aria-label="Dismiss"
         >
           <X className="w-3.5 h-3.5" />

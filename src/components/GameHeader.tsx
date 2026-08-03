@@ -2,6 +2,7 @@ import React from 'react';
 import { GameSettings } from '../types';
 import { Volume2, VolumeX, Tv, BookOpen, Pause, Play, Disc, Home, RotateCcw, Crosshair } from 'lucide-react';
 import { sound } from '../game/sound';
+import { useIsMobileDevice } from '../hooks/useDeviceType';
 
 interface GameHeaderProps {
   settings: GameSettings;
@@ -26,6 +27,15 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   onRestartStage,
   stageName,
 }) => {
+  /* Whether to show the header's own reset shortcut. See the button below —
+   * on a touch device it is a 32px unlabelled icon that throws the run away,
+   * and the pause menu already offers the same action with a full label. */
+  const isMobile = useIsMobileDevice();
+
+  /* 44px minimum on anything a finger has to hit. Empty on desktop, where the
+   * pointer is precise and the header has other things to fit. */
+  const touchFloor = isMobile ? 'min-w-11 min-h-11' : '';
+
   const toggleSound = () => {
     const nextSound = !settings.soundEnabled;
     onUpdateSettings({ soundEnabled: nextSound, musicEnabled: nextSound });
@@ -65,26 +75,63 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           </span>
         </div>
 
-        {/* Control Buttons */}
+        {/* Control Buttons
+          *
+          * touchFloor is 44px, the smallest target any platform guideline
+          * accepts; the padding alone gave 32px in portrait and 36 in
+          * landscape. It lifts rather than resizes, so the icons and the
+          * desktop layout are untouched.
+          *
+          * Gated on the device, not on `sm:`. A first attempt used the width
+          * breakpoint, which meant a phone held sideways — 852px wide, past
+          * the 640px threshold — dropped the floor and kept its 36px targets,
+          * in the orientation the game actually asks for. That is the same
+          * mistake as the keyboard hint two files over: viewport width is not
+          * a question about fingers.
+          *
+          * The width this costs is the width the reset shortcut above used to
+          * take, which is why the two changes belong in the same patch: six
+          * targets at 44px take about the same room as seven at 32px, and the
+          * stage name keeps its min-w-0/truncate either way.
+          */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Reset / Home Button */}
-          <button
-            onClick={() => {
-              sound.stopAll();
-              onReturnToTitle();
-            }}
-            className="p-1.5 sm:p-2 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 hover:border-red-400 text-red-200 transition-colors flex items-center gap-1.5 text-xs font-black shadow-md"
-            title="Reset Game & Return to Title Screen"
-          >
-            <Home className="w-4 h-4 text-red-400" />
-            <span className="hidden md:inline">RESET</span>
-          </button>
+          {/* Reset / Home Button — desktop only.
+            *
+            * This discards the run. There is no save and no confirmation, and
+            * on a phone the word RESET is hidden (it only appears at md), so
+            * what is left is an unlabelled red icon in a 32px box, first in a
+            * row of seven identical 32px boxes, none of which meets any
+            * touch-target minimum. One mistap while reaching for the pause
+            * button next to it costs the whole campaign.
+            *
+            * Nothing is lost by dropping it here: the pause menu below offers
+            * MAIN MENU / TITLE SCREEN as a full-width labelled button, which
+            * is the same call with the deliberation the action deserves. A
+            * shortcut to destroy progress is not a convenience.
+            *
+            * Kept on desktop, where the pointer is precise, the label shows,
+            * and a mistap is a different kind of unlikely. If it should go
+            * everywhere, delete the condition rather than the block.
+            */}
+          {!isMobile && (
+            <button
+              onClick={() => {
+                sound.stopAll();
+                onReturnToTitle();
+              }}
+              className="p-1.5 sm:p-2 bg-red-950/80 hover:bg-red-900 border-2 border-red-600 hover:border-red-400 text-red-200 transition-colors flex items-center gap-1.5 text-xs font-black shadow-md"
+              title="Reset Game & Return to Title Screen"
+            >
+              <Home className="w-4 h-4 text-red-400" />
+              <span className="hidden md:inline">RESET</span>
+            </button>
+          )}
 
           {/* Jukebox / Custom Music Button */}
           {onOpenAudioModal && (
             <button
               onClick={onOpenAudioModal}
-              className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ff00ff] text-[#ff00ff] transition-colors flex items-center gap-1.5 text-xs font-black"
+              className={`${touchFloor} justify-center p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ff00ff] text-[#ff00ff] transition-colors flex items-center gap-1.5 text-xs font-black`}
               title="Open Jukebox / Custom Audio Tracks"
             >
               <Disc className="w-4 h-4 animate-spin-slow text-[#ff00ff]" />
@@ -95,7 +142,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* Pause Button */}
           <button
             onClick={onTogglePause}
-            className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-zinc-300 transition-colors"
+            className={`${touchFloor} flex items-center justify-center p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-zinc-300 transition-colors`}
             title={isPaused ? 'Resume' : 'Pause'}
           >
             {isPaused ? <Play className="w-4 h-4 text-[#ffff00]" /> : <Pause className="w-4 h-4" />}
@@ -104,7 +151,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* Mute Toggle */}
           <button
             onClick={toggleSound}
-            className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#00ffff] text-zinc-300 transition-colors"
+            className={`${touchFloor} flex items-center justify-center p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#00ffff] text-zinc-300 transition-colors`}
             title="Toggle Sound"
           >
             {settings.soundEnabled ? (
@@ -152,7 +199,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               ring enemies hold while waiting for an attack slot. */}
           <button
             onClick={toggleHitboxes}
-            className={`p-1.5 sm:p-2 border-2 transition-colors ${
+            className={`${touchFloor} flex items-center justify-center p-1.5 sm:p-2 border-2 transition-colors ${
               settings.showHitboxes
                 ? 'bg-[#00ff88]/20 border-[#00ff88] text-[#00ff88]'
                 : 'bg-[#111] border-[#333] text-zinc-500'
@@ -165,7 +212,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* CRT Scanlines Toggle */}
           <button
             onClick={toggleCrt}
-            className={`p-1.5 sm:p-2 border-2 transition-colors ${
+            className={`${touchFloor} flex items-center justify-center p-1.5 sm:p-2 border-2 transition-colors ${
               settings.crtFilter
                 ? 'bg-[#ff00ff]/20 border-[#ff00ff] text-[#ff00ff]'
                 : 'bg-[#111] border-[#333] text-zinc-500'
@@ -178,7 +225,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           {/* Codex Button */}
           <button
             onClick={onOpenCodex}
-            className="p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] transition-colors"
+            className={`${touchFloor} flex items-center justify-center p-1.5 sm:p-2 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] transition-colors`}
             title="Open Lore Codex"
           >
             <BookOpen className="w-4 h-4" />

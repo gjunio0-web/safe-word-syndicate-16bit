@@ -78,32 +78,60 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
         <div className="flex flex-col gap-3 landscape:gap-1.5 max-w-lg landscape:max-w-xs mx-auto landscape:mx-0 landscape:shrink-0 w-full pb-4 landscape:pb-0">
           <button
             onClick={onStartBrawl}
-            className="w-full py-4 landscape:py-2 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg landscape:text-sm italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-[background-color,transform]"
+            className="w-full py-4 landscape:py-2 landscape:min-h-11 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg landscape:text-sm italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-[background-color,transform]"
           >
             <Play className="w-5 h-5 landscape:w-4 landscape:h-4 fill-current" /> START BRAWL
           </button>
 
-          <div className="flex flex-col sm:flex-row landscape:flex-row gap-3 landscape:gap-1.5 w-full">
+          {/* Three rows in landscape, not one.
+          *
+          * The three secondary buttons used to share a row and came out
+          * 103x30 — under any touch-target minimum, on a screen where the
+          * primary action was 36px tall. Height was the reason given for
+          * leaving them alone, and measuring killed that argument: the whole
+          * action block ends before the halfway mark of the viewport, and
+          * this arrangement costs 36px against at least 49px of slack on the
+          * worst landscape shape tested (740x300, standing in for a phone
+          * with a software nav bar).
+          *
+          * Grid rather than flex because the difficulty button spans both
+          * columns, and it spans them because it is the only one of the three
+          * that changes how the match plays. Its label is also live —
+          * NORMAL / EASY / PUNK HARD — so a full row turns it into a readout
+          * of what you are about to start on, not just a way in.
+          *
+          * Colour carries the same ranking: magenta to begin, cyan for the
+          * choice that changes the fight, grey for the two that only show you
+          * things. The jukebox gave up its cyan glow here — with difficulty
+          * lit, two glowing buttons would have been two focal points and no
+          * hierarchy at all.
+          *
+          * DOM order follows visual order, so keyboard and gamepad traversal
+          * matches what the eye does. Portrait is untouched: every change is
+          * behind landscape:, and the grid collapses to one column there,
+          * which is what the flex row already did.
+          */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 landscape:grid-cols-2 gap-3 landscape:gap-1.5 w-full">
             <button
               onClick={onOpenDifficulty}
-              className="w-full sm:flex-1 px-3 py-3 landscape:py-1.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-[11px] landscape:text-[9px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
+              className="w-full px-3 py-3 landscape:py-1.5 landscape:min-h-11 landscape:col-span-2 bg-[#0a1826] hover:bg-[#10243a] border-2 border-[#00ffff] text-[#00ffff] shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-colors font-black text-[11px] landscape:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
             >
-              <Gauge className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-[#ffff00]" />
+              <Gauge className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-[#00ffff]" />
               {difficulty === 'PUNK_HARD' ? 'PUNK HARD' : difficulty === 'EASY' ? 'EASY' : 'NORMAL'}
             </button>
 
             <button
               onClick={onOpenJukebox}
-              className="w-full sm:flex-1 px-3 py-3 landscape:py-1.5 bg-[#110826] hover:bg-[#1f103f] border-2 border-[#00ffff] text-[#00ffff] font-black text-[11px] landscape:text-[9px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-colors whitespace-nowrap"
+              className="w-full px-3 py-3 landscape:py-1.5 landscape:min-h-11 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-zinc-500 text-zinc-300 transition-colors font-black text-[11px] landscape:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
             >
-              <Disc className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-[#00ffff] animate-spin-slow" /> JUKEBOX
+              <Disc className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-zinc-400 animate-spin-slow" /> JUKEBOX
             </button>
 
             <button
               onClick={onOpenCodex}
-              className="w-full sm:flex-1 px-3 py-3 landscape:py-1.5 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-[#ffff00] text-[#ffff00] font-black text-[11px] landscape:text-[9px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
+              className="w-full px-3 py-3 landscape:py-1.5 landscape:min-h-11 bg-[#1a1a1a] hover:bg-[#222] border-2 border-[#333] hover:border-zinc-500 text-zinc-300 transition-colors font-black text-[11px] landscape:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
             >
-              <BookOpen className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-[#ffff00]" /> CODEX
+              <BookOpen className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-zinc-400" /> CODEX
             </button>
           </div>
         </div>

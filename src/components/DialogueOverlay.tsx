@@ -3,6 +3,7 @@ import { DialogueLine } from '../types';
 import { sound } from '../game/sound';
 import { portraitFor } from '../game/portraits';
 import { useGamepadMenu } from '../hooks/useGamepadMenu';
+import { useIsMobileDevice } from '../hooks/useDeviceType';
 import { ArrowRight, MessageSquareQuote } from 'lucide-react';
 
 interface DialogueOverlayProps {
@@ -52,6 +53,9 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
   // Undefined for every villain until their art exists, which is the whole
   // point of looking it up instead of assuming it.
   const face = portraitFor(line.portrait);
+  /* The keyboard hint below asks about having a keyboard, so it has to be
+   * gated on the device rather than on the viewport. */
+  const isMobile = useIsMobileDevice();
 
   return (
     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-40 flex flex-col justify-end p-6 select-none">
@@ -63,7 +67,7 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
               src={face}
               alt=""
               aria-hidden="true"
-              className="hidden sm:block w-24 h-24 shrink-0 object-cover border-2 border-[#00ffff] bg-black"
+              className="w-16 h-16 sm:w-24 sm:h-24 shrink-0 object-cover border-2 border-[#00ffff] bg-black"
               style={{ imageRendering: 'pixelated' }}
             />
           )}
@@ -86,7 +90,14 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
         <div className="mt-5 flex flex-wrap justify-between items-center gap-2 text-xs text-gray-400 font-mono pt-3 border-t border-[#333]">
           <span className="text-[#00ffff]">
             DIALOGUE {index + 1} / {dialogue.length}
-            <span className="ml-3 text-[#ffff00] hidden sm:inline font-bold">[PRESS ENTER / SPACE / J]</span>
+            {/* Gated on device, not on width. `hidden sm:inline` meant this
+              * appeared on any viewport past 640px — which includes every
+              * phone held sideways, the orientation the game asks for. Touch
+              * players were being told to press keys they do not have, next
+              * to a NEXT button that is the actual way through. */}
+            {!isMobile && (
+              <span className="ml-3 text-[#ffff00] hidden sm:inline font-bold">[PRESS ENTER / SPACE / J]</span>
+            )}
           </span>
           <button
             onClick={handleNext}
