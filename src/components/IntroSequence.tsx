@@ -554,16 +554,35 @@ const INTRO_CSS = `
   object-position: 50% 100%;
   animation: sws-pan-up calc(var(--bar) * 2) steps(20) calc(var(--bar) * 3) forwards;
 }
-/* Tuned against the actual scene 1 plate, which is dark: 82% of its pixels sit
-   below luminance 40 once desaturated, and a straight grayscale leaves the drained
-   city as mud with a 95th percentile of 123 — the neon stops reading as signage.
-   These values put it back at 223 while keeping 72% of the frame dark, so the dead
-   street stays legible without stopping looking dead.
+/* Tuned against the actual scene 1 plate, which is dark. A straight grayscale
+   leaves the drained city as mud and the neon stops reading as signage at exactly
+   the moment the pulse is supposed to be taking it away, so the filter has to lift
+   it back without lifting the dark off the rest of the frame.
 
-   The numbers belong to this plate. Swap the artwork and they need re-measuring:
-   the previous plate wanted 1.15/1.35, this one needs 1.75/1.65. */
+   Measured over the whole image with Rec.601 luminance. Stating the basis matters
+   more than it looks: scene 1 covers a 1.713 stage with a 0.739 plate, so only 43%
+   of the art is on screen at once and the pan slides that window from the lit
+   street up into the dark sky. The same filter on this plate reads as 241 at the
+   bottom of the pan and 70 at the top, against 185 for the image as a whole — a
+   number quoted without its window says almost nothing.
+
+   The numbers belong to the plate, so swapping the artwork means re-measuring.
+   That has now happened twice, and the brightness moved each time: 1.15 for the
+   first plate, 1.75 for the second, 2.05 for this one.
+
+   This plate is darker than the one before it on every basis checked — 95th
+   percentile 79 against 93 desaturated, 86.2% of its pixels below luminance 40
+   against 82.1%. Under the previous brightness(1.75) its drained 95th percentile
+   falls to 146, where the last plate reached 187. brightness(2.05) puts it at 185
+   while keeping 84% of the frame dark.
+
+   2.05 was chosen to reproduce what the previous plate looked like rather than to
+   hit a target number, which is the only calibration that survives an art swap:
+   the old plate at 1.75 and this one at 2.05 land within 3% of each other on all
+   six bases measured — whole image, and the panned window at top and at bottom,
+   each in Rec.601 and Rec.709. */
 .sws-drain {
-  filter: grayscale(100%) brightness(1.75) contrast(1.65);
+  filter: grayscale(100%) brightness(2.05) contrast(1.65);
   clip-path: inset(0 0 100% 0);
   animation: sws-drain-sweep calc(var(--bar) * 4) steps(20) calc(var(--bar) * 6) forwards,
              sws-pan-up calc(var(--bar) * 2) steps(20) calc(var(--bar) * 3) forwards;
