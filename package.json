@@ -12,7 +12,8 @@
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:watch": "vitest",
-    "compress:intro": "node scripts/compress-intro.mjs"
+    "compress:intro": "node scripts/compress-intro.mjs",
+    "lint": "eslint ."
   },
   "dependencies": {
     "lucide-react": "^0.546.0",
@@ -26,9 +27,13 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.9.0",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
+    "typescript-eslint": "^8.65.0",
     "vite": "^6.2.3",
     "vitest": "^4.1.10"
   }

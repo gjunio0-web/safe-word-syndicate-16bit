@@ -48,14 +48,42 @@ export const DialogueOverlay: React.FC<DialogueOverlayProps> = ({ dialogue, onCo
     if (action === 'CONFIRM') handleNext();
   });
 
+  /* Above the early return, and it has to stay above it.
+   *
+   * This sat after `if (!line) return null`, so it was only reached on renders
+   * where a line existed. React tracks hooks by call order: if the count
+   * changes between two renders of the same mounted instance it cannot match
+   * old state to new, and it tears the tree down.
+   *
+   * Unreachable today, one data edit away. Four things currently stand between
+   * this and a crash, and all four were checked rather than assumed:
+   *   1. the overlay only mounts when activeDialogue is non-null (App.tsx:656);
+   *   2. `index` never runs past the last entry — handleNext calls onComplete
+   *      instead, which clears activeDialogue and unmounts the component, so
+   *      the state dies with it;
+   *   3. `dialogue` cannot change while mounted, because the engine is frozen
+   *      for the duration of a dialogue, so no wave can queue another beneath;
+   *   4. none of the seven dialogueBefore arrays in stageData is empty — and
+   *      `[]` is truthy, so an empty one would pass the guard and mount this
+   *      with `line` undefined.
+   * Remove any one of those and the latent bug becomes an active one. Saying
+   * so plainly is stronger than implying a crash that does not happen,
+   * because it is checkable.
+   *
+   * The reasoning behind the hook itself was right and is unchanged: the
+   * keyboard hint below asks whether the player has a keyboard, which is a
+   * device question rather than a viewport one. Only the placement was wrong.
+   *
+   * Caught by the lint rule added alongside this, and by nothing else. The
+   * type checker passes on the broken version and so does the whole suite —
+   * verified by putting the bug back and running all three. */
+  const isMobile = useIsMobileDevice();
+
   if (!line) return null;
 
   // Undefined for every villain until their art exists, which is the whole
   // point of looking it up instead of assuming it.
   const face = portraitFor(line.portrait);
-  /* The keyboard hint below asks about having a keyboard, so it has to be
-   * gated on the device rather than on the viewport. */
-  const isMobile = useIsMobileDevice();
 
   return (
     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-40 flex flex-col justify-end p-6 select-none">
