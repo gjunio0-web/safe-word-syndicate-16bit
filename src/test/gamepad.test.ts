@@ -328,3 +328,54 @@ describe('slot assignment under signal loss', () => {
     expect(pads.p2!.punch).toBe(true);
   });
 });
+
+/**
+ * The staleness window is counted in calls to readPlayerPads, not in wall
+ * time — STALE_AFTER_FRAMES = 180 in gamepad.ts is only "three seconds" if
+ * the call site fires once per simulated step, roughly 60 times a second.
+ *
+ * This pins that fact from the outside, without importing the private
+ * counter: call readPlayerPads a known number of times and check the slot
+ * hand-over fires at exactly that count, not before or after. If a future
+ * change moves the call site to fire at a different rate — once per video
+ * frame instead of once per step, for instance — the call count needed to
+ * reproduce three seconds of real time changes, and whoever made that change
+ * needs to see this fail rather than silently shorten the window.
+ */
+describe('the staleness window is counted in calls', () => {
+  it('hands over a slot at exactly call 181, not before and not later', () => {
+    // Three controllers: pad 0 holds P1 and goes idle, pad 1 holds P2 and
+    // stays out of this, pad 2 is free and pressing something the whole
+    // time — the only kind of pad the hand-over logic will ever move into an
+    // abandoned slot, since a pad already holding P2 never re-enters that
+    // check.
+    connect([
+      pad({ index: 0, timestamp: 0 }),
+      pad({ index: 1, timestamp: 5, buttons: { 2: true } }),
+      pad({ index: 2, timestamp: 7, buttons: { 2: true } }),
+    ]);
+
+    let calls = 0;
+    let result;
+    do {
+      result = readPlayerPads(false);
+      calls++;
+    } while (calls < 180);
+
+    expect(result.p1, `still holding the slot at call ${calls}`).not.toBeNull();
+    // Pad 0 presses nothing, pad 2 presses punch, so `punch` is what says
+    // which of the two is answering for P1. The line above passes either way
+    // — the slot stays non-null right through the hand-over — and pins
+    // nothing on its own: a shortened window, the direction this whole test
+    // exists to catch, would slip by unnoticed without this.
+    expect(result.p1?.punch, `pad 0 still holds P1 at call ${calls}`).toBe(false);
+
+    result = readPlayerPads(false);
+    calls++;
+    expect(calls).toBe(181);
+    expect(result.p1, `handed over at call ${calls}`).not.toBeNull();
+    // Confirms it is specifically the free, pressed pad that took over, not
+    // merely that a slot is non-null for some other reason.
+    expect(result.p1?.punch).toBe(true);
+  });
+});

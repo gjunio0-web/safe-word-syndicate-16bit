@@ -21,6 +21,7 @@ import { RotateDevicePrompt } from './components/RotateDevicePrompt';
 import { AttractMode } from './components/AttractMode';
 import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
+import { advanceClock, createFrameClock, resetClock } from './game/frameClock';
 import { resolveKeyBinding } from './game/keyboard';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
@@ -357,61 +358,93 @@ export default function App() {
     isPausedRef.current = isPaused;
   }, [screen, isPaused]);
 
-  // Main Gameplay Update Loop using requestAnimationFrame for smooth 60fps execution
+  // Main Gameplay Update Loop, driven by a fixed-step clock
   useEffect(() => {
     if (screen !== 'GAMEPLAY' || isPaused) return;
 
     let animFrameId: number;
     let lastTime = performance.now();
-    const targetFps = 60;
-    const interval = 1000 / targetFps;
+    const clock = createFrameClock();
 
     const gameLoop = (currentTime: number) => {
       animFrameId = requestAnimationFrame(gameLoop);
-      const delta = currentTime - lastTime;
 
-      if (delta >= interval) {
-        lastTime = currentTime - (delta % interval);
+      const { steps } = advanceClock(clock, currentTime - lastTime);
+      lastTime = currentTime;
+      if (!engineRef.current) return;
 
-        if (engineRef.current) {
-          // Pause physics updates if active dialogue overlay is open
-          if (!engineRef.current.activeDialogue) {
-            // Polled here rather than in React state: the Gamepad API reports
-            // no button events, so reading it through setState would re-render
-            // the tree every frame.
-            // Assignment is stable across frames and keyed by the browser's
-            // pad index, so a device announcing itself late or briefly idling
-            // no longer swaps which fighter each person is driving.
-            const pads = readPlayerPads(gameMode === 'COOP');
+      // Input is read, and the step loop runs, only on frames that actually
+      // have a step to spend — not on every video frame.
+      //
+      // This guard exists because of a real bug the first version of this
+      // loop had: readPlayerPads does more than read. It calls trackActivity,
+      // which increments a frame counter used to decide when a stale
+      // controller's slot can be handed to someone else — STALE_AFTER_FRAMES
+      // in gamepad.ts, calibrated as "three seconds" at the counter's original
+      // call rate of once per simulated step, roughly 60 times a second on any
+      // 60Hz-or-faster display.
+      //
+      // Calling it once per video frame instead moves that counter to the
+      // display's refresh rate. At 240Hz the counter now advances four times
+      // for every step the simulation takes, so 180 counted "frames" stops
+      // meaning three seconds and starts meaning 180/240 = 0.75s — a
+      // controller resting on the table for less than a second could be
+      // treated as abandoned. That is the exact class of bug this whole clock
+      // exists to remove, reintroduced one call site downstream of the fix.
+      //
+      // Gating on `steps > 0` puts the call back at simulation rate — the rate
+      // the 180 was calibrated against — regardless of how fast the display
+      // refreshes.
+      if (steps > 0) {
+        const coop = gameMode === 'COOP';
+        const pads = readPlayerPads(coop);
+        const p1Input = mergeInputs(inputRef.current, pads.p1);
+        // In co-op, player two is always a person: the keyboard half plus
+        // whichever controller holds that slot. Passing an input object rather
+        // than undefined is what stops the engine falling through to the AI
+        // companion — the difference between "2P CO-OP" and "1P + AI BUDDY",
+        // which until now played identically whenever a second controller was
+        // missing.
+        const p2Input = coop ? mergeInputs(inputP2Ref.current, pads.p2) : (pads.p2 ?? undefined);
 
-            // In co-op, player two is always a person: the keyboard half plus
-            // whichever controller holds that slot. Passing an input object
-            // rather than undefined is what stops the engine falling through to
-            // the AI companion — which is the difference between "2P CO-OP" and
-            // "1P + AI BUDDY", and until now the two modes played identically
-            // whenever a second controller was missing.
-            const coop = gameMode === 'COOP';
-            const p2Input = coop
-              ? mergeInputs(inputP2Ref.current, pads.p2)
-              : (pads.p2 ?? undefined);
-
-            engineRef.current.update(mergeInputs(inputRef.current, pads.p1), p2Input);
+        for (let i = 0; i < steps; i++) {
+          // Dialogue holds the simulation without holding the clock: the overlay
+          // is meant to pause the fight, not to bank time and replay it in a
+          // burst the moment the player presses NEXT.
+          if (engineRef.current.activeDialogue) {
+            resetClock(clock);
+            break;
           }
-
-          // Victory is checked before stage clear.
-          //
-          // On the final stage both flags can rise on the same frame, and stage
-          // clear winning meant the campaign ended on a screen offering a NEXT
-          // STAGE that does not exist.
-          if (engineRef.current.bossDefeated) {
-            setSayonaraKilled(engineRef.current.sayonaraKilled);
-            setScreen('VICTORY');
-          } else if (engineRef.current.stageCleared) {
-            setScreen('STAGE_CLEAR');
-          } else if (engineRef.current.gameOver) {
-            setScreen('GAME_OVER');
-          }
+          engineRef.current.update(p1Input, p2Input);
         }
+      }
+
+      // Screen transitions are read once per frame, after stepping.
+      //
+      // Inside the step loop they would fire mid-catch-up, setting React state
+      // several times for one frame and letting the remaining steps run after
+      // the match was already decided.
+      //
+      // "Once per frame" now means once per video frame, not once per frame
+      // that actually stepped: this check sits outside the step loop, so on a
+      // 240Hz display it runs about four times for every step the simulation
+      // takes — most of those checks see nothing changed and call `setScreen`
+      // with the same value the screen already holds. That is not wasted work
+      // in any way that matters: React's setState bails out on an
+      // Object.is-equal value before re-rendering or re-running an effect that
+      // depends on it, so a redundant `setScreen('VICTORY')` while already on
+      // VICTORY is a no-op past the comparison.
+      //
+      // Victory is checked before stage clear: on the final stage both flags
+      // can rise on the same step, and stage clear winning meant the campaign
+      // ended on a screen offering a NEXT STAGE that does not exist.
+      if (engineRef.current.bossDefeated) {
+        setSayonaraKilled(engineRef.current.sayonaraKilled);
+        setScreen('VICTORY');
+      } else if (engineRef.current.stageCleared) {
+        setScreen('STAGE_CLEAR');
+      } else if (engineRef.current.gameOver) {
+        setScreen('GAME_OVER');
       }
     };
 
