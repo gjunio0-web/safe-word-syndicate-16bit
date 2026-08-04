@@ -166,7 +166,16 @@ describe('bark channel', () => {
   })) {
     return {
       ...STAGES[0],
-      waves: [{ triggerX: 0, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }], barkOnSpawn: [entry] }],
+      waves: [
+        { triggerX: 0, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }], barkOnSpawn: [entry] },
+        // A second wave, never reached by these tests, so the bark's own
+        // wave is not the stage's last one. The final wave raises the
+        // boss-warning banner on its own — even with no boss present — which
+        // now freezes bark's dismiss timer along with everything else while
+        // it shows. Without this, every test here would be exercising that
+        // freeze by accident instead of bark's own timer.
+        { triggerX: 100000, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }] },
+      ],
     };
   }
 
@@ -188,6 +197,10 @@ describe('bark channel', () => {
             enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }],
             barkOnSpawn: [FIXED, variantLine('FEET_MASTER')],
           },
+          // Not the final wave, same reasoning as barkingStage() above:
+          // isFinalWave alone raises the boss-warning banner, which now
+          // freezes bark's own dismiss timer while it shows.
+          { triggerX: 100000, enemies: [{ type: 'PURITY_PATROL' as const, count: 1 }] },
         ],
       },
       'FEET_MASTER'

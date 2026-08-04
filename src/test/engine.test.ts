@@ -659,3 +659,75 @@ describe('punishing a cast', () => {
     expect(hit(true)).toBe(hit(false));
   });
 });
+
+describe('the boss warning banner freezes the fight', () => {
+  const withBossWave = () => {
+    const stage = {
+      ...STAGES[0],
+      waves: [{ triggerX: 0, enemies: [{ type: 'BOSS_SAYONARA' as const, count: 1 }] }],
+    };
+    return new GameEngine(stage, 'FEET_MASTER');
+  };
+
+  it('holds simulated time and every position while the banner shows', () => {
+    const engine = withBossWave();
+    engine.update(NEUTRAL); // the triggering frame: spawns the boss, raises the banner
+    expect(engine.getHudSnapshot().showBossWarning).toBe(true);
+
+    const timeAtBannerStart = engine.simTimeMs;
+    const xAtBannerStart = engine.player1!.x;
+    const enemyXAtBannerStart = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!.x;
+
+    // Movement input held throughout — if anything moves while the banner is
+    // up, this is what would catch it.
+    for (let i = 0; i < 100; i++) engine.update(input({ right: true }));
+
+    expect(engine.simTimeMs, 'the animation clock must not advance').toBe(timeAtBannerStart);
+    expect(engine.player1!.x, 'the player must not move').toBe(xAtBannerStart);
+    expect(
+      engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!.x,
+      'the enemy must not move either'
+    ).toBe(enemyXAtBannerStart);
+  });
+
+  /**
+   * Pins the length, because the ordering that produces it is easy to lose.
+   *
+   * The flag is read before bossWarningTimer is decremented rather than after,
+   * and that one line is the whole difference between 180 frozen frames and
+   * 179 — reading it after lets the banner's final frame run the simulation
+   * underneath itself. Neither ordering affects the frame that raises the
+   * banner: bossWarningTimer is set inside updateWaveTriggers, which runs later
+   * in update(), so at the top of that frame the timer is still zero either way
+   * and the wave spawns regardless. Without this test the two orderings are
+   * indistinguishable to the suite.
+   */
+  it('freezes for the banner\'s full 180 frames, not one fewer', () => {
+    const engine = withBossWave();
+    engine.update(NEUTRAL);
+
+    let frozen = 0;
+    for (let i = 0; i < 400; i++) {
+      const before = engine.simTimeMs;
+      engine.update(input({ right: true }));
+      if (engine.simTimeMs !== before) break;
+      frozen++;
+    }
+    expect(frozen, 'three seconds at sixty steps a second').toBe(180);
+  });
+
+  it('resumes normally once the banner clears', () => {
+    const engine = withBossWave();
+    engine.update(NEUTRAL);
+    for (let i = 0; i < 179; i++) engine.update(input({ right: true }));
+
+    const stillFrozen = engine.getHudSnapshot().showBossWarning;
+    engine.update(input({ right: true })); // the 180th frame since the trigger
+    const clockAfter = engine.simTimeMs;
+
+    engine.update(input({ right: true }));
+    expect(stillFrozen, 'sanity: the banner was actually up before this').toBe(true);
+    expect(engine.getHudSnapshot().showBossWarning, 'the banner is gone').toBe(false);
+    expect(engine.simTimeMs, 'and time is moving again').toBeGreaterThan(clockAfter);
+  });
+});

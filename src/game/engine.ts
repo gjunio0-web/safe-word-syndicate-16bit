@@ -431,17 +431,33 @@ export class GameEngine {
   public update(p1Input: PlayerInput, p2Input?: PlayerInput) {
     if (this.gameOver || this.stageCleared) return;
 
+    if (this.stageStartBannerTimer > 0) {
+      this.stageStartBannerTimer--;
+    }
+
+    // Read before decrementing, on purpose: the frame that raises the banner
+    // — inside updateWaveTriggers below, when it spawns the surge and sets
+    // bossWarningTimer to 180 — has to run in full, spawn included. Only the
+    // frames after that one, where the banner is already up, freeze.
+    const bossWarningWasShowing = this.bossWarningTimer > 0;
+    if (this.bossWarningTimer > 0) {
+      this.bossWarningTimer--;
+    }
+
+    if (bossWarningWasShowing) {
+      // Nothing else advances: no frameCount, so the animation clock derived
+      // from it holds too, and no player, enemy, or wave logic runs. The
+      // banner used to sit over a fight that kept going underneath it —
+      // dodgeable damage the player could not see coming because the warning
+      // covered the middle of the screen.
+      return;
+    }
+
     this.frameCount++;
     if (this.frameCount % 60 === 0) {
       this.stats.timeSeconds++;
     }
 
-    if (this.stageStartBannerTimer > 0) {
-      this.stageStartBannerTimer--;
-    }
-    if (this.bossWarningTimer > 0) {
-      this.bossWarningTimer--;
-    }
     if (this.barkTimer > 0) {
       this.barkTimer--;
       if (this.barkTimer === 0) {

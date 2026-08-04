@@ -360,7 +360,14 @@ export default function App() {
 
   // Main Gameplay Update Loop, driven by a fixed-step clock
   useEffect(() => {
-    if (screen !== 'GAMEPLAY' || isPaused) return;
+    // Codex, jukebox, and difficulty share this gate with isPaused: opening
+    // any of them used to leave the fight running behind the overlay, so a
+    // boss's projectile could land on a player reading the bestiary. Tearing
+    // the effect down (rather than checking per frame) matches how isPaused
+    // already works — no rAF gets scheduled at all until every one of these
+    // closes, and reopening starts a fresh clock rather than replaying
+    // whatever time was banked while the modal was up.
+    if (screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal || showDifficultyModal) return;
 
     let animFrameId: number;
     let lastTime = performance.now();
@@ -450,7 +457,7 @@ export default function App() {
 
     animFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [screen, isPaused, gameMode]);
+  }, [screen, isPaused, gameMode, showCodex, showAudioModal, showDifficultyModal]);
 
   const startStage = (
     stageIdx: number,
