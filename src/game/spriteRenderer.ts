@@ -29,7 +29,8 @@ export function renderEntitySprite(
   ctx: CanvasRenderingContext2D,
   entity: EntityState,
   renderX: number,
-  renderY: number
+  renderY: number,
+  simTimeMs: number
 ) {
   ctx.save();
   ctx.translate(renderX, renderY);
@@ -48,7 +49,14 @@ export function renderEntitySprite(
   }
 
   // 3. Invulnerability / Damage Flashing Effect
-  if (entity.invulnerableTimer > 0 && Math.floor(Date.now() / 60) % 2 === 0) {
+  //
+  // simTimeMs comes from the engine's step count, not Date.now(). This flash,
+  // the walk cycle, and every other animation in this file used to run on
+  // the system clock regardless of whether the game was actually stepping —
+  // pausing the simulation left a knocked-back fighter flickering and the
+  // ground still scrolling. Deriving animation time from the same clock that
+  // gates simulation means freezing one freezes both.
+  if (entity.invulnerableTimer > 0 && Math.floor(simTimeMs / 60) % 2 === 0) {
     ctx.globalAlpha = 0.45;
   }
 
@@ -71,18 +79,18 @@ export function renderEntitySprite(
     ctx.globalAlpha = 0.3;
     ctx.translate(-18, 0);
     if (entity.isPlayer && entity.charId) {
-      renderPlayerSprite(ctx, entity.charId, entity);
+      renderPlayerSprite(ctx, entity.charId, entity, simTimeMs);
     }
     ctx.restore();
   }
 
   // 7. Main Sprite Rendering
   if (entity.isPlayer && entity.charId) {
-    renderPlayerSprite(ctx, entity.charId, entity);
+    renderPlayerSprite(ctx, entity.charId, entity, simTimeMs);
     // Unobtrusive Arcade Player Arrow Indicator high above head (never covers face!)
     renderPlayerIndicator(ctx, entity);
   } else if (entity.enemyType) {
-    renderEnemySprite(ctx, entity.enemyType, entity);
+    renderEnemySprite(ctx, entity.enemyType, entity, simTimeMs);
     // Render Overhead Arcade Health Bar for Enemies
     renderEnemyHealthBar(ctx, entity);
   }
@@ -335,7 +343,8 @@ const HERO_OUTLINE: Record<CharacterId, string> = {
 function renderPlayerSprite(
   ctx: CanvasRenderingContext2D,
   charId: CharacterId,
-  entity: EntityState
+  entity: EntityState,
+  simTimeMs: number
 ) {
   const isPunch = entity.action === 'PUNCH1' || entity.action === 'PUNCH2' || entity.action === 'PUNCH3';
   const isKick = entity.action === 'KICK';
@@ -356,7 +365,7 @@ function renderPlayerSprite(
   let bodyY = 0;
 
   if (isMoving) {
-    const stepTime = Date.now() / 80;
+    const stepTime = simTimeMs / 80;
     stepPhase = Math.sin(stepTime);
     stride1 = stepPhase * 14;              // Back leg horizontal stride
     stride2 = -stepPhase * 14;             // Front leg horizontal stride
@@ -396,7 +405,7 @@ function renderPlayerSprite(
         ctx.strokeStyle = '#00ffff';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(0, -42, 55 + Math.sin(Date.now() / 50) * 8, 0, Math.PI * 2);
+        ctx.arc(0, -42, 55 + Math.sin(simTimeMs / 50) * 8, 0, Math.PI * 2);
         ctx.stroke();
       }
 
@@ -648,7 +657,7 @@ function renderPlayerSprite(
       if (isFlying) ctx.rotate(0.12); // Forward soaring angle in flight
 
       if (isFlying || isJumping || isSpecial) {
-        const jetGlow = 18 + Math.sin(Date.now() / 30) * 6;
+        const jetGlow = 18 + Math.sin(simTimeMs / 30) * 6;
         ctx.fillStyle = '#ff00ff';
         ctx.beginPath();
         ctx.arc(-12, 6, jetGlow, 0, Math.PI * 2);
@@ -660,10 +669,10 @@ function renderPlayerSprite(
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
           ctx.moveTo(-18, 0);
-          ctx.lineTo(-12, 32 + Math.sin(Date.now() / 20) * 8);
+          ctx.lineTo(-12, 32 + Math.sin(simTimeMs / 20) * 8);
           ctx.lineTo(-6, 0);
           ctx.moveTo(6, 0);
-          ctx.lineTo(12, 32 + Math.cos(Date.now() / 20) * 8);
+          ctx.lineTo(12, 32 + Math.cos(simTimeMs / 20) * 8);
           ctx.lineTo(18, 0);
           ctx.fill();
 
@@ -1195,7 +1204,8 @@ function renderPlayerSprite(
 function renderEnemySprite(
   ctx: CanvasRenderingContext2D,
   type: EnemyType,
-  entity: EntityState
+  entity: EntityState,
+  simTimeMs: number
 ) {
   ctx.strokeStyle = '#090810';
   ctx.lineWidth = 2.5;
@@ -1210,7 +1220,7 @@ function renderEnemySprite(
   let bodyY = 0;
 
   if (isMoving) {
-    const stepTime = Date.now() / 90;
+    const stepTime = simTimeMs / 90;
     stepPhase = Math.sin(stepTime);
     stride1 = stepPhase * 12;
     stride2 = -stepPhase * 12;

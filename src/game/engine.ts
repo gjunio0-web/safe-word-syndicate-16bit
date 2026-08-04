@@ -33,6 +33,7 @@ import {
   ATTACKER_STANDOFF_TOLERANCE,
 } from './constants';
 import { sound } from './sound';
+import { STEP_MS } from './frameClock';
 
 /**
  * What the HUD actually shows, in display form.
@@ -159,6 +160,21 @@ export class GameEngine {
   };
 
   private frameCount: number = 0;
+
+  /**
+   * Simulated milliseconds elapsed, for animation.
+   *
+   * Derived from `frameCount * STEP_MS` rather than `Date.now()`, which is
+   * what every animation in spriteRenderer.ts and GameCanvas.tsx used to read
+   * directly. That tied their motion to the system clock instead of the
+   * simulation: pausing the engine — a dialogue box, a menu — left walk
+   * cycles, glows, and jets animating over a frozen fight. This only advances
+   * when `update()` runs, so freezing the engine now freezes what it looks
+   * like too.
+   */
+  public get simTimeMs(): number {
+    return this.frameCount * STEP_MS;
+  }
   private settings: GameSettings;
 
   /**

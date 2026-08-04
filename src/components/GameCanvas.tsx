@@ -183,7 +183,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         if (hazard.type === 'LASER_CROSS') {
           // Excommunication wave: a crimson cross, the boss's censure made
           // visible. She used to land this damage with nothing on screen.
-          ctx.rotate(Date.now() / 200);
+          //
+          // engine.simTimeMs, not Date.now(): this used to keep spinning
+          // while the engine was paused, same class of bug as every animation
+          // in spriteRenderer.ts.
+          ctx.rotate(engine.simTimeMs / 200);
           ctx.fillStyle = '#d63031';
           ctx.fillRect(-3.5, -14, 7, 28);
           ctx.fillRect(-11, -3.5, 22, 7);
@@ -199,7 +203,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           ctx.fill();
         } else {
           // Vial: glass body, glowing contents, cork.
-          ctx.rotate(Date.now() / 90);
+          ctx.rotate(engine.simTimeMs / 90);
           ctx.fillStyle = '#22d3ee';
           ctx.beginPath();
           ctx.arc(0, 0, 7, 0, Math.PI * 2);
@@ -246,7 +250,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.restore();
 
         // Sprite
-        renderEntitySprite(ctx, entity, renderX, renderY);
+        renderEntitySprite(ctx, entity, renderX, renderY, engine.simTimeMs);
       });
 
       // 3b. Hitbox overlay

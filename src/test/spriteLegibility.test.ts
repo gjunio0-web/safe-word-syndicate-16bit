@@ -67,6 +67,7 @@ function edgeContrast(charId: CharacterId, stageType: StageConfig['bgType']): nu
     composedCtx as unknown as CanvasRenderingContext2D,
     spriteHero(charId),
     0,
+    0,
     0
   );
   composedCtx.restore();

@@ -55,6 +55,16 @@ export class RecordingContext {
   /** One entry per draw call: the operation and the fill or stroke colour. */
   operations: string[] = [];
 
+  /**
+   * Alpha in force at each draw call, aligned with `operations`.
+   *
+   * Kept separate rather than folded into the operation string because tests
+   * assert on `operations` by exact value. Some effects change nothing but
+   * transparency — the damage flash is one — and without this they are
+   * invisible to a recorder that logs only geometry and colour.
+   */
+  alphas: number[] = [];
+
   saveCount = 0;
   restoreCount = 0;
 
@@ -83,6 +93,7 @@ export class RecordingContext {
   private record(op: string, ...points: RecordedPoint[]) {
     const colour = typeof this.fillStyle === 'string' ? this.fillStyle : 'gradient';
     this.operations.push(`${op}:${colour}`);
+    this.alphas.push(this.globalAlpha);
     this.points.push(...points);
   }
 

@@ -30,7 +30,7 @@ const ACTIONS: EntityAction[] = [
 
 function render(subject: EntityState) {
   const recorder = new RecordingContext();
-  renderEntitySprite(asContext(recorder), subject, 0, 0);
+  renderEntitySprite(asContext(recorder), subject, 0, 0, 0);
   return recorder;
 }
 
@@ -183,5 +183,132 @@ describe('defeated entities', () => {
     const recorder = render(spriteEnemy('PURITY_PATROL', { hp: 0, action: 'HURT', actionTimer: 10 }));
     expect(recorder.points.length).toBeGreaterThan(0);
     expect(recorder.depth).toBe(0);
+  });
+});
+
+describe('animation follows simulated time, not the wall clock', () => {
+  it('draws identically for the same simTimeMs, regardless of real elapsed time', () => {
+    const subject = spriteHero('FEET_MASTER', { action: 'IDLE', invulnerableTimer: 40 });
+    const frameA = new RecordingContext();
+    renderEntitySprite(asContext(frameA), subject, 0, 0, 1234);
+    const frameB = new RecordingContext();
+    renderEntitySprite(asContext(frameB), subject, 0, 0, 1234);
+    expect(frameB.points).toEqual(frameA.points);
+  });
+
+  it('draws the walk cycle identically for the same simTimeMs', () => {
+    // A separate check from the one above: the invulnerability flash and the
+    // walk cycle are two different lines that each used to read Date.now()
+    // independently, so fixing one does not prove the other was fixed.
+    //
+    // Worth being honest about what this does and does not catch: two calls
+    // this close together would usually land in the same millisecond even if
+    // this line still read Date.now(), so a regression back to it is caught
+    // most of the time here, not every time — confirmed by mutating it back
+    // and re-running this a few times, which failed on some runs and passed
+    // on others. It pins the intended behaviour correctly; it just is not an
+    // airtight guard against that one specific regression the way a
+    // synchronous, non-time-based check would be.
+    const subject = spriteHero('FEET_MASTER', { action: 'WALK' });
+    const frameA = new RecordingContext();
+    renderEntitySprite(asContext(frameA), subject, 0, 0, 777);
+    const frameB = new RecordingContext();
+    renderEntitySprite(asContext(frameB), subject, 0, 0, 777);
+    expect(frameB.points).toEqual(frameA.points);
+  });
+
+  /**
+   * One case per animated site in this file, because each reads simTimeMs on
+   * its own line and fixing one proves nothing about the others.
+   *
+   * The shape is always the same: render the same entity at two simulated
+   * times far enough apart to move the animation, and require the drawing to
+   * differ. That is also what makes these a guard rather than a description —
+   * a line reverted to Date.now() returns the same value for both calls, so
+   * the two renders come out identical and the test fails. Measured: with the
+   * walk cycle reverted, this style of check failed on 10 runs out of 10,
+   * while comparing two renders at the *same* simTimeMs failed on 1 of 10.
+   */
+  it('animates the enemy walk cycle with simulated time', () => {
+    const subject = spriteEnemy('PURITY_PATROL', { action: 'WALK' });
+    const early = new RecordingContext();
+    renderEntitySprite(asContext(early), subject, 0, 0, 0);
+    const later = new RecordingContext();
+    renderEntitySprite(asContext(later), subject, 0, 0, 5000);
+    expect(later.points).not.toEqual(early.points);
+  });
+
+  it('animates the power move aura with simulated time', () => {
+    const subject = spriteHero('FEET_MASTER', { action: 'POWER_MOVE' });
+    const early = new RecordingContext();
+    renderEntitySprite(asContext(early), subject, 0, 0, 0);
+    const later = new RecordingContext();
+    renderEntitySprite(asContext(later), subject, 0, 0, 5000);
+    expect(later.points).not.toEqual(early.points);
+  });
+
+  /**
+   * Fun Maker in flight animates from three separate lines at once — the two
+   * jet glows, and the left and right thruster plumes — so "the drawing
+   * changed" is too weak a claim here: revert any one of them and the other
+   * two still move the picture, and a test asserting only inequality passes
+   * while the regression ships. Counting the points that moved is what makes
+   * each line individually accountable, since losing one drops the count.
+   */
+  const movedPoints = (a: RecordingContext, b: RecordingContext) => {
+    let moved = 0;
+    for (let i = 0; i < Math.max(a.points.length, b.points.length); i++) {
+      const p = a.points[i];
+      const q = b.points[i];
+      if (!p || !q || p.x !== q.x || p.y !== q.y) moved++;
+    }
+    return moved;
+  };
+
+  const atTwoTimes = (subject: EntityState) => {
+    const early = new RecordingContext();
+    renderEntitySprite(asContext(early), subject, 0, 0, 0);
+    const later = new RecordingContext();
+    renderEntitySprite(asContext(later), subject, 0, 0, 5000);
+    return movedPoints(early, later);
+  };
+
+  it("animates Fun Maker's jet glow, which a jump draws without the plumes", () => {
+    // Two arcs, each recorded as a bounding-box pair: four points.
+    expect(atTwoTimes(spriteHero('FUN_MAKER', { action: 'JUMP', z: 60 }))).toBe(4);
+  });
+
+  it("animates Fun Maker's thruster plumes on top of the jet glow in flight", () => {
+    // The jump's four, plus one moving vertex per plume.
+    expect(atTwoTimes(spriteHero('FUN_MAKER', { action: 'FLYING', z: 60 }))).toBe(6);
+  });
+
+  /**
+   * The damage flash changes nothing but transparency, so it leaves no mark on
+   * geometry or colour. `alphas` is what makes it observable at all.
+   *
+   * 0ms and 60ms sit on opposite sides of the flash's toggle, so the alpha in
+   * force during the sprite's own draw calls has to differ between them.
+   */
+  it('animates the damage flash with simulated time', () => {
+    const subject = spriteHero('FEET_MASTER', { action: 'IDLE', invulnerableTimer: 40 });
+    const lit = new RecordingContext();
+    renderEntitySprite(asContext(lit), subject, 0, 0, 0);
+    const dark = new RecordingContext();
+    renderEntitySprite(asContext(dark), subject, 0, 0, 60);
+    expect(dark.alphas).not.toEqual(lit.alphas);
+  });
+
+  it('animates when simTimeMs advances, so it is not simply ignored', () => {
+    // The recorder's `operations` log deliberately only tracks call type and
+    // colour — resilient to visual tweaks by design — so it wouldn't show a
+    // walk cycle shifting a few pixels. Geometry lives in `points`, the
+    // recorded coordinates in the caller's own space.
+    const subject = spriteHero('FEET_MASTER', { action: 'WALK' });
+    const early = new RecordingContext();
+    renderEntitySprite(asContext(early), subject, 0, 0, 0);
+    const later = new RecordingContext();
+    renderEntitySprite(asContext(later), subject, 0, 0, 5000);
+    expect(later.points).not.toEqual(early.points);
   });
 });
