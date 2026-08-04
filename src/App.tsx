@@ -282,10 +282,19 @@ export default function App() {
   // not find it in the new scope, and confirm spent itself moving focus instead
   // of pressing anything. Closing them left focus on an element that no longer
   // existed, costing another press.
-  useMenuFocusReset(
-    `${screen}:${isPaused}:${showCodex}:${showAudioModal}:${showDifficultyModal}`,
-    screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal || showDifficultyModal
-  );
+  /**
+   * One name for "something is covering the screen", because four places need
+   * to agree on it: focus restoration, the gameplay loop's gate, that effect's
+   * dependency list, and the keyboard handler that must not fire through an
+   * overlay. Spelled out at each site, a fifth modal added later gets wired
+   * into some of them and not the others, and the one it misses decides
+   * whether the fight keeps running behind it. No test covers any of the four
+   * — the gate lives in a React effect and this project has no DOM test
+   * environment — so the single name is the guard.
+   */
+  const anyModalOpen = showCodex || showAudioModal || showDifficultyModal;
+
+  useMenuFocusReset(`${screen}:${isPaused}:${anyModalOpen}`, screen !== 'GAMEPLAY' || isPaused || anyModalOpen);
 
   const gameRootRef = useRef<HTMLDivElement>(null);
 
@@ -367,7 +376,7 @@ export default function App() {
     // already works — no rAF gets scheduled at all until every one of these
     // closes, and reopening starts a fresh clock rather than replaying
     // whatever time was banked while the modal was up.
-    if (screen !== 'GAMEPLAY' || isPaused || showCodex || showAudioModal || showDifficultyModal) return;
+    if (screen !== 'GAMEPLAY' || isPaused || anyModalOpen) return;
 
     let animFrameId: number;
     let lastTime = performance.now();
@@ -457,7 +466,7 @@ export default function App() {
 
     animFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [screen, isPaused, gameMode, showCodex, showAudioModal, showDifficultyModal]);
+  }, [screen, isPaused, gameMode, anyModalOpen]);
 
   const startStage = (
     stageIdx: number,
@@ -539,7 +548,7 @@ export default function App() {
       // it: pressing start with the codex open began the match behind the
       // codex, and confirm fell through to the same handler whenever focus was
       // not on one of the overlay's own buttons.
-      if (showCodex || showAudioModal || showDifficultyModal) {
+      if (anyModalOpen) {
         if (action === 'BACK') {
           setShowCodex(false);
           setShowAudioModal(false);

@@ -233,6 +233,22 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
    * the space is not there and stay put when it is. Nothing is smaller at any
    * size that fitted before; the inset simply stops manufacturing scroll it
    * has nothing to show. */
+  /* This screen still scrolls below 1920x1080, and that is a decision rather
+   * than an oversight, written down here because a decision nobody recorded
+   * gets rediscovered as a bug.
+   *
+   * Measured, one player, fullscreen, worst scrolling element on the page:
+   * 1920x1080 none, 1440x900 28px, 1600x900 68px, 1536x864 88px, 1366x768
+   * 141px, 1280x720 168px. The same 1920x1080 panel in an ordinary window
+   * rather than fullscreen gives 93px, so a maximised 1920x1080 is the only
+   * configuration that fits outright.
+   *
+   * Everything reachable through spacing was already spent — the removed
+   * min-height above, the shrinkable inset above that, and the slot bar's
+   * box. What is left would have to come out of the content: fewer lines in
+   * the dossier, or a block dropped. That is a cut to what the screen says,
+   * not to how it is arranged, and it is not a change to make silently on the
+   * way past. Until someone decides which words go, the screen scrolls. */
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] text-white flex flex-col justify-between px-2 pt-2 sm:px-4 sm:pt-4 md:px-6 md:pt-6 select-none font-sans overflow-y-auto border-2 sm:border-8 md:border-[12px] border-[#ff00ff]/10">
       {/* Top Header - Controls & Mode Selector */}

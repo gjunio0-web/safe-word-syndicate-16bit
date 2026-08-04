@@ -555,16 +555,25 @@ const INTRO_CSS = `
   animation: sws-pan-up calc(var(--bar) * 2) steps(20) calc(var(--bar) * 3) forwards;
 }
 /* Tuned against the actual scene 1 plate, which is dark. A straight grayscale
-   leaves the drained city as mud and the neon stops reading as signage at exactly
-   the moment the pulse is supposed to be taking it away, so the filter has to lift
-   it back without lifting the dark off the rest of the frame.
+   leaves the drained city as mud, so the filter has to lift it back without
+   lifting the dark off the rest of the frame.
+
+   What these numbers protect is the sky and the cathedral, not the neon, and it
+   is worth being exact about that because the comment used to claim otherwise.
+   Scene 1 covers a 1.713 stage with a 0.739 plate, so only 43% of the art is on
+   screen at once. The pan runs from bar 3 to bar 5 and parks the camera at the
+   top of the plate; the drain does not start until bar 6. By the time the colour
+   goes, the lit street the plate is famous for has been off screen for two
+   seconds and what is left in frame is the skyline and the tower — which is the
+   right image for the beat, the Protocol's own building being the thing the
+   colour dies on, but it does mean nobody is watching neon fail to read.
 
    Measured over the whole image with Rec.601 luminance. Stating the basis matters
-   more than it looks: scene 1 covers a 1.713 stage with a 0.739 plate, so only 43%
-   of the art is on screen at once and the pan slides that window from the lit
-   street up into the dark sky. The same filter on this plate reads as 241 at the
-   bottom of the pan and 70 at the top, against 185 for the image as a whole — a
-   number quoted without its window says almost nothing.
+   more than it looks: the same filter on this plate reads as 241 over the window
+   at the bottom of the pan and 70 over the window at the top, against 185 for the
+   image as a whole — a number quoted without its window says almost nothing. The
+   whole-image figure is the one carried here because it is the only one that
+   survives a change to the pan; the 70 is what the player actually sees drain.
 
    The numbers belong to the plate, so swapping the artwork means re-measuring.
    That has now happened twice, and the brightness moved each time: 1.15 for the
