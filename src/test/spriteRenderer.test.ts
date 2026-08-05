@@ -390,6 +390,28 @@ describe('Sayonara reads as the animal her data describes', () => {
     ).toBeLessThan(-bodyBounds(standing).minY);
   });
 
+  it('keeps her paws on the floor in every pose', () => {
+    // She lifted off during the wind-up and the recovery — 6px and 8px of
+    // daylight underneath — because the sink was applied to the legs as well
+    // as the body. With the heights snapping between phases on top of it, the
+    // thing it read as in play was a dog that hops rather than one that
+    // crouches.
+    const poses: Array<[string, Partial<EntityState>]> = [
+      ['idle', {}],
+      ['walking', { vx: 2, action: 'WALK' }],
+      ['winding up', { chargeState: 'TELEGRAPH' }],
+      ['charging', { chargeState: 'CHARGE', vx: 8.5, action: 'WALK' }],
+      ['recovering', { chargeState: 'RECOVER' }],
+      ['biting', { action: 'PUNCH1', actionTimer: 12 }],
+      ['down', { downed: true, hp: 1 }],
+    ];
+
+    for (const [name, over] of poses) {
+      const floor = bodyBounds(render(dog(over))).maxY;
+      expect(floor, `${name} left her ${(-floor).toFixed(1)}px above the ground`).toBeCloseTo(0, 1);
+    }
+  });
+
   it('puts the collar out once the spell holding it is broken', () => {
     const leashed = render(dog({ downed: true, hp: 1 }));
     const freed = render(dog({ downed: true, hp: 1, freed: true }));

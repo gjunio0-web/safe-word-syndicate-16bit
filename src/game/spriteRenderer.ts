@@ -1571,8 +1571,17 @@ function renderEnemySprite(
       ctx.save();
       ctx.scale(0.8, 0.8);
       const gait = isDown || winding ? 0 : 1;
-      const legLen = isDown ? 7 : winding ? 13 : running ? 15 : spent ? 11 : 18;
-      const drop = isDown ? 13 : winding ? 5 : spent ? 7 : 0;
+      // Leg length alone decides how low she sits, and the paws stay welded
+      // to the floor at zero.
+      //
+      // A second sink term used to be applied to the legs as well as the body,
+      // so instead of the body settling onto folded legs the whole animal
+      // lifted: 6px of daylight under her during the wind-up, 8px during the
+      // recovery, and 15.6px while down — the worst of the three, and the pose
+      // she holds motionless for longest, so the easiest to catch. Together
+      // with the height snapping between phases, what that read as in play was
+      // a dog that hops.
+      const legLen = isDown ? 7 : winding ? 12 : running ? 15 : spent ? 10 : 18;
 
       // Weight shifts back to load the charge, forward to spend it.
       const lean = winding ? -9 : running ? 12 : spent ? -5 : 0;
@@ -1592,26 +1601,26 @@ function renderEnemySprite(
       // Hind legs, then fore legs: the far pair sits a shade darker so the
       // body reads as having two sides at this size.
       ctx.fillStyle = HIDE_LOW;
-      ctx.fillRect(-40 + p2, -legLen - l2 - drop, 13, legLen + l2);
-      ctx.strokeRect(-40 + p2, -legLen - l2 - drop, 13, legLen + l2);
-      ctx.fillRect(8 + p1, -legLen - l1 - drop, 13, legLen + l1);
-      ctx.strokeRect(8 + p1, -legLen - l1 - drop, 13, legLen + l1);
+      ctx.fillRect(-40 + p2, -legLen - l2, 13, legLen + l2);
+      ctx.strokeRect(-40 + p2, -legLen - l2, 13, legLen + l2);
+      ctx.fillRect(8 + p1, -legLen - l1, 13, legLen + l1);
+      ctx.strokeRect(8 + p1, -legLen - l1, 13, legLen + l1);
 
       ctx.fillStyle = HIDE;
-      ctx.fillRect(-30 + p1, -legLen - l1 - drop, 14, legLen + l1);
-      ctx.strokeRect(-30 + p1, -legLen - l1 - drop, 14, legLen + l1);
-      ctx.fillRect(20 + p2, -legLen - l2 - drop, 14, legLen + l2);
-      ctx.strokeRect(20 + p2, -legLen - l2 - drop, 14, legLen + l2);
+      ctx.fillRect(-30 + p1, -legLen - l1, 14, legLen + l1);
+      ctx.strokeRect(-30 + p1, -legLen - l1, 14, legLen + l1);
+      ctx.fillRect(20 + p2, -legLen - l2, 14, legLen + l2);
+      ctx.strokeRect(20 + p2, -legLen - l2, 14, legLen + l2);
 
       // Tan points on the paws, the way the breed wears them.
       ctx.fillStyle = TAN;
-      ctx.fillRect(-40 + p2, -4 - l2 - drop, 13, 4);
-      ctx.fillRect(8 + p1, -4 - l1 - drop, 13, 4);
-      ctx.fillRect(-30 + p1, -4 - l1 - drop, 14, 4);
-      ctx.fillRect(20 + p2, -4 - l2 - drop, 14, 4);
+      ctx.fillRect(-40 + p2, -4 - l2, 13, 4);
+      ctx.fillRect(8 + p1, -4 - l1, 13, 4);
+      ctx.fillRect(-30 + p1, -4 - l1, 14, 4);
+      ctx.fillRect(20 + p2, -4 - l2, 14, 4);
 
       ctx.save();
-      ctx.translate(lean, sway - drop);
+      ctx.translate(lean, sway);
 
       // Docked stub, back where the tail would be.
       ctx.fillStyle = HIDE_LOW;

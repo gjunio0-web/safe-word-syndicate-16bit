@@ -1086,26 +1086,135 @@ describe('Sayonara charges', () => {
     expect(frames).toBeGreaterThanOrEqual(SAYONARA_RECOVER_FRAMES - 1);
   });
 
-  it('backs off when crowded, because a tackle needs a run-up', () => {
-    // Started outside the distance bodies rest at, so separation cannot do
-    // the moving for her — at 60px apart she is shoved clear whether she
-    // retreats or stands still, and the test passes either way.
-    const { engine, dog } = dogAt(150);
+  /**
+   * Pinned against the arena edge with the player on top of her.
+   *
+   * The player is placed once and left alone: dragging him every frame moves
+   * the camera, and the arena bounds move with it, so she is never actually
+   * cornered and the setup quietly tests nothing. Waves are swept for the same
+   * reason — grunts spawning behind the player deal damage that looks like
+   * hers.
+   */
+  const cornered = (frames = 900) => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx: 150 }]);
+    const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!;
     const player = engine.player1!;
-    const startX = dog.x;
-    const away = Math.sign(dog.x - player.x);
+    const wall = (engine as unknown as { cameraX: number }).cameraX + 760;
+    // Close enough to the edge that a step back is already outside it — at
+    // thirty she still has room, retreats into the wall and is only cornered
+    // a second later, which makes the first thing she throws hard to predict.
+    dog.x = wall - 10;
+    player.x = dog.x - 110;
 
-    // Stopped while she is still inside the band. Left to run she reaches it
-    // and winds up, which is correct and would make the second assertion a
-    // statement about how long the loop ran rather than about her.
-    for (let i = 0; i < 30; i++) {
+    const full = player.hp;
+    let taken = 0;
+    let bites = 0;
+    let previous = dog.action;
+    for (let i = 0; i < frames; i++) {
+      engine.entities = engine.entities.filter((e) => e.isPlayer || e === dog);
       engine.update(NEUTRAL);
-      expect(dog.chargeState ?? 'READY', `wound up from inside on frame ${i}`).toBe('READY');
+      if (dog.action === 'PUNCH1' && previous !== 'PUNCH1') bites++;
+      previous = dog.action;
+      if (player.hp < full) taken += full - player.hp;
+      player.hp = full;
+      player.invulnerableTimer = 0;
+    }
+    return { engine, dog, player, taken, bites };
+  };
+
+  it('cannot be switched off by cornering her against the arena edge', () => {
+    // Reproduced from play: pinned to the edge with the player standing on
+    // her, she spent nine hundred frames in the approach state and dealt
+    // nothing at all, because retreating was the only thing she knew how to
+    // do at that range and there was nowhere left to retreat to.
+    const { taken, bites } = cornered();
+    expect(bites, 'she fights with what she has').toBeGreaterThan(0);
+    expect(taken, 'a boss with an off switch is not a trade').toBeGreaterThan(0);
+  });
+
+  it('still goes and fetches the run-up when there is room for it', () => {
+    // The regression this guards against is the mirror of the one above and
+    // was invisible to every other test here: with the bite available at close
+    // range and no reason to back off, she stopped charging altogether —
+    // twenty-four bites and one charge over thirty seconds. The telegraphed
+    // move is the one the fight is built around, so a version of her that
+    // never throws it is not the boss that was designed.
+    const { engine, dog } = dogAt(110);
+    let charges = 0;
+    let bites = 0;
+    let previousState = dog.chargeState;
+    let previousAction = dog.action;
+    for (let i = 0; i < 900; i++) {
+      engine.update(NEUTRAL);
+      engine.player1!.hp = 100;
+      engine.player1!.invulnerableTimer = 0;
+      if (dog.chargeState === 'TELEGRAPH' && previousState !== 'TELEGRAPH') charges++;
+      if (dog.action === 'PUNCH1' && previousAction !== 'PUNCH1') bites++;
+      previousState = dog.chargeState;
+      previousAction = dog.action;
     }
 
-    // Her own position, not the gap between them: the gap widens if the player
-    // is shoved as well, which would pass without her having moved at all.
-    expect((dog.x - startX) * away, 'she makes room rather than mauling').toBeGreaterThan(20);
+    expect(charges, 'started point-blank and never went to get the ground back').toBeGreaterThan(1);
+
+    // Both halves, counted in the same run. Dropping the cooldown term from
+    // the retreat condition sends her back to fetching ground every time she
+    // is crowded — eleven charges and no bites at all, which is the design
+    // this branch was rewritten to stop being. The charge count alone cannot
+    // tell those apart, so it has to be the mix.
+    expect(bites, 'and still bites between the charges').toBeGreaterThan(0);
+  });
+
+  it('keeps the bite the lesser half of her, measured on the player', () => {
+    // Read off what actually lands, not off the constants. Comparing the two
+    // constants to each other says nothing about whether the engine uses
+    // either of them.
+    const bite = (() => {
+      // Zero frames: the helper otherwise lands the first bite inside its own
+      // loop and resets the health it took, so the first drop seen here would
+      // be whatever came next.
+      const { engine, player } = cornered(0);
+      const full = player.hp;
+      for (let i = 0; i < 600; i++) {
+        engine.entities = engine.entities.filter((e) => e.isPlayer || e.enemyType === 'BOSS_SAYONARA');
+        engine.update(NEUTRAL);
+        if (player.hp < full) return { damage: full - player.hp, down: player.actionTimer, action: player.action };
+      }
+      throw new Error('the bite never landed');
+    })();
+
+    const tackle = (() => {
+      const { engine } = dogAt(300);
+      const player = engine.player1!;
+      const full = player.hp;
+      for (let i = 0; i < 600; i++) {
+        engine.update(NEUTRAL);
+        if (player.hp < full) return { damage: full - player.hp, down: player.actionTimer, action: player.action };
+      }
+      throw new Error('the tackle never landed');
+    })();
+
+    expect(bite.action, 'the bite puts him down too').toBe('KNOCKDOWN');
+    expect(tackle.action).toBe('KNOCKDOWN');
+    expect(bite.damage, 'and hits for less than the charge').toBeLessThan(tackle.damage);
+    expect(bite.down, 'and holds him there for less time').toBeLessThan(tackle.down);
+  });
+
+  it('leaves no dead band between the jaws and the run-up', () => {
+    // Between bite range and charge range she neither bites nor commits. If
+    // she also stands still there, the off switch has only moved.
+    const { engine } = dogAt(180);
+    const player = engine.player1!;
+    const full = player.hp;
+    let taken = 0;
+    for (let i = 0; i < 400; i++) {
+      engine.update(NEUTRAL);
+      if (player.hp < full) taken += full - player.hp;
+      player.hp = full;
+      player.invulnerableTimer = 0;
+    }
+    expect(taken, 'she closes the gap rather than waiting in it').toBeGreaterThan(0);
   });
 
   it('keeps a fighter wider than its own reach able to land a hit', () => {

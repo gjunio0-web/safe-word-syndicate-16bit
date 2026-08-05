@@ -115,6 +115,12 @@ export interface EntityState {
   chargeDir?: -1 | 1;
   /** One tackle connects once, however long the body stays overlapped. */
   chargeHasHit?: boolean;
+  /** Frames before she may bite again. */
+  biteCooldown?: number;
+  /** Frames of backing away that gained her no ground at all. */
+  retreatFrames?: number;
+  /** Gap to the player last frame, to tell a retreat that works from one that does not. */
+  lastGap?: number;
   aiTimer?: number;
 
   /**

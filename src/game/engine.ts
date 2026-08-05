@@ -44,6 +44,12 @@ import {
   SAYONARA_TACKLE_DAMAGE_MULTIPLIER,
   SAYONARA_TACKLE_KNOCKBACK,
   SAYONARA_TACKLE_KNOCKDOWN_FRAMES,
+  SAYONARA_BITE_FRAMES,
+  SAYONARA_BITE_COOLDOWN,
+  SAYONARA_BITE_RANGE,
+  SAYONARA_BITE_KNOCKDOWN_FRAMES,
+  SAYONARA_BITE_KNOCKBACK,
+  SAYONARA_RETREAT_PATIENCE,
 } from './constants';
 import {
   COMPANION_TUNING,
@@ -1627,26 +1633,103 @@ export class GameEngine {
       // READY: close to the band she can commit from, and hold there.
       enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
       enemy.vy = Math.abs(dy) > 10 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
+      enemy.biteCooldown = Math.max(0, (enemy.biteCooldown ?? 0) - 1);
 
       if (absDx > SAYONARA_CHARGE_MAX_RANGE) {
         enemy.vx = (dx > 0 ? 1 : -1) * info.speed;
         enemy.action = 'WALK';
       } else if (absDx < SAYONARA_CHARGE_MIN_RANGE) {
-        // Backing off is the answer to being crowded, and it is deliberate
-        // counter-play rather than an oversight: she has no short attack, so a
-        // player who stays glued to her shuts the tackle off entirely. The
-        // price is the ground — staying that close means fighting inside her
-        // reach with no room to retreat when she does break away, and it
-        // cannot be done at all with a second enemy on the field.
+        // Too close to run. Either she goes and gets the room, or she fights
+        // where she stands.
         //
-        // It is a real trade and it is also a real hole: point-blank is safe.
-        // If that reads as too safe in play, the fix is a short bite here
-        // rather than a change to the charge.
-        enemy.vx = (dx > 0 ? -1 : 1) * info.speed * 0.75;
-        enemy.action = 'WALK';
+        // She used to always retreat here, which was written up as
+        // counter-play: give up the ground, deny the tackle. Against the arena
+        // edge there is no ground left to give, and a player who walked into
+        // her simply turned her off — nine hundred frames cornered, never once
+        // leaving the approach state, no damage at all. A boss with an off
+        // switch is not a trade.
+        //
+        // Then she always bit, and that was worse in a quieter way: measured
+        // over thirty seconds she threw twenty-four bites and one charge. The
+        // whole telegraphed move — crouch where the player can read it, commit
+        // to a direction, pay for missing — fired once, and a boss whose
+        // offence is an unannounced bite is the tax this engine's own comment
+        // warns against three branches up.
+        //
+        // So the retreat is conditional on having something to retreat for. If
+        // the charge is off cooldown she goes and fetches the ground for it;
+        // if it is not, or if there is no ground behind her, she fights with
+        // what she has. The bite becomes the filler between charges rather
+        // than a replacement for them: eight and eight over the same thirty
+        // seconds, against eleven and zero if she only ever retreated.
+        //
+        // The bite stays the lesser half of her either way — less damage, half
+        // the time on the floor, no run-up to read.
+        // The wall is the edge of the screen, and it is nearer than the edge
+        // itself: step past `arenaMaxX` and the arena-entry branch at the top
+        // of this method takes over before any of her own logic runs, marching
+        // her back to seventy pixels inside. Retreating into that is not
+        // retreating, it is handing the decision to another branch, so the
+        // margin here matches the one that branch uses to put her back — a
+        // retreat now ends somewhere she can still act from.
+        //
+        // It does not buy back the time itself. Chased across open ground she
+        // spends roughly the same share of the fight outside the arena either
+        // way — 1602 frames of 1800 before this patch, 1348 after — because
+        // that is the camera's doing and not hers. What changes is what
+        // happens in the frames she does get: nothing at all before, 120
+        // damage after. The camera behaviour is its own defect and is not
+        // fixed here.
+        const roomBehind = enemy.x + (dx > 0 ? -1 : 1) * info.speed * 0.75;
+        const cornered = roomBehind <= arenaMinX + 70 || roomBehind >= arenaMaxX - 70;
+
+        // Counted in stalled frames rather than elapsed ones: what matters is
+        // not how long she has been backing away but whether backing away is
+        // earning her anything. A player who simply walks after her holds the
+        // gap at the resting distance, and she would otherwise retreat for the
+        // entire fight without ever reaching the band she is retreating
+        // towards — one bite and no charges across fifteen seconds of being
+        // chased, measured. Which is the same boss with an off switch the bite
+        // was added to fix, wearing a different hat.
+        const stalled = absDx <= (enemy.lastGap ?? 0) + 0.5;
+        enemy.lastGap = absDx;
+        const givingUp = (enemy.retreatFrames ?? 0) >= SAYONARA_RETREAT_PATIENCE;
+
+        if (!cornered && !givingUp && enemy.chargeCooldown === 0) {
+          enemy.vx = (dx > 0 ? -1 : 1) * info.speed * 0.75;
+          enemy.action = 'WALK';
+          enemy.retreatFrames = stalled ? (enemy.retreatFrames ?? 0) + 1 : 0;
+        } else if (
+          enemy.biteCooldown === 0 &&
+          absDx < SAYONARA_BITE_RANGE &&
+          Math.abs(dy) < SAYONARA_TACKLE_DEPTH
+        ) {
+          enemy.vx = 0;
+          enemy.vy = 0;
+          enemy.action = 'PUNCH1';
+          enemy.actionTimer = SAYONARA_BITE_FRAMES;
+          enemy.biteCooldown = SAYONARA_BITE_FRAMES + SAYONARA_BITE_COOLDOWN;
+          enemy.retreatFrames = 0;
+          sound.playPunch(sound.calculatePan(enemy.x, this.cameraX));
+
+          this.damageEntity(targetPlayer, info.power, enemy);
+          targetPlayer.vx = (dx > 0 ? 1 : -1) * SAYONARA_BITE_KNOCKBACK;
+          targetPlayer.action = 'KNOCKDOWN';
+          targetPlayer.actionTimer = SAYONARA_BITE_KNOCKDOWN_FRAMES;
+        } else if (absDx > SAYONARA_BITE_RANGE - 20) {
+          // Between the jaws and the run-up there would otherwise be a band
+          // where she neither bites nor charges, which is the same dead zone
+          // in a different place. She closes it.
+          enemy.vx = (dx > 0 ? 1 : -1) * info.speed * 0.6;
+          enemy.action = 'WALK';
+        } else {
+          enemy.vx = 0;
+          enemy.action = 'IDLE';
+        }
       } else {
         enemy.vx = 0;
         enemy.action = 'IDLE';
+        enemy.retreatFrames = 0;
 
         if (enemy.chargeCooldown === 0 && Math.abs(dy) < SAYONARA_TACKLE_DEPTH) {
           enemy.chargeState = 'TELEGRAPH';

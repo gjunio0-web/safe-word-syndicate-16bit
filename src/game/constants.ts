@@ -191,8 +191,14 @@ export const SAYONARA_TELEGRAPH_FRAMES = 32;
 export const SAYONARA_CHARGE_FRAMES = 34;
 /** Frames spent skidding to a stop, unable to act. */
 export const SAYONARA_RECOVER_FRAMES = 42;
-/** Frames before she may wind up again, counted from the end of a recovery. */
-export const SAYONARA_CHARGE_COOLDOWN = 72;
+/**
+ * Frames before she may wind up again, counted from the end of a recovery.
+ *
+ * Was 72, which put a full three seconds between attempts once the wind-up,
+ * the run and the recovery were added on. In play that read as a boss who was
+ * mostly waiting.
+ */
+export const SAYONARA_CHARGE_COOLDOWN = 40;
 /** Ground speed of the charge itself — roughly three times her walk. */
 export const SAYONARA_CHARGE_SPEED = 8.5;
 /**
@@ -217,3 +223,39 @@ export const SAYONARA_TACKLE_DAMAGE_MULTIPLIER = 1.6;
 export const SAYONARA_TACKLE_KNOCKBACK = 22;
 /** Frames the player spends on the floor afterwards. */
 export const SAYONARA_TACKLE_KNOCKDOWN_FRAMES = 46;
+
+
+/**
+ * The bite, for when there is no room to run.
+ *
+ * The charge needs two hundred pixels of ground and she had no answer without
+ * them, so a player who simply walked into her switched her off: cornered
+ * against the arena edge with someone standing on her, she spent nine hundred
+ * frames in the approach state and dealt nothing at all. That was documented
+ * as counter-play — give up the ground, deny the tackle — but against a wall
+ * there is no ground left to give, and the trade stopped being a trade.
+ *
+ * She now fights at close quarters instead of retreating out of them. It is a
+ * smaller hit than the tackle and it puts the player down for half as long,
+ * because the charge has to stay the thing worth being afraid of.
+ */
+export const SAYONARA_BITE_FRAMES = 25;
+/** Frames between bites, on top of the bite itself. */
+export const SAYONARA_BITE_COOLDOWN = 26;
+/** How far the jaws reach, measured from body centre to body centre. */
+export const SAYONARA_BITE_RANGE = 125;
+/** Frames the player spends down — against 46 for the tackle. */
+export const SAYONARA_BITE_KNOCKDOWN_FRAMES = 24;
+/** Horizontal shove from a bite, against 22 for the tackle. */
+export const SAYONARA_BITE_KNOCKBACK = 11;
+
+/**
+ * How long she will try to buy herself a run-up before giving up on it.
+ *
+ * Retreating only works if the ground is actually being gained. A player who
+ * simply walks after her keeps pace, so without a limit she backs away for the
+ * whole fight and never fights: measured at one bite and no charges across
+ * fifteen seconds of being chased, which is the same boss-with-an-off-switch
+ * the bite was added to fix, wearing a different hat.
+ */
+export const SAYONARA_RETREAT_PATIENCE = 20;
