@@ -620,20 +620,40 @@ export class GameEngine {
     return !candidates.some((other) => other !== target && !other.downed);
   }
 
-  private isMelee(enemy: EntityState): boolean {
-    return enemy.enemyType !== 'CONVERSION_THERAPIST';
+  /**
+   * Whether this enemy queues for an attack slot.
+   *
+   * The question is not whether a fighter swings up close but whether it waits
+   * its turn. The slot is permission to walk into the player's face; the ones
+   * who never do that should not be holding one.
+   *
+   * The predicate used to ask only whether the enemy was melee, which read as
+   * true for the Matriarch — so she took a slot on spawn and kept it for the
+   * whole fight, while her own branch returns long before the queue is ever
+   * consulted. On EASY, where there is exactly one slot, that left whoever
+   * fought beside her permanently parked on the standoff ring. In the final
+   * wave that is Sayonara: the fastest fighter in the game, waiting out the
+   * boss fight 190px away.
+   *
+   * A downed or freed fighter has stopped fighting too, so the slot returns to
+   * the queue instead of being buried with her.
+   */
+  private queuesForAttackSlot(enemy: EntityState): boolean {
+    if (enemy.hp <= 0 || enemy.downed || enemy.freed) return false;
+    return enemy.enemyType !== 'CONVERSION_THERAPIST' && enemy.enemyType !== 'BOSS_MADAM_MIZYDIA';
   }
 
   /**
-   * Hands out the attack slots, closest melee enemy first.
+   * Hands out the attack slots, closest queueing enemy first.
    *
-   * Holders keep their slot while alive, so an engaged enemy is not swapped out
-   * mid-swing. Everyone else waits on the standoff ring in `updateEnemyAi`.
+   * Holders keep their slot while they are still fighting, so an engaged enemy
+   * is not swapped out mid-swing. Everyone else waits on the standoff ring in
+   * `updateEnemyAi`.
    */
   private updateAttackSlots() {
     for (const id of this.attackSlots) {
       const holder = this.entities.find((e) => e.id === id);
-      if (!holder || holder.hp <= 0) this.attackSlots.delete(id);
+      if (!holder || !this.queuesForAttackSlot(holder)) this.attackSlots.delete(id);
     }
 
     const free = ATTACKERS_BY_DIFFICULTY[this.settings.difficulty] - this.attackSlots.size;
@@ -643,7 +663,7 @@ export class GameEngine {
     if (!target) return;
 
     this.entities
-      .filter((e) => !e.isPlayer && e.hp > 0 && this.isMelee(e) && !this.attackSlots.has(e.id))
+      .filter((e) => !e.isPlayer && this.queuesForAttackSlot(e) && !this.attackSlots.has(e.id))
       .sort(
         (a, b) =>
           Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y)

@@ -736,3 +736,84 @@ describe('the boss warning banner freezes the fight', () => {
     expect(engine.simTimeMs, 'and time is moving again').toBeGreaterThan(clockAfter);
   });
 });
+
+/**
+ * Attack slots go to fighters who actually use them.
+ *
+ * The slot is permission to close on the player and swing. Handing one to an
+ * enemy who never does that spends the difficulty budget on nothing, and on
+ * EASY — one slot — it spends all of it.
+ */
+describe('attack slots', () => {
+  const slotsOf = (engine: GameEngine) =>
+    (engine as unknown as { attackSlots: Set<string> }).attackSlots;
+
+  const onEasy = (engine: GameEngine) => {
+    (engine as unknown as { settings: { difficulty: string } }).settings.difficulty = 'EASY';
+    return engine;
+  };
+
+  const idsIn = (engine: GameEngine, type: string) =>
+    engine.entities.filter((e) => e.enemyType === type).map((e) => e.id);
+
+  it('does not seat Mizydia, who casts from range and never queues', () => {
+    const engine = onEasy(startEngine(STAGES.findIndex((s) => s.isFinalStage)));
+    advance(engine, 60);
+    // Deliberately closer than the dog: the queue sorts by distance, so this is
+    // the arrangement that used to hand her the only slot on the first frame.
+    stageEnemies(engine, [
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 120 },
+      { type: 'BOSS_SAYONARA', dx: 260 },
+    ]);
+    advance(engine, 30);
+
+    const [mizydia] = idsIn(engine, 'BOSS_MADAM_MIZYDIA');
+    const [sayonara] = idsIn(engine, 'BOSS_SAYONARA');
+    expect(slotsOf(engine).has(mizydia), 'the caster holds no slot').toBe(false);
+    expect(slotsOf(engine).has(sayonara), 'the dog gets the one there is').toBe(true);
+  });
+
+  it('keeps the seat with the dog for the whole boss fight, not just the first frame', () => {
+    const engine = onEasy(startEngine(STAGES.findIndex((s) => s.isFinalStage)));
+    advance(engine, 60);
+    stageEnemies(engine, [
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 120 },
+      { type: 'BOSS_SAYONARA', dx: 260 },
+    ]);
+
+    // Tenure is the point: holders keep their slot while they fight, so a
+    // single sampled frame cannot tell "the caster never took it" apart from
+    // "the caster has not taken it yet".
+    const [mizydia] = idsIn(engine, 'BOSS_MADAM_MIZYDIA');
+    const [sayonara] = idsIn(engine, 'BOSS_SAYONARA');
+    let seatedFrames = 0;
+    for (let i = 0; i < 600; i++) {
+      engine.update(NEUTRAL);
+      expect(slotsOf(engine).has(mizydia), `the caster took a slot on frame ${i}`).toBe(false);
+      if (slotsOf(engine).has(sayonara)) seatedFrames++;
+    }
+    expect(seatedFrames, 'the dog is the one engaging, every frame of it').toBe(600);
+  });
+
+  it('returns the slot when Sayonara goes down, instead of burying it with her', () => {
+    const engine = onEasy(startEngine());
+    advance(engine, 60);
+    stageEnemies(engine, [
+      { type: 'BOSS_SAYONARA', dx: 90 },
+      { type: 'PURITY_PATROL', dx: 200 },
+    ]);
+    advance(engine, 5);
+
+    const [dogId] = idsIn(engine, 'BOSS_SAYONARA');
+    expect(slotsOf(engine).has(dogId), 'sanity: she held it first').toBe(true);
+
+    const dog = engine.entities.find((e) => e.id === dogId)!;
+    dog.downed = true;
+    dog.hp = 1;
+    advance(engine, 2);
+
+    const [gruntId] = idsIn(engine, 'PURITY_PATROL');
+    expect(slotsOf(engine).has(dogId), 'a fighter on the floor is not engaging').toBe(false);
+    expect(slotsOf(engine).has(gruntId), 'the grunt inherits it').toBe(true);
+  });
+});
