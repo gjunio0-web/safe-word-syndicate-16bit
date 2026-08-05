@@ -1552,15 +1552,30 @@ function renderEnemySprite(
       // Sayonara used to stand there looking exactly like one still fighting.
       const isDown = entity.downed === true;
 
+      // The tackle, drawn.
+      //
+      // A charge that cannot be seen coming is a tax rather than a fight, so
+      // the wind-up has to be legible from across the arena: she drops, hauls
+      // her weight back over the hind legs, and pins her ears. The run is the
+      // opposite shape — flat, stretched, head down and level with the
+      // shoulders. The recovery leaves her splayed and off balance, which is
+      // the window a player who read it has earned.
+      const winding = entity.chargeState === 'TELEGRAPH';
+      const running = entity.chargeState === 'CHARGE';
+      const spent = entity.chargeState === 'RECOVER';
+
       // Drawn at a comfortable working size, then fitted to the box she
       // declares in characterData. Without it she is built 175px across while
       // resting 100px from the player, so her muzzle ends up inside him — a
       // silhouette that lies about where the fight actually is.
       ctx.save();
       ctx.scale(0.8, 0.8);
-      const gait = isDown ? 0 : 1;
-      const legLen = isDown ? 7 : 18;
-      const drop = isDown ? 13 : 0;
+      const gait = isDown || winding ? 0 : 1;
+      const legLen = isDown ? 7 : winding ? 13 : running ? 15 : spent ? 11 : 18;
+      const drop = isDown ? 13 : winding ? 5 : spent ? 7 : 0;
+
+      // Weight shifts back to load the charge, forward to spend it.
+      const lean = winding ? -9 : running ? 12 : spent ? -5 : 0;
       const p1 = stride1 * 0.8 * gait;
       const p2 = stride2 * 0.8 * gait;
       const l1 = lift1 * gait;
@@ -1596,7 +1611,7 @@ function renderEnemySprite(
       ctx.fillRect(20 + p2, -4 - l2 - drop, 14, 4);
 
       ctx.save();
-      ctx.translate(0, sway - drop);
+      ctx.translate(lean, sway - drop);
 
       // Docked stub, back where the tail would be.
       ctx.fillStyle = HIDE_LOW;
@@ -1632,8 +1647,8 @@ function renderEnemySprite(
       ctx.strokeRect(-40, -legLen - 26, 14, 20);
 
       // Head, neck and collar ride forward on a lunge.
-      const reach = attackSwing * 20;
-      const nod = isDown ? 16 : attackSwing * 5;
+      const reach = attackSwing * 20 + (running ? 16 : winding ? -6 : 0);
+      const nod = isDown ? 16 : winding ? 7 : running ? 9 : spent ? 5 : attackSwing * 5;
 
       ctx.save();
       ctx.translate(reach, nod);
@@ -1669,7 +1684,7 @@ function renderEnemySprite(
 
       // Teeth, and only on the lunge. A dog that is always snarling is a
       // decoration; one that snarls when it commits is a warning.
-      if (attackSwing > 0.15) {
+      if (attackSwing > 0.15 || running) {
         ctx.fillStyle = '#f4f4f5';
         ctx.fillRect(52, -legLen - 42, 15, 4);
         ctx.fillStyle = HIDE_LOW;

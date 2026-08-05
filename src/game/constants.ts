@@ -88,6 +88,15 @@ export const ATTACKERS_BY_DIFFICULTY: Record<'EASY' | 'NORMAL' | 'PUNK_HARD', nu
   PUNK_HARD: 3,
 };
 
+/**
+ * The build every ordinary fighter is cut to.
+ *
+ * Anyone at or under this keeps the flat, tuned spacing; anyone wider claims
+ * half of their own body instead. Named rather than written as 60 in the
+ * engine so the two places that mean "a normal-sized fighter" say so.
+ */
+export const DEFAULT_BUILD_WIDTH = 60;
+
 /** Horizontal distance kept by melee enemies waiting for an attack slot. */
 export const ATTACKER_STANDOFF_X = 190;
 
@@ -150,3 +159,50 @@ export const BARK_DURATION_FRAMES = 200;
 /** Ceiling on the ending walk. She normally clears the screen well before
  *  this; the cap is here so a missing entity can never hang the victory. */
 export const OUTRO_MAX_FRAMES = 420;
+
+/**
+ * Sayonara's Heavy Knockback Tackle.
+ *
+ * The move is named in her data and was never built: she used the generic
+ * melee branch, so the fastest fighter in the game closed to punching distance
+ * and threw a grunt's punch. A charge is the shape her own description asks
+ * for, and a charge is only fair if the player can see it coming, so the
+ * numbers below are a sequence rather than a damage figure.
+ *
+ * The wind-up is the whole contract. Half a second of a dog dropping into a
+ * crouch is enough time to move, and if the player does move, the recovery is
+ * long enough to make her pay for committing. Shorten the telegraph and the
+ * move stops being readable; shorten the recovery and there is no reward for
+ * reading it.
+ */
+export const SAYONARA_TELEGRAPH_FRAMES = 32;
+/** Frames she runs for before pulling up, hit or miss. */
+export const SAYONARA_CHARGE_FRAMES = 34;
+/** Frames spent skidding to a stop, unable to act. */
+export const SAYONARA_RECOVER_FRAMES = 42;
+/** Frames before she may wind up again, counted from the end of a recovery. */
+export const SAYONARA_CHARGE_COOLDOWN = 72;
+/** Ground speed of the charge itself — roughly three times her walk. */
+export const SAYONARA_CHARGE_SPEED = 8.5;
+/**
+ * The band she will commit from.
+ *
+ * Too close and there is no run-up to read; too far and she is charging at
+ * where the player used to be.
+ *
+ * The floor is not arbitrary. Contact happens at half of each build plus a
+ * little — 110px against the hero's — so committing from 135 gave a run of
+ * twenty-five pixels: three frames, measured, which reads as the wind-up
+ * teleporting into a hit rather than a dog crossing ground. From here the run
+ * is long enough to be a run.
+ */
+export const SAYONARA_CHARGE_MIN_RANGE = 230;
+export const SAYONARA_CHARGE_MAX_RANGE = 430;
+/** Depth tolerance for a connection — a shoulder, not a laser. */
+export const SAYONARA_TACKLE_DEPTH = 44;
+/** What the tackle multiplies her listed power by. */
+export const SAYONARA_TACKLE_DAMAGE_MULTIPLIER = 1.6;
+/** Horizontal launch on a connection, against a grunt's punch of nine. */
+export const SAYONARA_TACKLE_KNOCKBACK = 22;
+/** Frames the player spends on the floor afterwards. */
+export const SAYONARA_TACKLE_KNOCKDOWN_FRAMES = 46;

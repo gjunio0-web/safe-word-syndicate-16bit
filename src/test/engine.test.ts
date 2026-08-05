@@ -15,11 +15,14 @@ import {
   ARENA_MIN_Y,
   OUTRO_MAX_FRAMES,
   PLAYER_BODY_SEPARATION_X,
+  SAYONARA_CHARGE_SPEED,
+  SAYONARA_RECOVER_FRAMES,
+  SAYONARA_TACKLE_DEPTH,
   STREET_TOP_Y,
 } from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
-import { EnemyType } from '../types';
+import { EnemyType, EntityState } from '../types';
 
 describe('combat', () => {
   /**
@@ -750,6 +753,11 @@ describe('the boss warning banner freezes the fight', () => {
  * The slot is permission to close on the player and swing. Handing one to an
  * enemy who never does that spends the difficulty budget on nothing, and on
  * EASY — one slot — it spends all of it.
+ *
+ * Neither boss queues any more. The Matriarch casts from behind her standoff
+ * and her branch never consults the queue at all; Sayonara paces herself off
+ * her own tackle cooldown. What is left in the queue is the crowd the queue
+ * was written for.
  */
 describe('attack slots', () => {
   const slotsOf = (engine: GameEngine) =>
@@ -763,65 +771,51 @@ describe('attack slots', () => {
   const idsIn = (engine: GameEngine, type: string) =>
     engine.entities.filter((e) => e.enemyType === type).map((e) => e.id);
 
-  it('does not seat Mizydia, who casts from range and never queues', () => {
+  it('seats neither boss, however close to the player they stand', () => {
     const engine = onEasy(startEngine(STAGES.findIndex((s) => s.isFinalStage)));
     advance(engine, 60);
-    // Deliberately closer than the dog: the queue sorts by distance, so this is
-    // the arrangement that used to hand her the only slot on the first frame.
+    // Deliberately closer than the grunt: the queue sorts by distance, so this
+    // is the arrangement that used to hand a boss the only slot there is.
     stageEnemies(engine, [
       { type: 'BOSS_MADAM_MIZYDIA', dx: 120 },
-      { type: 'BOSS_SAYONARA', dx: 260 },
+      { type: 'BOSS_SAYONARA', dx: 150 },
+      { type: 'PURITY_PATROL', dx: 400 },
     ]);
-    advance(engine, 30);
 
     const [mizydia] = idsIn(engine, 'BOSS_MADAM_MIZYDIA');
     const [sayonara] = idsIn(engine, 'BOSS_SAYONARA');
-    expect(slotsOf(engine).has(mizydia), 'the caster holds no slot').toBe(false);
-    expect(slotsOf(engine).has(sayonara), 'the dog gets the one there is').toBe(true);
-  });
+    const [grunt] = idsIn(engine, 'PURITY_PATROL');
 
-  it('keeps the seat with the dog for the whole boss fight, not just the first frame', () => {
-    const engine = onEasy(startEngine(STAGES.findIndex((s) => s.isFinalStage)));
-    advance(engine, 60);
-    stageEnemies(engine, [
-      { type: 'BOSS_MADAM_MIZYDIA', dx: 120 },
-      { type: 'BOSS_SAYONARA', dx: 260 },
-    ]);
-
-    // Tenure is the point: holders keep their slot while they fight, so a
-    // single sampled frame cannot tell "the caster never took it" apart from
-    // "the caster has not taken it yet".
-    const [mizydia] = idsIn(engine, 'BOSS_MADAM_MIZYDIA');
-    const [sayonara] = idsIn(engine, 'BOSS_SAYONARA');
-    let seatedFrames = 0;
+    // Tenure is the point: a single sampled frame cannot tell "never took one"
+    // apart from "has not taken one yet".
     for (let i = 0; i < 600; i++) {
       engine.update(NEUTRAL);
-      expect(slotsOf(engine).has(mizydia), `the caster took a slot on frame ${i}`).toBe(false);
-      if (slotsOf(engine).has(sayonara)) seatedFrames++;
+      expect(slotsOf(engine).has(mizydia), `the Matriarch queued on frame ${i}`).toBe(false);
+      expect(slotsOf(engine).has(sayonara), `the dog queued on frame ${i}`).toBe(false);
     }
-    expect(seatedFrames, 'the dog is the one engaging, every frame of it').toBe(600);
+    expect(slotsOf(engine).has(grunt), 'the slot goes to the crowd it was written for').toBe(true);
   });
 
-  it('returns the slot when Sayonara goes down, instead of burying it with her', () => {
+  it('returns a slot when its holder goes down, instead of burying it', () => {
     const engine = onEasy(startEngine());
     advance(engine, 60);
     stageEnemies(engine, [
-      { type: 'BOSS_SAYONARA', dx: 90 },
-      { type: 'PURITY_PATROL', dx: 200 },
+      { type: 'TRAD_WIFE_STRIKER', dx: 90 },
+      { type: 'PURITY_PATROL', dx: 260 },
     ]);
     advance(engine, 5);
 
-    const [dogId] = idsIn(engine, 'BOSS_SAYONARA');
-    expect(slotsOf(engine).has(dogId), 'sanity: she held it first').toBe(true);
+    const [striker] = idsIn(engine, 'TRAD_WIFE_STRIKER');
+    expect(slotsOf(engine).has(striker), 'sanity: the nearer fighter held it first').toBe(true);
 
-    const dog = engine.entities.find((e) => e.id === dogId)!;
-    dog.downed = true;
-    dog.hp = 1;
+    const floored = engine.entities.find((e) => e.id === striker)!;
+    floored.downed = true;
+    floored.hp = 1;
     advance(engine, 2);
 
-    const [gruntId] = idsIn(engine, 'PURITY_PATROL');
-    expect(slotsOf(engine).has(dogId), 'a fighter on the floor is not engaging').toBe(false);
-    expect(slotsOf(engine).has(gruntId), 'the grunt inherits it').toBe(true);
+    const [grunt] = idsIn(engine, 'PURITY_PATROL');
+    expect(slotsOf(engine).has(striker), 'a fighter on the floor is not engaging').toBe(false);
+    expect(slotsOf(engine).has(grunt), 'the grunt inherits it').toBe(true);
   });
 });
 
@@ -950,5 +944,195 @@ describe('body size', () => {
     const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!;
     const expected = (mizydia.width + dog.width) / 2;
     expect(Math.abs(mizydia.x - dog.x)).toBeCloseTo(expected, 1);
+  });
+});
+
+/**
+ * The Heavy Knockback Tackle.
+ *
+ * Named in her data since the beginning and never built: she shared the melee
+ * branch with the Purity Patrol, so the fastest fighter in the game closed to
+ * punching distance and threw a grunt's punch with a grunt's push of nine.
+ *
+ * These pin the contract that makes a charge fair rather than punishing: it is
+ * announced, it cannot be steered once committed, it connects once, and
+ * missing costs her.
+ */
+describe('Sayonara charges', () => {
+  const dogAt = (dx: number) => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx }]);
+    const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!;
+    return { engine, dog };
+  };
+
+  /** Runs until she reaches a phase, or gives up and says which one she is in. */
+  const runTo = (
+    engine: GameEngine,
+    dog: EntityState,
+    phase: EntityState['chargeState'],
+    limit = 400
+  ) => {
+    for (let i = 0; i < limit; i++) {
+      engine.update(NEUTRAL);
+      if (dog.chargeState === phase) return i;
+    }
+    throw new Error(`never reached ${phase}; stuck in ${dog.chargeState ?? 'READY'}`);
+  };
+
+  it('winds up before it runs, and stands still while it does', () => {
+    const { engine, dog } = dogAt(240);
+    runTo(engine, dog, 'TELEGRAPH');
+
+    let moved = 0;
+    const startX = dog.x;
+    while (dog.chargeState === 'TELEGRAPH') {
+      engine.update(NEUTRAL);
+      moved = Math.max(moved, Math.abs(dog.x - startX));
+    }
+    expect(moved, 'the wind-up is a plant, not an approach').toBeLessThan(2);
+  });
+
+  it('gives the player long enough to get out of the way', () => {
+    const { engine, dog } = dogAt(300);
+    runTo(engine, dog, 'TELEGRAPH');
+
+    // A wind-up is only a warning if the warning is actionable. Counting its
+    // frames against the constant that sets them asserts nothing, so this
+    // walks the player out of the lane from the moment she plants and
+    // requires that walking was enough.
+    while (dog.chargeState === 'TELEGRAPH') engine.update(input({ up: true }));
+    const escaped = Math.abs(engine.player1!.y - dog.y);
+    expect(escaped, `only made ${escaped.toFixed(0)}px of ground`).toBeGreaterThan(
+      SAYONARA_TACKLE_DEPTH
+    );
+
+    for (let i = 0; i < 200 && dog.chargeState === 'CHARGE'; i++) engine.update(NEUTRAL);
+    expect(dog.chargeHasHit, 'a player who moved should not be hit').toBeFalsy();
+  });
+
+  it('runs far faster than she walks', () => {
+    const { engine, dog } = dogAt(300);
+    runTo(engine, dog, 'CHARGE');
+    engine.update(NEUTRAL);
+    expect(Math.abs(dog.vx)).toBeCloseTo(SAYONARA_CHARGE_SPEED, 1);
+    expect(Math.abs(dog.vx)).toBeGreaterThan(ENEMIES.BOSS_SAYONARA.speed * 2);
+  });
+
+  it('cannot be steered once committed', () => {
+    const { engine, dog } = dogAt(300);
+    runTo(engine, dog, 'CHARGE');
+    const committed = dog.chargeDir;
+
+    // Teleport the player behind her mid-run: a homing charge would turn.
+    engine.player1!.x = dog.x + (committed === 1 ? 400 : -400) * -1;
+    for (let i = 0; i < 10 && dog.chargeState === 'CHARGE'; i++) engine.update(NEUTRAL);
+
+    expect(dog.chargeDir).toBe(committed);
+    expect(Math.sign(dog.vx)).toBe(committed);
+  });
+
+  it('knocks the player down and throws them, where a punch only nudged', () => {
+    const { engine, dog } = dogAt(240);
+    const player = engine.player1!;
+    const hpBefore = player.hp;
+
+    for (let i = 0; i < 400 && !dog.chargeHasHit; i++) engine.update(NEUTRAL);
+
+    expect(dog.chargeHasHit, 'she reached him').toBe(true);
+    expect(player.action).toBe('KNOCKDOWN');
+    expect(Math.abs(player.vx), 'a grunt pushes nine').toBeGreaterThan(15);
+    expect(hpBefore - player.hp).toBeGreaterThan(ENEMIES.BOSS_SAYONARA.power);
+  });
+
+  it('connects once per run, however long the bodies stay touching', () => {
+    const { engine, dog } = dogAt(300);
+    const player = engine.player1!;
+    for (let i = 0; i < 400 && !dog.chargeHasHit; i++) engine.update(NEUTRAL);
+    expect(dog.chargeHasHit, 'she reached him').toBe(true);
+
+    // She does not stop on impact, and body separation needs a few frames to
+    // push her back out to the ring — one to ten, measured. The bodies stay
+    // inside contact range for that long, and without the flag that single
+    // commitment lands two or three times.
+    const afterFirst = player.hp;
+    let contactFrames = 0;
+    while (dog.chargeState === 'CHARGE') {
+      engine.update(NEUTRAL);
+      player.invulnerableTimer = 0;
+      if (Math.abs(dog.x - player.x) < (dog.width + player.width) / 2 + 10) contactFrames++;
+    }
+
+    expect(contactFrames, 'the bodies stayed overlapped afterwards').toBeGreaterThan(0);
+    expect(player.hp, 'one tackle, one hit').toBe(afterFirst);
+  });
+
+  it('pays for missing with a recovery she cannot act out of', () => {
+    const { engine, dog } = dogAt(300);
+    runTo(engine, dog, 'CHARGE');
+
+    // Out of the lane entirely, so the run goes past him.
+    engine.player1!.y = ARENA_MIN_Y;
+    dog.y = ARENA_MAX_Y;
+
+    runTo(engine, dog, 'RECOVER');
+    let frames = 0;
+    while (dog.chargeState === 'RECOVER') {
+      engine.update(NEUTRAL);
+      frames++;
+      expect(dog.chargeState, 'no winding up out of a recovery').not.toBe('TELEGRAPH');
+    }
+    expect(frames).toBeGreaterThanOrEqual(SAYONARA_RECOVER_FRAMES - 1);
+  });
+
+  it('backs off when crowded, because a tackle needs a run-up', () => {
+    // Started outside the distance bodies rest at, so separation cannot do
+    // the moving for her — at 60px apart she is shoved clear whether she
+    // retreats or stands still, and the test passes either way.
+    const { engine, dog } = dogAt(150);
+    const player = engine.player1!;
+    const startX = dog.x;
+    const away = Math.sign(dog.x - player.x);
+
+    // Stopped while she is still inside the band. Left to run she reaches it
+    // and winds up, which is correct and would make the second assertion a
+    // statement about how long the loop ran rather than about her.
+    for (let i = 0; i < 30; i++) {
+      engine.update(NEUTRAL);
+      expect(dog.chargeState ?? 'READY', `wound up from inside on frame ${i}`).toBe('READY');
+    }
+
+    // Her own position, not the gap between them: the gap widens if the player
+    // is shoved as well, which would pass without her having moved at all.
+    expect((dog.x - startX) * away, 'she makes room rather than mauling').toBeGreaterThan(20);
+  });
+
+  it('keeps a fighter wider than its own reach able to land a hit', () => {
+    // The guard in `idealRange` lost its only subject when Sayonara stopped
+    // using the melee branch: nothing left in the game is both wide enough to
+    // trip it and dependent on it. So the case is built rather than waited
+    // for — a grunt given an absurd build, whose 80px reach is far shorter
+    // than the 130px its own body would hold it at.
+    const original = ENEMIES.PURITY_PATROL.hitbox;
+    (ENEMIES.PURITY_PATROL as { hitbox: typeof original }).hitbox = { width: 200, height: 120 };
+
+    try {
+      const engine = startEngine();
+      advance(engine, 30);
+      stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 260 }]);
+
+      const full = engine.player1!.hp;
+      let taken = 0;
+      for (let i = 0; i < 900; i++) {
+        engine.update(NEUTRAL);
+        if (engine.player1!.hp < full) taken += full - engine.player1!.hp;
+        engine.player1!.hp = full;
+        engine.player1!.invulnerableTimer = 0;
+      }
+      expect(taken, 'a body wider than its arm still has to be able to swing').toBeGreaterThan(0);
+    } finally {
+      (ENEMIES.PURITY_PATROL as { hitbox: typeof original }).hitbox = original;
+    }
   });
 });

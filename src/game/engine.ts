@@ -31,6 +31,18 @@ import {
   ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
+  DEFAULT_BUILD_WIDTH,
+  SAYONARA_TELEGRAPH_FRAMES,
+  SAYONARA_CHARGE_FRAMES,
+  SAYONARA_RECOVER_FRAMES,
+  SAYONARA_CHARGE_COOLDOWN,
+  SAYONARA_CHARGE_SPEED,
+  SAYONARA_CHARGE_MIN_RANGE,
+  SAYONARA_CHARGE_MAX_RANGE,
+  SAYONARA_TACKLE_DEPTH,
+  SAYONARA_TACKLE_DAMAGE_MULTIPLIER,
+  SAYONARA_TACKLE_KNOCKBACK,
+  SAYONARA_TACKLE_KNOCKDOWN_FRAMES,
 } from './constants';
 import { sound } from './sound';
 import { STEP_MS } from './frameClock';
@@ -640,7 +652,7 @@ export class GameEngine {
    */
   private queuesForAttackSlot(enemy: EntityState): boolean {
     if (enemy.hp <= 0 || enemy.downed || enemy.freed) return false;
-    return enemy.enemyType !== 'CONVERSION_THERAPIST' && enemy.enemyType !== 'BOSS_MADAM_MIZYDIA';
+    return enemy.enemyType !== 'CONVERSION_THERAPIST' && !this.isBossEntity(enemy);
   }
 
   /**
@@ -951,7 +963,14 @@ export class GameEngine {
    * are tuned values, and widening them across the board would loosen every
    * crowd in the game.
    *
-   * A boss instead takes up the room its own build says it takes. Half of each
+   * Anyone built wider than that instead takes up the room their own build
+   * says they take. The rule used to ask whether the fighter was a boss, which
+   * happened to be true of everyone unusually wide and was the wrong question:
+   * it meant the only fighter the rule could be exercised on was Sayonara, and
+   * once she stopped using the melee branch there was no way left to test it
+   * at all. Asking about the build instead changes nothing today — every
+   * current fighter lands on the same number either way, verified — and leaves
+   * the rule reachable. Half of each
    * body meeting in the middle is what "she is bigger" has to mean if it is to
    * mean anything on the floor — before this, `width` drew a shadow and an
    * overlay and nothing else, so a larger Sayonara would have been larger only
@@ -972,7 +991,7 @@ export class GameEngine {
   private minSeparationX(a: EntityState, b: EntityState): number {
     const betweenEnemies = !a.isPlayer && !b.isPlayer;
     const base = betweenEnemies ? ENEMY_BODY_SEPARATION_X : PLAYER_BODY_SEPARATION_X;
-    if (!this.isBossEntity(a) && !this.isBossEntity(b)) return base;
+    if (a.width <= DEFAULT_BUILD_WIDTH && b.width <= DEFAULT_BUILD_WIDTH) return base;
     return Math.max(base, (a.width + b.width) / 2);
   }
 
@@ -1473,6 +1492,140 @@ export class GameEngine {
             timer: 90,
             active: true,
           });
+        }
+      }
+      return;
+    }
+
+    if (enemy.enemyType === 'BOSS_SAYONARA') {
+      // The Old Guard runs at you.
+      //
+      // Her data has said Heavy Knockback Tackle since the beginning and the
+      // engine has never built one: she shared the generic melee branch with
+      // the Purity Patrol, so the fastest fighter in the game walked into
+      // punching distance and threw a grunt's punch with a grunt's push of
+      // nine. What follows is the move her own description promises.
+      //
+      // It runs as a small state machine rather than a damage roll, because a
+      // charge that cannot be seen coming is not a fight, it is a tax. She
+      // drops into a crouch where the player can read it, commits to a
+      // direction she cannot then steer, and if she misses she is on the floor
+      // of her own recovery with nothing to do about it.
+      //
+      // She takes no attack slot. The shared queue exists to stop a crowd
+      // swinging at once, and her own cooldown already paces her — leaving her
+      // in it meant the two grunts who spawn beside the player in wave 1.4
+      // took both slots on the first frame and held them, which measured as
+      // zero engagement from the stage's boss across thirty seconds on EASY
+      // and NORMAL. The first boss of the game watched her own fight.
+      const phase = enemy.chargeState ?? 'READY';
+      enemy.chargeCooldown = Math.max(0, (enemy.chargeCooldown ?? 0) - 1);
+      enemy.chargeTimer = Math.max(0, (enemy.chargeTimer ?? 0) - 1);
+
+      if (phase === 'TELEGRAPH') {
+        // Planted. She still turns to track, so the player cannot simply walk
+        // around behind her during the wind-up, but she does not close.
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.action = 'IDLE';
+        enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
+
+        if (enemy.chargeTimer === 0) {
+          enemy.chargeState = 'CHARGE';
+          enemy.chargeTimer = SAYONARA_CHARGE_FRAMES;
+          enemy.chargeDir = dx > 0 ? 1 : -1;
+          enemy.chargeHasHit = false;
+          sound.playBossAlarm();
+        }
+        return;
+      }
+
+      if (phase === 'CHARGE') {
+        const dir = enemy.chargeDir ?? (dx > 0 ? 1 : -1);
+        enemy.vx = dir * SAYONARA_CHARGE_SPEED;
+        enemy.vy = 0;
+        enemy.action = 'WALK';
+        enemy.facing = dir > 0 ? 'RIGHT' : 'LEFT';
+
+        // Contact is body against body, not a reach: half of each build plus a
+        // little, which is why she had to be given a build in the first place.
+        //
+        // She does not stop on impact — a charge that ends the moment it lands
+        // is a lunge — but she does not pass through either, and it is worth
+        // being exact about why. Contact reaches 110px; body separation holds
+        // her at 100. Separation is the tighter of the two, so the frame after
+        // she connects she is being pushed back out to that ring, and she runs
+        // the rest of the charge along it rather than crossing to the far
+        // side. Measured at four starting distances: the gap after a hit is
+        // 100px every time and she never changes sides.
+        //
+        // The 10px of slack between the two is exactly what `chargeHasHit`
+        // covers. The bodies stay inside contact range for one to ten frames
+        // while separation does its work, and without the flag that single
+        // commitment lands two or three times.
+        const contactX = (enemy.width + targetPlayer.width) / 2 + 10;
+        if (
+          !enemy.chargeHasHit &&
+          Math.abs(dx) < contactX &&
+          Math.abs(dy) < SAYONARA_TACKLE_DEPTH
+        ) {
+          enemy.chargeHasHit = true;
+          this.damageEntity(targetPlayer, Math.round(info.power * SAYONARA_TACKLE_DAMAGE_MULTIPLIER), enemy);
+          targetPlayer.vx = dir * SAYONARA_TACKLE_KNOCKBACK;
+          targetPlayer.action = 'KNOCKDOWN';
+          targetPlayer.actionTimer = SAYONARA_TACKLE_KNOCKDOWN_FRAMES;
+          this.addParticle(targetPlayer.x, targetPlayer.y - 40, 0, '#f97316', undefined, 'SHOCKWAVE');
+        }
+
+        if (enemy.chargeTimer === 0) {
+          enemy.chargeState = 'RECOVER';
+          enemy.chargeTimer = SAYONARA_RECOVER_FRAMES;
+        }
+        return;
+      }
+
+      if (phase === 'RECOVER') {
+        // Pulling up. Momentum bleeds off rather than stopping dead, and she
+        // cannot turn, wind up, or walk out of it — this is the window the
+        // read is worth.
+        enemy.vx *= 0.86;
+        enemy.vy = 0;
+        enemy.action = 'IDLE';
+
+        if (enemy.chargeTimer === 0) {
+          enemy.chargeState = 'READY';
+          enemy.chargeCooldown = SAYONARA_CHARGE_COOLDOWN;
+        }
+        return;
+      }
+
+      // READY: close to the band she can commit from, and hold there.
+      enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
+      enemy.vy = Math.abs(dy) > 10 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
+
+      if (absDx > SAYONARA_CHARGE_MAX_RANGE) {
+        enemy.vx = (dx > 0 ? 1 : -1) * info.speed;
+        enemy.action = 'WALK';
+      } else if (absDx < SAYONARA_CHARGE_MIN_RANGE) {
+        // Backing off is the answer to being crowded, and it is deliberate
+        // counter-play rather than an oversight: she has no short attack, so a
+        // player who stays glued to her shuts the tackle off entirely. The
+        // price is the ground — staying that close means fighting inside her
+        // reach with no room to retreat when she does break away, and it
+        // cannot be done at all with a second enemy on the field.
+        //
+        // It is a real trade and it is also a real hole: point-blank is safe.
+        // If that reads as too safe in play, the fix is a short bite here
+        // rather than a change to the charge.
+        enemy.vx = (dx > 0 ? -1 : 1) * info.speed * 0.75;
+        enemy.action = 'WALK';
+      } else {
+        enemy.vx = 0;
+        enemy.action = 'IDLE';
+
+        if (enemy.chargeCooldown === 0 && Math.abs(dy) < SAYONARA_TACKLE_DEPTH) {
+          enemy.chargeState = 'TELEGRAPH';
+          enemy.chargeTimer = SAYONARA_TELEGRAPH_FRAMES;
         }
       }
       return;

@@ -95,6 +95,26 @@ export interface EntityState {
   aiTargetX?: number;
   aiTargetY?: number;
   aiState?: 'PATROL' | 'APPROACH' | 'ATTACK' | 'RETREAT' | 'SPECIAL';
+
+  /**
+   * Where Sayonara is in a tackle.
+   *
+   * Her weapon has always been called a Heavy Knockback Tackle in her data and
+   * has never existed: she fell into the generic melee branch and threw the
+   * same punch, with the same push of nine, as a grunt in a polo shirt. A
+   * charge has to be readable to be fair, so it is a sequence rather than a
+   * single frame of damage — wind up where the player can see it, commit, and
+   * be caught out if it misses.
+   */
+  chargeState?: 'READY' | 'TELEGRAPH' | 'CHARGE' | 'RECOVER';
+  /** Frames left in the current charge phase. */
+  chargeTimer?: number;
+  /** Frames before she may wind up again. */
+  chargeCooldown?: number;
+  /** Direction committed to at the start of a charge, so it cannot be steered. */
+  chargeDir?: -1 | 1;
+  /** One tackle connects once, however long the body stays overlapped. */
+  chargeHasHit?: boolean;
   aiTimer?: number;
 
   /**
