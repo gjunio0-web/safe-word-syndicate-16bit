@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  companionState,
   decideCompanionInput,
   nearestTarget,
+  newCompanionMemory,
+  selectTarget,
   canStrike,
+  LEASH_X,
+  LEASH_TOLERANCE_X,
   STRIKE_MAX_DX,
   STRIKE_MAX_DY,
 } from '../game/companionAi';
@@ -84,15 +89,36 @@ describe('companion target selection', () => {
     expect(nearestTarget(self, [at(self.x + 80, self.y, { freed: true })])).toBeNull();
   });
 
-  it('presses nothing on an empty street', () => {
-    expect(decideCompanionInput(buddy(), [])).toEqual(NEUTRAL);
+  it('presses nothing on an empty street with nobody to follow', () => {
+    expect(decideCompanionInput(buddy(), [], null, newCompanionMemory())).toEqual(NEUTRAL);
+  });
+
+  it('keeps the enemy it is already fighting when another is barely closer', () => {
+    const self = buddy();
+    const held = at(self.x + 100, self.y);
+    const rival = at(self.x + 90, self.y);
+    expect(selectTarget(self, [held, rival], held.id)?.id).toBe(held.id);
+  });
+
+  it('switches when the new enemy is decisively closer', () => {
+    const self = buddy();
+    const held = at(self.x + 400, self.y);
+    const rival = at(self.x + 80, self.y);
+    expect(selectTarget(self, [held, rival], held.id)?.id).toBe(rival.id);
+  });
+
+  it('lets go of an enemy that goes down mid-fight', () => {
+    const self = buddy();
+    const held = at(self.x + 90, self.y, { downed: true });
+    const other = at(self.x + 300, self.y);
+    expect(selectTarget(self, [held, other], held.id)?.id).toBe(other.id);
   });
 });
 
 describe('companion movement intent', () => {
   it('walks toward a target that is out of reach', () => {
     const self = buddy();
-    const input = decideCompanionInput(self, [at(self.x + 400, self.y)]);
+    const input = decideCompanionInput(self, [at(self.x + 400, self.y)], null, newCompanionMemory());
     expect(input.right).toBe(true);
     expect(input.left).toBe(false);
     expect(input.punch).toBe(false);
@@ -100,16 +126,89 @@ describe('companion movement intent', () => {
 
   it('closes the depth gap', () => {
     const self = buddy();
-    const input = decideCompanionInput(self, [at(self.x + 400, self.y - 60)]);
+    const input = decideCompanionInput(
+      self,
+      [at(self.x + 400, self.y - 60)],
+      null,
+      newCompanionMemory()
+    );
     expect(input.up).toBe(true);
     expect(input.down).toBe(false);
   });
 
   it('keeps pressing into a target it is already hitting, to hold facing', () => {
     const self = buddy();
-    const input = decideCompanionInput(self, [at(self.x - 80, self.y)]);
+    const input = decideCompanionInput(self, [at(self.x - 80, self.y)], null, newCompanionMemory());
     expect(input.left).toBe(true);
     expect(input.punch).toBe(true);
+  });
+});
+
+describe('companion state machine', () => {
+  it('hands off the pad while hurt', () => {
+    const self = buddy();
+    self.action = 'HURT';
+    expect(companionState(self, at(self.x + 60, self.y))).toBe('RECOVER');
+    expect(decideCompanionInput(self, [at(self.x + 60, self.y)], null, newCompanionMemory())).toEqual(
+      NEUTRAL
+    );
+  });
+
+  it('hands off the pad while stunned', () => {
+    const self = buddy();
+    self.stunTimer = 20;
+    expect(companionState(self, at(self.x + 60, self.y))).toBe('RECOVER');
+  });
+
+  it('engages what it cannot yet reach and strikes what it can', () => {
+    const self = buddy();
+    expect(companionState(self, at(self.x + 400, self.y))).toBe('ENGAGE');
+    expect(companionState(self, at(self.x + 80, self.y))).toBe('STRIKE');
+  });
+
+  it('follows the hero when the street is clear', () => {
+    const self = buddy();
+    expect(companionState(self, null)).toBe('FOLLOW');
+  });
+});
+
+describe('companion leash', () => {
+  const hero = (x: number, y = 300) =>
+    at(x, y, { isPlayer: true, playerNum: 1, charId: 'FEET_MASTER', hp: 100, maxHp: 100 });
+
+  it('parks the buddy outside the hero, not inside them', () => {
+    // The leash tests below place the hero at LEASH_X, so every one of them
+    // agrees with whatever LEASH_X happens to be — set it to 0 and they all
+    // still pass while the buddy stands inside the hero and shoves them 500px
+    // down the street. This is the assertion that cannot agree: the station
+    // has to clear the distance the collision pass holds two players apart.
+    expect(LEASH_X).toBeGreaterThan(PLAYER_BODY_SEPARATION_X);
+  });
+
+  it('walks up when the hero has left it behind', () => {
+    const self = buddy();
+    const input = decideCompanionInput(self, [], hero(self.x + 600), newCompanionMemory());
+    expect(input.right).toBe(true);
+  });
+
+  it('stands its ground inside the follow band', () => {
+    const self = buddy();
+    const input = decideCompanionInput(self, [], hero(self.x + LEASH_X), newCompanionMemory());
+    expect(input.right).toBe(false);
+    expect(input.left).toBe(false);
+  });
+
+  it('backs off rather than shoving the hero', () => {
+    const self = buddy();
+    const ally = hero(self.x + LEASH_X - LEASH_TOLERANCE_X - 20);
+    expect(decideCompanionInput(self, [], ally, newCompanionMemory()).left).toBe(true);
+  });
+
+  it('never leaves the leash for a downed hero', () => {
+    const self = buddy();
+    const ally = hero(self.x + 600);
+    ally.hp = 0;
+    expect(decideCompanionInput(self, [], ally, newCompanionMemory())).toEqual(NEUTRAL);
   });
 });
 

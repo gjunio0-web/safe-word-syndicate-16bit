@@ -64,6 +64,52 @@ export const STRIKE_MAX_DY = 40;
 export const STRIKE_MAX_DX = PLAYER_PUNCH_REACH - 12;
 
 /**
+ * How much closer a new enemy must be before the buddy drops the one it is
+ * already fighting.
+ *
+ * Straight nearest-first flips target every frame between two enemies at
+ * roughly equal distance, and a fighter that changes its mind sixty times a
+ * second walks nowhere. A quarter closer is a real difference; anything less
+ * is noise.
+ */
+export const TARGET_SWITCH_RATIO = 0.75;
+
+/**
+ * Where the buddy stands when there is nothing to fight.
+ *
+ * Comfortably past the 72px both players are held apart by, so following the
+ * hero around does not turn into shoving them down the street.
+ */
+export const LEASH_X = 120;
+
+/**
+ * Slack around the leash before the buddy corrects.
+ *
+ * Without it the buddy oscillates across the exact leash distance. With it,
+ * the follow band is 95 to 145px and it simply stands there.
+ */
+export const LEASH_TOLERANCE_X = 25;
+
+/**
+ * What the buddy is doing this frame.
+ *
+ * Named because "the companion is stuck" is a sentence someone will say about
+ * this code one day, and a state is easier to test and to read in a debugger
+ * than a chain of conditions rebuilt from velocities after the fact.
+ */
+export type CompanionState = 'RECOVER' | 'STRIKE' | 'ENGAGE' | 'FOLLOW';
+
+/** Actions during which no input is read anyway. Pressing buttons is theatre. */
+const BUSY_ACTIONS = ['HURT', 'KNOCKDOWN', 'POWER_MOVE', 'BITING', 'RECOVERY'];
+
+/** What the buddy remembers between frames. Owned by the engine. */
+export interface CompanionMemory {
+  targetId: string | null;
+}
+
+export const newCompanionMemory = (): CompanionMemory => ({ targetId: null });
+
+/**
  * A target the buddy is allowed to hit.
  *
  * `downed` and `freed` are excluded for the same reason `updateEnemyAi` skips
@@ -101,28 +147,93 @@ export function canStrike(self: EntityState, target: EntityState): boolean {
 }
 
 /**
- * The buttons the buddy holds this frame.
+ * The enemy the buddy commits to this frame.
  *
- * Walk toward the nearest enemy, keep pressing into it once there — holding
- * the direction through a swing is what keeps the buddy facing its target and
- * stepping after an enemy the punch knocked back — and throw a punch whenever
- * one would land. `updatePlayer` handles the cadence: an attack occupies the
- * fighter for 18 frames and the punch input is ignored until it ends, so a
- * held button is a combo, not a blur.
+ * Sticky by design: the enemy held last frame is kept unless it stopped being
+ * a target or something got materially closer. Pure — the caller decides what
+ * to do with the answer.
  */
-export function decideCompanionInput(self: EntityState, entities: EntityState[]): PlayerInput {
-  const target = nearestTarget(self, entities);
-  if (!target) return { ...IDLE_INPUT };
+export function selectTarget(
+  self: EntityState,
+  entities: EntityState[],
+  previousId: string | null
+): EntityState | null {
+  const nearest = nearestTarget(self, entities);
+  if (!nearest) return null;
 
-  const dx = target.x - self.x;
-  const dy = target.y - self.y;
+  const previous = entities.find((e) => e.id === previousId);
+  if (!previous || !isEngageable(previous)) return nearest;
 
+  const previousDist = Math.hypot(previous.x - self.x, previous.y - self.y);
+  const nearestDist = Math.hypot(nearest.x - self.x, nearest.y - self.y);
+
+  return nearestDist < previousDist * TARGET_SWITCH_RATIO ? nearest : previous;
+}
+
+/** Which of the four behaviours applies, given what the buddy can see. */
+export function companionState(self: EntityState, target: EntityState | null): CompanionState {
+  if (self.stunTimer > 0 || BUSY_ACTIONS.includes(self.action)) return 'RECOVER';
+  if (!target) return 'FOLLOW';
+  return canStrike(self, target) ? 'STRIKE' : 'ENGAGE';
+}
+
+/** Walk toward a point, pressing only the axes that are actually off. */
+function walkToward(dx: number, dy: number, holdX: boolean): PlayerInput {
   return {
     ...IDLE_INPUT,
-    left: dx < -FACING_DEADZONE_X,
-    right: dx > FACING_DEADZONE_X,
+    left: holdX && dx < -FACING_DEADZONE_X,
+    right: holdX && dx > FACING_DEADZONE_X,
     up: dy < -DEPTH_DEADZONE_Y,
     down: dy > DEPTH_DEADZONE_Y,
-    punch: canStrike(self, target),
   };
+}
+
+/**
+ * The buttons the buddy holds this frame.
+ *
+ * Four behaviours, checked in order of how much they override each other:
+ *
+ *   RECOVER — hurt, floored, mid-power-move or stunned. Hands off the pad.
+ *   STRIKE  — a punch thrown now would land. Throw it, and keep pressing into
+ *             the target: holding the direction through a swing is what keeps
+ *             the buddy facing an enemy the punch just knocked backwards.
+ *   ENGAGE  — an enemy exists but is out of reach. Close the distance.
+ *   FOLLOW  — street is clear. Walk to a spot behind the hero rather than
+ *             standing still, which is what made the old companion look like
+ *             scenery being towed by the camera. Walking the hero's line also
+ *             sweeps up dropped tacos on the way, since pickups are proximity
+ *             based and need no seeking of their own.
+ *
+ * `updatePlayer` owns the cadence. An attack occupies the fighter for 18
+ * frames and ignores the punch input until it ends, so a held button reads as
+ * a combo rather than a blur.
+ */
+export function decideCompanionInput(
+  self: EntityState,
+  entities: EntityState[],
+  ally: EntityState | null,
+  memory: CompanionMemory
+): PlayerInput {
+  const target = selectTarget(self, entities, memory.targetId);
+  memory.targetId = target?.id ?? null;
+
+  switch (companionState(self, target)) {
+    case 'RECOVER':
+      return { ...IDLE_INPUT };
+
+    case 'STRIKE':
+      return { ...walkToward(target!.x - self.x, target!.y - self.y, true), punch: true };
+
+    case 'ENGAGE':
+      return walkToward(target!.x - self.x, target!.y - self.y, true);
+
+    case 'FOLLOW': {
+      if (!ally || ally.hp <= 0) return { ...IDLE_INPUT };
+      // Behind the hero, on the side they came from, so the buddy does not
+      // wander into the next wave ahead of the player who is steering.
+      const anchorX = ally.x - LEASH_X;
+      const dx = anchorX - self.x;
+      return walkToward(dx, ally.y - self.y, Math.abs(dx) > LEASH_TOLERANCE_X);
+    }
+  }
 }

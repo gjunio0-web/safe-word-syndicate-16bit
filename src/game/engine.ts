@@ -45,7 +45,7 @@ import {
   SAYONARA_TACKLE_KNOCKBACK,
   SAYONARA_TACKLE_KNOCKDOWN_FRAMES,
 } from './constants';
-import { decideCompanionInput } from './companionAi';
+import { CompanionMemory, decideCompanionInput, newCompanionMemory } from './companionAi';
 import { sound } from './sound';
 import { STEP_MS } from './frameClock';
 
@@ -125,6 +125,13 @@ export class GameEngine {
    * knocking her out is unavoidable, finishing her off is a choice.
    */
   public sayonaraKilled: boolean = false;
+
+  /**
+   * What the AI buddy carries between frames — currently the enemy it has
+   * committed to. Lives on the engine rather than inside the policy so the
+   * policy stays a pure function of the world it is handed.
+   */
+  private companionMemory: CompanionMemory = newCompanionMemory();
 
   public stageStartBannerTimer: number = 210;
   public bossWarningTimer: number = 0;
@@ -508,7 +515,11 @@ export class GameEngine {
     // whose buttons are pressed by code, not a second kind of entity with its
     // own physics.
     if (this.player2 && this.player2.hp > 0) {
-      this.updatePlayer(this.player2, p2Input ?? decideCompanionInput(this.player2, this.entities));
+      this.updatePlayer(
+        this.player2,
+        p2Input ??
+          decideCompanionInput(this.player2, this.entities, this.player1, this.companionMemory)
+      );
     }
 
     // Update Camera position
