@@ -603,10 +603,11 @@ describe('punishing a cast', () => {
     // One clean punch, with the pose held so the state cannot tick away.
     //
     // stunTimer is reset every frame so her own AI never runs: left alone,
-    // the 'IDLE' branch lets her autonomous behaviour move her or roll her
-    // own cast, occasionally consuming Math.random() in a way that shifts
-    // results between runs. The player's forced input is the only thing
-    // that should vary here.
+    // the 'IDLE' branch lets her autonomous behaviour move her or roll her own
+    // cast, which would consume draws and act on them. The player's forced
+    // input is the only thing that should vary here. (The draws themselves are
+    // deterministic now -- see setup.ts -- but a boss acting on her own would
+    // still be a variable this measurement does not want.)
     for (let i = 0; i < 6; i++) {
       target.action = casting ? 'PUNCH1' : 'IDLE';
       target.stunTimer = 2;
@@ -642,13 +643,17 @@ describe('punishing a cast', () => {
       for (let i = 0; i < 6; i++) {
         grunt.action = casting ? 'PUNCH1' : 'IDLE';
         // Reset every frame for the same reason: an 'IDLE' grunt runs its
-        // own AI, which has its own small per-frame chance to throw a punch.
-        // That chance draws from the same unseeded Math.random() stream as
-        // everything else in the suite, so how many calls the tests before
-        // this one happened to make could occasionally let the grunt attack
-        // mid-measurement -- observed failing intermittently across full
-        // suite runs, never in isolation, which is the fingerprint of shared
-        // random state rather than a real bug.
+        // own AI, which has its own small per-frame chance to throw a punch,
+        // and a punch landing mid-measurement would be counted as damage this
+        // test did not deal.
+        //
+        // This used to be load-bearing for a second reason that no longer
+        // applies: Math.random was one unseeded stream shared by the whole
+        // suite, so how many draws the tests before this one happened to make
+        // decided whether the grunt swung -- failing intermittently in full
+        // runs, never in isolation. setup.ts now reseeds before every test, so
+        // ordering cannot move the result. The pinning stays because the
+        // measurement should not depend on grunt AI at all, seeded or not.
         grunt.stunTimer = 2;
         engine.update(input({ punch: i < 2 }));
       }
