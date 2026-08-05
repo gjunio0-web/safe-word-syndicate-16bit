@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "16-bit retro arcade beat 'em up side-scroller built with React, Vite and a hand-rolled canvas engine.",
+  "author": "Argos Outis Digital Bunker",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "tsc --noEmit && vite build",

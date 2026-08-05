@@ -163,6 +163,18 @@ export function useMenuFocusReset(scopeKey: unknown, enabled: boolean = true) {
     if (active && active !== document.body) active.blur();
 
     const items = focusableItems();
-    if (items.length > 0) items[0].focus();
+    // Focus without dragging the viewport to it.
+    //
+    // A screen should open where it was composed to open. The victory screen
+    // has exactly one focusable element and it sits at the bottom, so plain
+    // focus() scrolled the container all the way down and the word VICTORY
+    // opened off screen in landscape. Measured at 844x390: header at y=-235
+    // with the container already at its maximum scrollTop; with preventScroll,
+    // y=138 and scrollTop 0.
+    //
+    // Only the initial focus is quiet. Arrow and stick navigation below still
+    // use plain focus(), so walking onto an item that is off screen still
+    // brings it into view, which is what navigation is for.
+    if (items.length > 0) items[0].focus({ preventScroll: true });
   }, [scopeKey]);
 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
@@ -19,6 +19,7 @@ import { OnScreenControls } from './components/OnScreenControls';
 import { KeyboardHints } from './components/KeyboardHints';
 import { RotateDevicePrompt } from './components/RotateDevicePrompt';
 import { AttractMode } from './components/AttractMode';
+import { BootSplash } from './components/BootSplash';
 import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { advanceClock, createFrameClock, resetClock } from './game/frameClock';
@@ -38,7 +39,8 @@ import { LoreCodex } from './components/LoreCodex';
 import { CustomAudioModal } from './components/CustomAudioModal';
 import { DifficultyModal } from './components/DifficultyModal';
 import { sound } from './game/sound';
-import { Award } from 'lucide-react';
+import { CREDIT_LINE, CREDIT_ROLES, STUDIO_NAME, STUDIO_SUFFIX } from './game/credits';
+// Award icon removed — see SignalCrash below for why.
 
 // Kept module-level: useSyncExternalStore resubscribes on every render if the
 // accessors are recreated.
@@ -60,8 +62,74 @@ const NEUTRAL_INPUT: PlayerInput = {
   grab: false,
 };
 
+/**
+ * Mizydia's own signage, switched off for good.
+ *
+ * The victory screen used to open on a circular badge and the word
+ * "VICTORY" in amber — an achievement-unlock icon borrowed from mobile
+ * gamification, unrelated to anything this game is about, in a color that
+ * appears nowhere else in it (title, codex, boot, and the fight itself are
+ * all magenta/cyan/yellow neon on near-black).
+ *
+ * This replaces it with the villain's own broadcast, caught mid-collapse.
+ * The team's own outro proposal already scripts this exact beat — the
+ * corporate telón's live sin metrics glitching into CENSURE PROTOCOL:
+ * OFFLINE — for a future <OutroSequence/> that doesn't exist yet. This is
+ * that beat, compressed into the screen that exists today. When the outro
+ * lands, this component moves into it wholesale.
+ *
+ * Red and green are Mizydia's colors here on purpose, not the hero
+ * palette — the telón was scripted red-framed with a green stock line, and
+ * a sign in the hero's own magenta/cyan would read as the heroes' victory
+ * lap starting a beat too early, before her signal has actually died.
+ */
+const SignalCrash: React.FC = () => {
+  const [dead, setDead] = useState(false);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDead(true), 700);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  return (
+    <div className="inline-block border border-red-900/50 bg-black/40 px-4 py-2 text-left font-mono text-[10px] md:text-xs uppercase tracking-widest">
+      {dead ? (
+        <div className="sws-signal-crash text-red-500">CENSURE PROTOCOL: OFFLINE</div>
+      ) : (
+        <>
+          <div className="text-red-500/70">[LIVE SIN METRICS]</div>
+          <div className="text-zinc-500">
+            DIVERSITY: <span className="text-red-400">0.00%</span>
+          </div>
+          <div className="text-zinc-500">
+            PROFIT: <span className="text-[#00ff88]">+999.9%</span>
+          </div>
+        </>
+      )}
+      <style>{`
+        @keyframes sws-signal-crash-flicker {
+          0%, 100% { opacity: 1; }
+          10% { opacity: 0.2; }
+          20% { opacity: 1; }
+          35% { opacity: 0.1; }
+          45% { opacity: 1; }
+          60% { opacity: 0.3; }
+        }
+        .sws-signal-crash {
+          animation: sws-signal-crash-flicker 0.5s steps(2, jump-none) 1;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sws-signal-crash { animation-duration: 1ms; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 export default function App() {
-  const [screen, setScreen] = useState<GameScreen>('ATTRACT');
+  // Boots into the studio splash, which hands over to the attract loop on its
+  // own after a beat or on the first input, whichever lands first.
+  const [screen, setScreen] = useState<GameScreen>('BOOT');
   const [currentStageIdx, setCurrentStageIdx] = useState(0);
 
   const [p1Char, setP1Char] = useState<CharacterId>('FEET_MASTER');
@@ -559,6 +627,12 @@ export default function App() {
         return;
       }
 
+      if (screen === 'BOOT') {
+        // The splash owns its own skip, on its own listener. Swallowing the
+        // action here keeps a controller press from falling through to the
+        // attract screen's coin slot in the same frame the splash leaves.
+        return;
+      }
       if (screen === 'ATTRACT') {
         // Every button is the coin slot here, matching keyboard and touch.
         handleInsertCoin();
@@ -608,6 +682,9 @@ export default function App() {
     // actually-visible area and were cropped. dvh tracks the real visible
     // height as that chrome shows/hides.
     <div className="relative w-screen h-dvh bg-[#0a0a0a] overflow-hidden font-sans select-none flex flex-col">
+      {/* 0.0 BOOT SPLASH */}
+      {screen === 'BOOT' && <BootSplash onComplete={() => setScreen('ATTRACT')} />}
+
       {/* 0. ATTRACT MODE */}
       {screen === 'ATTRACT' && <AttractMode onInsertCoin={handleInsertCoin} />}
 
@@ -741,16 +818,82 @@ export default function App() {
 
       {/* 7. VICTORY ENDING SCREEN */}
       {screen === 'VICTORY' && (
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-amber-950/40 to-zinc-950 text-white z-50 p-8 flex flex-col justify-between text-center select-none overflow-y-auto">
+        <div
+          className={`absolute inset-0 text-white z-50 flex flex-col text-center select-none bg-[#0a0a0a] ${
+            sayonaraKilled ? '' : 'sws-victory-glow'
+          }`}
+        >
+          {/* Scroll owns the story, not the exit.
+            *
+            * Header and RETURN used to share one scrolling flex column, so
+            * preventScroll on the initial focus could only pick a winner: the
+            * header at the top or the button at the bottom, never both once
+            * total content ran past the viewport. Measured at 844x390 with
+            * the credit roster included: button top=687 against a 390px
+            * viewport, off screen by nearly 300px, on the only route a
+            * touch player has to leave this screen.
+            *
+            * Splitting the button out of the scroll container and pinning it
+            * to the bottom of the screen — not of the content — removes the
+            * competition. The story scrolls under it; RETURN does not move. */}
+          <div className="flex-1 overflow-y-auto p-8 pb-4">
           <div className="my-auto space-y-6 max-w-2xl mx-auto">
-            <div className="inline-flex p-4 bg-amber-500/10 text-amber-400 rounded-full border border-amber-500/30">
-              <Award className="w-12 h-12" />
+            <div className="space-y-2">
+              <SignalCrash />
+              {/* Omega Biker's line from the team's own outro script (Cena 1:
+                * O Colapso da Matriarca). Reused rather than invented — the
+                * broadcast dying is the same beat in both endings, only
+                * Sayonara's fate differs below. */}
+              <p
+                className={`text-[10px] md:text-xs font-mono uppercase tracking-widest ${
+                  sayonaraKilled ? 'text-zinc-400' : 'text-[#00ffff]'
+                }`}
+              >
+                Omega Biker: "The broadcast is dead. Let's get our colors back."
+              </p>
             </div>
 
-            <h1 className="text-3xl md:text-5xl font-black italic text-amber-400 uppercase tracking-wider">
-              {sayonaraKilled
-                ? 'VICTORY — BUT NOT FOR EVERYONE'
-                : 'VICTORY! THE SAFE-WORD SYNDICATE TRIUMPHS!'}
+            {/* Headline and body used to be quoted verbatim from the
+              * project's own script document (Roteiro Completo, "Tela de
+              * vitória" — Final A / Final B). Sayonara-freed's headline is
+              * no longer that line — replaced on explicit instruction with
+              * "Kinky is the new black. Again!" — so it now diverges from
+              * the script doc; flagging it here in case the doc itself
+              * should be updated to match, or this should stay a
+              * screen-only line the script never sees.
+              *
+              * Sayonara-killed keeps the original canon line untouched: the
+              * replacement was scoped to the headline shown, which was the
+              * freed ending's. The body paragraphs are still canon on both
+              * branches, word for word, only restyled.
+              *
+              * Sayonara-freed gets a neon accent on the last word, the same
+              * device the title screen uses on its own name. Sayonara-killed
+              * gets none — and that is enforced across the whole screen, not
+              * just here, because the point of that ending is that the colour
+              * did not fully come back and a screen that says so in one place
+              * while glowing magenta in four others says nothing.
+              *
+              * Five things switch on sayonaraKilled: this accent, the radial
+              * glow behind everything, Omega Biker's line, the dot after the
+              * studio name, and the RETURN button. The button is the one worth
+              * flagging — an exit that looks different between two endings can
+              * read as an interface bug rather than a decision, so: it is a
+              * decision. In the ending where the colour came back it is the
+              * game's magenta with the game's glow; in the ending where it did
+              * not, it is grey.
+              *
+              * Omega Biker's line loses its cyan in that variant while still
+              * reading "let's get our colors back". That irony is the point,
+              * and it only lands if the line is not itself in colour. */}
+            <h1 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter">
+              {sayonaraKilled ? (
+                <span className="text-zinc-300">VICTORY — BUT NOT FOR EVERYONE</span>
+              ) : (
+                <span className="text-white">
+                  KINKY IS THE NEW BLACK. <span className="text-[#ff00ff]">AGAIN!</span>
+                </span>
+              )}
             </h1>
 
             <p className="text-sm md:text-base font-mono text-zinc-300 leading-relaxed">
@@ -758,17 +901,82 @@ export default function App() {
                 ? "Madam Mizydia's corporate broadcast signal has been permanently dismantled, and the gray status quo is shattered forever. But the collar came off too late. Sayonara never got to walk out on her own terms. The city is loud again — one voice short."
                 : "Madam Mizydia's corporate broadcast signal has been permanently dismantled! Sayonara broke free from her leash and walked away into freedom! The Ultra Evil League of Conservative Christians' gray status quo is shattered forever, restoring vibrant punk joy to the world!"}
             </p>
+
+            {/* The credit roll.
+              *
+              * Restyled to match the codex's own STAFF panel — same white
+              * name, cyan dot, magenta suffix, same table — so the two
+              * places crediting the studio share one visual language
+              * instead of the codex's neon sitting next to this screen's
+              * old amber like they belonged to different apps.
+              *
+              * Short, and here rather than on a screen of its own: the outro
+              * sequence that will eventually carry a full roll does not exist
+              * yet, and a roster nobody ever reaches is the same as no
+              * roster. When the outro lands this block moves into it
+              * wholesale — it reads the same table. */}
+            <div className="pt-4 border-t border-zinc-700/60 space-y-3">
+              <div className="space-y-1">
+                <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-zinc-500">
+                  MADE IN A BUNKER BY
+                </div>
+                <div className="text-lg md:text-2xl font-black italic uppercase tracking-tighter text-white">
+                  {STUDIO_NAME}
+                  <span className={sayonaraKilled ? 'text-zinc-500' : 'text-[#00ffff]'}>.</span>
+                </div>
+                <div
+                  className={`text-xs md:text-sm font-mono uppercase tracking-[0.3em] ${
+                    sayonaraKilled ? 'text-zinc-400' : 'text-[#ff00ff]'
+                  }`}
+                >
+                  {STUDIO_SUFFIX}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 max-w-md mx-auto font-mono text-[10px] md:text-xs uppercase tracking-wider">
+                {CREDIT_ROLES.map((entry) => (
+                  <React.Fragment key={entry.role}>
+                    <div className="text-right text-zinc-500">{entry.role}</div>
+                    <div className="text-left text-white">{entry.name}</div>
+                  </React.Fragment>
+                ))}
+              </div>
+
+              <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-600">
+                {CREDIT_LINE}
+              </p>
+            </div>
+          </div>
           </div>
 
-          <button
-            onClick={() => {
-              sound.stopBgm();
-              returnToTitle();
-            }}
-            className="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-sm italic uppercase tracking-wider mx-auto shadow-xl"
-          >
-            RETURN TO TITLE SCREEN
-          </button>
+          <div className="shrink-0 px-8 pb-8 pt-3 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/95 to-transparent">
+            <button
+              onClick={() => {
+                sound.stopBgm();
+                returnToTitle();
+              }}
+              className={`px-8 py-3 text-black font-black rounded-xl text-sm italic uppercase tracking-wider mx-auto block ${
+                sayonaraKilled
+                  ? 'bg-zinc-300 hover:bg-zinc-200 shadow-xl'
+                  : 'bg-[#ff00ff] hover:bg-[#ff33ff] shadow-[0_0_25px_rgba(255,0,255,0.4)]'
+              }`}
+            >
+              RETURN TO TITLE SCREEN
+            </button>
+          </div>
+
+          {/* The color the rest of the game already has, arriving here too.
+            * A quiet radial glow, not an animation — the loud version of
+            * "color returns" belongs to the future outro sequence; this is
+            * the version that costs nothing and never plays for the ending
+            * where color didn't come all the way back. */}
+          <style>{`
+            .sws-victory-glow {
+              background-image:
+                radial-gradient(ellipse 60% 40% at 20% 0%, rgba(255,0,255,0.10), transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(0,255,255,0.08), transparent 60%);
+            }
+          `}</style>
         </div>
       )}
 

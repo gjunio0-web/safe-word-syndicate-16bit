@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Gauge, Disc, BookOpen } from 'lucide-react';
 import { TitleScreenProps } from './TitleScreen';
+import { COPYRIGHT_NOTICE, CREDIT_SLOGAN } from '../game/credits';
 
 /**
  * The title screen for phones. Portrait keeps the tall stack; landscape —
@@ -136,6 +137,21 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Studio credit.
+        *
+        * Anchored to the whole screen rather than to the action column. In
+        * landscape that column is 20rem wide and the line broke in two inside
+        * it; out here it clears both columns and sits on one line under them.
+        *
+        * Portrait keeps the two halves stacked — 390px never fits the pair on
+        * one line at any size that stays legible, so the stack is the design
+        * rather than the failure mode. */}
+      <p className="shrink-0 pt-2 pb-1 text-center text-[10px] landscape:text-[8px] font-mono uppercase tracking-widest text-gray-500">
+        <span className="block landscape:inline text-gray-300">{COPYRIGHT_NOTICE}</span>
+        <span className="hidden landscape:inline"> · </span>
+        <span className="block landscape:inline">{CREDIT_SLOGAN}</span>
+      </p>
     </div>
   );
 };

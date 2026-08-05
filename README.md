@@ -90,3 +90,11 @@ npm run build    # gera dist/
 ```
 
 Netlify: build command `npm run build`, publish directory `dist`.
+
+## Créditos
+
+Desenvolvido por **Argos Outis Digital Bunker**.
+
+Os textos de crédito exibidos no jogo — nome do estúdio, aviso de copyright, slogan e a lista de funções — vivem em `src/game/credits.ts` e são lidos de lá pela tela de título, pelo codex (`WHO MADE THIS NOISE`), pela tela de vitória e pelo grafite da fase 1. Alterar qualquer um deles é alterar aquele arquivo, e o teste `src/test/credits.test.ts` guarda a regra de que o slogan não faz declaração alguma sobre direitos de cópia.
+
+© 2026 Argos Outis Digital Bunker.

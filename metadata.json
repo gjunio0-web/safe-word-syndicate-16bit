@@ -1,6 +1,7 @@
 {
   "name": "The Safe-Word Syndicate",
   "description": "A 16-bit retro arcade beat 'em up side-scroller featuring a punk-rock squad fighting an oppressive syndicate.",
+  "author": "Argos Outis Digital Bunker",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

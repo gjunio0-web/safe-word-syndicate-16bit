@@ -1,4 +1,5 @@
 import { StageConfig } from '../types';
+import { GRAFFITI_SUBTAG, GRAFFITI_TAG } from './credits';
 import { heroLine } from './dialogue';
 import { assertStagesAreCompletable } from './stageValidation';
 
@@ -347,7 +348,7 @@ export function renderStageBackground(
       ctx.shadowColor = '#ff007f';
       ctx.shadowBlur = 18;
       ctx.fillStyle = '#ff007f';
-      ctx.font = 'black 20px monospace';
+      ctx.font = '900 20px monospace';
       ctx.fillText('★ RAINBOW LOUNGE ★', neonX + 15, 138);
       ctx.shadowColor = '#00ffff';
       ctx.fillStyle = '#00ffff';
@@ -364,6 +365,37 @@ export function renderStageBackground(
         ctx.lineTo(neonX + 260, by);
         ctx.stroke();
       }
+
+      // Studio tag, sprayed on the brick.
+      //
+      // The only signature in the game that belongs to the fiction: a wall in
+      // the one district that still refuses the Censure Protocol is exactly
+      // where a name gets written without asking. It rides the 0.4x layer, so
+      // it scrolls past early in stage 1 and is gone — a tag, not a credit
+      // screen. The credit screens are elsewhere.
+      //
+      // Sits between the neon sign and the curb line on purpose. The 1.0x
+      // foreground below is the lane the fight is read in, and nothing
+      // decorative goes there.
+      ctx.save();
+      ctx.translate(neonX + 24, 214);
+      ctx.rotate(-0.05);
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#7ef9ff';
+      ctx.font = 'italic 900 19px monospace';
+      ctx.fillText(GRAFFITI_TAG, 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255, 0, 127, 0.85)';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(GRAFFITI_SUBTAG, 2, 14);
+      ctx.strokeStyle = 'rgba(126, 249, 255, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.lineTo(128, 4);
+      ctx.stroke();
+      ctx.restore();
     }
 
     // Layer 4: Foreground Wet Asphalt & Sidewalk (1.0x Full Camera Motion)

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Gauge, Disc, BookOpen } from 'lucide-react';
 import { TitleScreenProps } from './TitleScreen';
+import { COPYRIGHT_NOTICE, CREDIT_SLOGAN } from '../game/credits';
 
 /**
  * The title screen as desktop has always wanted it: three direct children
@@ -75,7 +76,8 @@ export const TitleScreenDesktop: React.FC<TitleScreenProps> = ({
         * primary action full width and lets the three secondary buttons
         * divide the row evenly, so they stay the same size as each other.
         */}
-      <div className="flex flex-col gap-3 max-w-lg mx-auto w-full pb-4">
+      <div className="w-full pb-4">
+        <div className="flex flex-col gap-3 max-w-lg mx-auto w-full">
         <button
           onClick={onStartBrawl}
           className="w-full py-4 bg-[#ff00ff] hover:bg-[#d400d4] text-black font-black text-base sm:text-lg md:text-[clamp(1.125rem,1.42vw,1.8rem)] italic uppercase tracking-wider shadow-[0_0_20px_rgba(255,0,255,0.4)] flex items-center justify-center gap-2 active:scale-95 transition-[background-color,transform]"
@@ -106,6 +108,23 @@ export const TitleScreenDesktop: React.FC<TitleScreenProps> = ({
             <BookOpen className="w-4 h-4 shrink-0 text-[#ffff00]" /> CODEX
           </button>
         </div>
+        </div>
+
+        {/* Studio credit.
+          *
+          * Outside the action column on purpose. Inside it the line inherited
+          * a 32rem cap and broke across two lines at every window width, which
+          * reads as an overflow rather than as a signature. Out here it has the
+          * screen's own width and sits on one line.
+          *
+          * The two halves are separate elements so a narrow window stacks them
+          * deliberately — notice above, slogan below — instead of wrapping
+          * wherever the words happen to run out. */}
+        <p className="pt-3 text-[10px] md:text-xs font-mono uppercase tracking-widest text-gray-500">
+          <span className="block sm:inline text-gray-300">{COPYRIGHT_NOTICE}</span>
+          <span className="hidden sm:inline"> · </span>
+          <span className="block sm:inline">{CREDIT_SLOGAN}</span>
+        </p>
       </div>
     </div>
   );

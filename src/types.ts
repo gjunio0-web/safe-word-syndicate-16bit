@@ -1,5 +1,7 @@
 import type { BgmTrack } from './game/bgmTracks';
 export type GameScreen =
+  // The boot splash runs once per page load, ahead of the attract loop.
+  | 'BOOT'
   | 'ATTRACT'
   | 'INTRO'
   | 'TITLE'

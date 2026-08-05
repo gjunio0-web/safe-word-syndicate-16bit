@@ -3,7 +3,13 @@ import { CHARACTERS, ENEMIES } from '../game/characterData';
 import { KEYBOARD_LAYOUT } from '../game/keyboard';
 import { portraitFor } from '../game/portraits';
 import { PortraitId } from '../types';
-import { BookOpen, X, Shield, Zap, Skull, Award } from 'lucide-react';
+import { BookOpen, X, Shield, Zap, Skull, Award, Wrench } from 'lucide-react';
+import {
+  CREDIT_LINE,
+  CREDIT_ROLES,
+  STUDIO_NAME,
+  STUDIO_SUFFIX,
+} from '../game/credits';
 
 interface LoreCodexProps {
   onClose: () => void;
@@ -148,7 +154,7 @@ const POWER_MOVES = [
 ] as const;
 
 export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
-  const [tab, setTab] = useState<'HEROES' | 'ENEMIES' | 'BOSSES' | 'COMBOS'>('HEROES');
+  const [tab, setTab] = useState<'HEROES' | 'ENEMIES' | 'BOSSES' | 'COMBOS' | 'STAFF'>('HEROES');
 
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none font-sans text-white" data-gamepad-scope>
@@ -161,12 +167,33 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
               PUNK REBEL CODEX & DOSSIER<span className="text-[#00ffff]">.</span>
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ff00ff] text-zinc-300 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* The studio entry lives in the header, not in the tab row.
+              *
+              * As a fifth tab it pushed the row onto a second line on desktop
+              * and a third in portrait, costing the content area up to 155px
+              * of height to make room for the one entry nobody opens the codex
+              * for. Up here it is one press away and costs the dossiers
+              * nothing. */}
+            <button
+              onClick={() => setTab((prev) => (prev === 'STAFF' ? 'HEROES' : 'STAFF'))}
+              className={`px-2 py-1.5 border-2 font-black text-[10px] font-mono uppercase tracking-wider flex items-center gap-1 transition-colors ${
+                tab === 'STAFF'
+                  ? 'bg-white text-black border-white'
+                  : 'bg-[#111] border-[#333] text-zinc-300 hover:border-[#00ffff] hover:text-white'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">WHO MADE THIS NOISE</span>
+              <span className="sm:hidden">STAFF</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 bg-[#111] hover:bg-[#222] border-2 border-[#333] hover:border-[#ff00ff] text-zinc-300 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -242,6 +269,40 @@ export const LoreCodex: React.FC<LoreCodexProps> = ({ onClose }) => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {tab === 'STAFF' && (
+            <div className="max-w-xl mx-auto space-y-6 py-4">
+              <div className="text-center space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-gray-500">
+                  A GAME BY
+                </div>
+                <div className="text-3xl font-black italic uppercase tracking-tighter text-white">
+                  {STUDIO_NAME}<span className="text-[#00ffff]">.</span>
+                </div>
+                <div className="text-sm font-mono uppercase tracking-[0.35em] text-[#ff00ff]">
+                  {STUDIO_SUFFIX}
+                </div>
+              </div>
+
+              <div className="bg-[#111] border-2 border-[#333] p-5 space-y-2 font-mono text-xs uppercase tracking-wider">
+                {CREDIT_ROLES.map((entry, index) => (
+                  <div
+                    key={entry.role}
+                    className={`flex justify-between gap-4 ${
+                      index < CREDIT_ROLES.length - 1 ? 'border-b border-[#222] pb-2' : ''
+                    }`}
+                  >
+                    <span className="text-gray-500 shrink-0">{entry.role}</span>
+                    <span className="text-white text-right">{entry.name}</span>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-center text-[10px] font-mono uppercase tracking-widest text-gray-600">
+                {CREDIT_LINE}
+              </p>
             </div>
           )}
 
