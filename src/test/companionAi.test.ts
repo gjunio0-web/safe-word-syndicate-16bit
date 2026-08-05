@@ -5,15 +5,22 @@ import {
   nearestTarget,
   newCompanionMemory,
   selectTarget,
+  shouldPowerMove,
+  prefersKick,
   canStrike,
+  COMPANION_TUNING,
+  POWER_MOVE_COST,
+  KICK_MAX_DX,
   LEASH_X,
   LEASH_TOLERANCE_X,
   STRIKE_MAX_DX,
   STRIKE_MAX_DY,
 } from '../game/companionAi';
 import { PLAYER_BODY_SEPARATION_X } from '../game/constants';
-import { EntityState } from '../types';
+import { EntityState, GameSettings } from '../types';
 import { startEngine, stageEnemies, NEUTRAL } from './helpers';
+import { GameEngine } from '../game/engine';
+import { STAGES } from '../game/stageData';
 
 /** A bare entity at a position, enough for the policy to read. */
 function at(x: number, y: number, over: Partial<EntityState> = {}): EntityState {
@@ -60,9 +67,12 @@ describe('companion strike band', () => {
     expect(canStrike(self, at(self.x + PLAYER_BODY_SEPARATION_X, self.y))).toBe(true);
   });
 
-  it('holds fire past the punch hitbox', () => {
+  it('holds fire past the longest hitbox it has', () => {
+    // The band opened up when the kick joined the repertoire: in reach now
+    // means in reach of the kick, and which attack to throw is decided after.
     const self = buddy();
-    expect(canStrike(self, at(self.x + STRIKE_MAX_DX + 2, self.y))).toBe(false);
+    expect(canStrike(self, at(self.x + KICK_MAX_DX - 2, self.y))).toBe(true);
+    expect(canStrike(self, at(self.x + KICK_MAX_DX + 2, self.y))).toBe(false);
   });
 
   it('holds fire on a target too far off in depth', () => {
@@ -238,5 +248,142 @@ describe('companion in the running engine', () => {
     // The second ending is the player's call. The buddy must not cast it.
     expect(sayonara.hp).toBe(startHp);
     expect(engine.sayonaraKilled).toBe(false);
+  });
+});
+
+describe('companion repertoire', () => {
+  const tuning = COMPANION_TUNING;
+
+  it('opens with the kick from the band the punch cannot cover', () => {
+    const self = buddy();
+    const memory = newCompanionMemory();
+    const input = decideCompanionInput(
+      self,
+      [at(self.x + STRIKE_MAX_DX + 10, self.y)],
+      null,
+      memory,
+      tuning
+    );
+    expect(input.kick).toBe(true);
+    expect(input.punch).toBe(false);
+  });
+
+  it('punches inside, for a combo hero', () => {
+    // Fun Maker: combo 5, range 3.
+    const self = buddy();
+    const input = decideCompanionInput(self, [at(self.x + 80, self.y)], null, newCompanionMemory(), tuning);
+    expect(input.punch).toBe(true);
+    expect(input.kick).toBe(false);
+  });
+
+  it('kicks inside, for a long-reach hero', () => {
+    // Feet Master: range 4, combo 2.
+    expect(prefersKick('FEET_MASTER')).toBe(true);
+    expect(prefersKick('FUN_MAKER')).toBe(false);
+  });
+
+  it('rests between swings and keeps walking through the pause', () => {
+    const self = buddy();
+    const memory = newCompanionMemory();
+    const enemies = [at(self.x + 80, self.y)];
+
+    const first = decideCompanionInput(self, enemies, null, memory, tuning);
+    expect(first.punch).toBe(true);
+
+    const second = decideCompanionInput(self, enemies, null, memory, tuning);
+    expect(second.punch).toBe(false);
+    expect(second.kick).toBe(false);
+    expect(second.right).toBe(true);
+  });
+
+  it('plays the same way whatever the difficulty is set to', () => {
+    // The buddy is deliberately off the difficulty dial: that setting moves
+    // how much is coming at the players, not how good their partner is. A
+    // future decision to scale it has to come through here.
+    const settings = (difficulty: GameSettings['difficulty']): GameSettings => ({
+      soundEnabled: false,
+      musicEnabled: false,
+      volume: 0,
+      crtFilter: false,
+      showHitboxes: false,
+      difficulty,
+    });
+
+    const openingMove = (difficulty: GameSettings['difficulty']) => {
+      const engine = new GameEngine(STAGES[0], 'FEET_MASTER', 'FUN_MAKER', settings(difficulty));
+      engine.setActiveDialogue(null);
+      engine.entities = engine.entities.filter((e) => e.isPlayer);
+      const self = engine.player2!;
+      engine.spawnEnemy('PURITY_PATROL', self.x + 80, self.y);
+      engine.update(NEUTRAL);
+      return self.action;
+    };
+
+    const difficulties: Array<GameSettings['difficulty']> = ['EASY', 'NORMAL', 'PUNK_HARD'];
+    const moves = difficulties.map(openingMove);
+    // Identical, and identically a swing — three IDLEs would agree too.
+    expect(new Set(moves).size).toBe(1);
+    expect(moves[0]).toBe('PUNCH1');
+  });
+
+  it('never narrows the horizontal band below the separation floor', () => {
+    // The original bug, guarded at the one tuning that exists.
+    const self = buddy();
+    const enemy = at(self.x + PLAYER_BODY_SEPARATION_X, self.y);
+    expect(companionState(self, enemy, COMPANION_TUNING.strikeMaxDy)).toBe('STRIKE');
+  });
+});
+
+describe('companion power move', () => {
+  const tuning = COMPANION_TUNING;
+  const charged = () => {
+    const self = buddy();
+    self.powerMeter = 100;
+    return self;
+  };
+
+  it('saves the meter for a lone grunt', () => {
+    const self = charged();
+    const enemies = [at(self.x + 80, self.y)];
+    expect(shouldPowerMove(self, enemies[0], enemies, tuning)).toBe(false);
+  });
+
+  it('spends it on a crowd inside the radius', () => {
+    const self = charged();
+    const enemies = [at(self.x + 80, self.y), at(self.x + 120, self.y + 20), at(self.x + 150, self.y - 20)];
+    expect(shouldPowerMove(self, enemies[0], enemies, tuning)).toBe(true);
+  });
+
+  it('spends it on a boss that is nearly down', () => {
+    const self = charged();
+    const boss = at(self.x + 90, self.y, { enemyType: 'BOSS_MADAM_MIZYDIA', hp: 100, maxHp: 600 });
+    expect(shouldPowerMove(self, boss, [boss], tuning)).toBe(true);
+  });
+
+  it('holds the meter while suppressed by a therapist dart', () => {
+    const self = charged();
+    self.suppressedTimer = 60;
+    const enemies = [at(self.x + 80, self.y), at(self.x + 120, self.y), at(self.x + 150, self.y)];
+    expect(shouldPowerMove(self, enemies[0], enemies, tuning)).toBe(false);
+  });
+
+  it('holds the meter when it cannot afford the move', () => {
+    const self = buddy();
+    self.powerMeter = POWER_MOVE_COST - 1;
+    const enemies = [at(self.x + 80, self.y), at(self.x + 120, self.y), at(self.x + 150, self.y)];
+    expect(shouldPowerMove(self, enemies[0], enemies, tuning)).toBe(false);
+  });
+
+  it('lets Omega Biker break a censure shield on sight', () => {
+    const self = buddy();
+    self.charId = 'OMEGA_BIKER';
+    self.powerMeter = 100;
+    const boss = at(self.x + 90, self.y, {
+      enemyType: 'BOSS_MADAM_MIZYDIA',
+      hp: 600,
+      maxHp: 600,
+      shieldHp: 150,
+    });
+    expect(shouldPowerMove(self, boss, [boss], tuning)).toBe(true);
   });
 });

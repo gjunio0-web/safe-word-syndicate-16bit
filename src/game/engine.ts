@@ -45,7 +45,12 @@ import {
   SAYONARA_TACKLE_KNOCKBACK,
   SAYONARA_TACKLE_KNOCKDOWN_FRAMES,
 } from './constants';
-import { CompanionMemory, decideCompanionInput, newCompanionMemory } from './companionAi';
+import {
+  COMPANION_TUNING,
+  CompanionMemory,
+  decideCompanionInput,
+  newCompanionMemory,
+} from './companionAi';
 import { sound } from './sound';
 import { STEP_MS } from './frameClock';
 
@@ -518,7 +523,13 @@ export class GameEngine {
       this.updatePlayer(
         this.player2,
         p2Input ??
-          decideCompanionInput(this.player2, this.entities, this.player1, this.companionMemory)
+          decideCompanionInput(
+            this.player2,
+            this.entities,
+            this.player1,
+            this.companionMemory,
+            COMPANION_TUNING
+          )
       );
     }
 

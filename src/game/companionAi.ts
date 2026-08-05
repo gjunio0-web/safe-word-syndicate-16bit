@@ -1,5 +1,6 @@
-import { EntityState, PlayerInput } from '../types';
-import { PLAYER_PUNCH_REACH } from './constants';
+import { CharacterId, EntityState, PlayerInput } from '../types';
+import { CHARACTERS } from './characterData';
+import { PLAYER_KICK_REACH, PLAYER_PUNCH_REACH } from './constants';
 
 /**
  * The AI buddy's brain.
@@ -105,9 +106,117 @@ const BUSY_ACTIONS = ['HURT', 'KNOCKDOWN', 'POWER_MOVE', 'BITING', 'RECOVERY'];
 /** What the buddy remembers between frames. Owned by the engine. */
 export interface CompanionMemory {
   targetId: string | null;
+  strikeCooldown: number;
 }
 
-export const newCompanionMemory = (): CompanionMemory => ({ targetId: null });
+export const newCompanionMemory = (): CompanionMemory => ({ targetId: null, strikeCooldown: 0 });
+
+/** How sharp the buddy plays. */
+export interface CompanionTuning {
+  /** Frames of rest between attacks, on top of the animation's own recovery. */
+  strikeCooldown: number;
+  /** How far off in depth a target may be and still be swung at. */
+  strikeMaxDy: number;
+  /** Enemies inside the power move's radius before spending 30 meter is worth it. */
+  powerMoveCrowd: number;
+}
+
+/**
+ * How the buddy plays, everywhere, on every setting.
+ *
+ * Deliberately not indexed by difficulty. The enemy side already scales
+ * through ATTACKERS_BY_DIFFICULTY, and moving the ally on the same dial means
+ * the setting no longer says one thing: a player raising the difficulty would
+ * be asking for more enemies and getting a worse partner in the same gesture,
+ * or a better one, and either way the number on the menu stops mapping to
+ * anything a player can predict. The buddy fights the same way at every level;
+ * what changes is how much is coming at it.
+ *
+ * The numbers stay a parameter rather than literals inside the policy so a
+ * test can hand it a different set, and so a future decision to scale — by
+ * difficulty, by stage, by whatever — has one place to hook into.
+ */
+export const COMPANION_TUNING: CompanionTuning = {
+  strikeCooldown: 9,
+  strikeMaxDy: STRIKE_MAX_DY,
+  powerMoveCrowd: 3,
+};
+
+/**
+ * Furthest a kick may be thrown from, on the same margin as the punch.
+ *
+ * The kick reaches 135 against the punch's 110 and hits far harder, so the
+ * band between the two is the buddy's opener: it arrives kicking and settles
+ * into punches once it is inside.
+ */
+export const KICK_MAX_DX = PLAYER_KICK_REACH - 12;
+
+/**
+ * Radius each power move actually covers, per hero.
+ *
+ * Read off `performPowerMove`. Omega Biker's is a directional shockwave with
+ * no distance bound of its own, so 200 stands in for "a screen-length ahead" —
+ * an estimate, unlike the other three, which are the literal radii the engine
+ * tests against.
+ */
+export const POWER_MOVE_RADIUS: Record<CharacterId, number> = {
+  FEET_MASTER: 200,
+  FUN_MAKER: 180,
+  OMEGA_BIKER: 200,
+  ANGRY_CORSO: 150,
+};
+
+/** Meter a power move costs, mirrored from `performPowerMove`. */
+export const POWER_MOVE_COST = 30;
+
+/** A boss worth spending the meter on rather than saving it for a crowd. */
+function isPressingBoss(target: EntityState, self: EntityState): boolean {
+  const isBoss = target.enemyType === 'BOSS_MADAM_MIZYDIA' || target.enemyType === 'BOSS_SAYONARA';
+  if (!isBoss) return false;
+  // Omega Biker is the only hero whose power move zeroes a censure shield, so
+  // his is worth spending the moment one is up rather than saving for later.
+  if (self.charId === 'OMEGA_BIKER' && (target.shieldHp ?? 0) > 0) return true;
+  return target.hp / target.maxHp < 0.4;
+}
+
+/**
+ * Whether the meter is better spent now than saved.
+ *
+ * `suppressedTimer` is checked here as well as in `updatePlayer` — a dart from
+ * a Conversion Therapist locks the move out, and a buddy that keeps mashing a
+ * button the engine is ignoring stops swinging with the ones it still has.
+ */
+export function shouldPowerMove(
+  self: EntityState,
+  target: EntityState,
+  entities: EntityState[],
+  tuning: CompanionTuning
+): boolean {
+  if (self.powerMeter < POWER_MOVE_COST || self.suppressedTimer > 0) return false;
+
+  if (isPressingBoss(target, self)) return true;
+
+  const radius = POWER_MOVE_RADIUS[self.charId as CharacterId] ?? 180;
+  const crowd = entities.filter(
+    (e) => isEngageable(e) && Math.hypot(e.x - self.x, e.y - self.y) <= radius
+  ).length;
+
+  return crowd >= tuning.powerMoveCrowd;
+}
+
+/**
+ * Which melee attack the hero in question prefers when both would land.
+ *
+ * Read from the stats the character sheet already carries rather than
+ * switched on hero id, so a future fighter inherits a preference without
+ * touching this file: long reach favours the kick, high combo favours the
+ * punch, and everyone else alternates by falling through to the punch.
+ */
+export function prefersKick(charId: CharacterId | undefined): boolean {
+  if (!charId) return false;
+  const stats = CHARACTERS[charId].stats;
+  return stats.range >= 4 && stats.combo < 5;
+}
 
 /**
  * A target the buddy is allowed to hit.
@@ -139,11 +248,18 @@ export function nearestTarget(self: EntityState, entities: EntityState[]): Entit
   return best;
 }
 
-/** Whether a punch thrown this frame would reach `target`. */
-export function canStrike(self: EntityState, target: EntityState): boolean {
-  return (
-    Math.abs(target.x - self.x) <= STRIKE_MAX_DX && Math.abs(target.y - self.y) <= STRIKE_MAX_DY
-  );
+/**
+ * Whether an attack thrown this frame would reach `target`.
+ *
+ * Measured against the kick, the longer of the two: being in range at all is
+ * what separates ENGAGE from STRIKE. Which attack to throw is decided after.
+ */
+export function canStrike(
+  self: EntityState,
+  target: EntityState,
+  maxDy: number = STRIKE_MAX_DY
+): boolean {
+  return Math.abs(target.x - self.x) <= KICK_MAX_DX && Math.abs(target.y - self.y) <= maxDy;
 }
 
 /**
@@ -171,10 +287,14 @@ export function selectTarget(
 }
 
 /** Which of the four behaviours applies, given what the buddy can see. */
-export function companionState(self: EntityState, target: EntityState | null): CompanionState {
+export function companionState(
+  self: EntityState,
+  target: EntityState | null,
+  maxDy: number = STRIKE_MAX_DY
+): CompanionState {
   if (self.stunTimer > 0 || BUSY_ACTIONS.includes(self.action)) return 'RECOVER';
   if (!target) return 'FOLLOW';
-  return canStrike(self, target) ? 'STRIKE' : 'ENGAGE';
+  return canStrike(self, target, maxDy) ? 'STRIKE' : 'ENGAGE';
 }
 
 /** Walk toward a point, pressing only the axes that are actually off. */
@@ -212,17 +332,37 @@ export function decideCompanionInput(
   self: EntityState,
   entities: EntityState[],
   ally: EntityState | null,
-  memory: CompanionMemory
+  memory: CompanionMemory,
+  tuning: CompanionTuning = COMPANION_TUNING
 ): PlayerInput {
   const target = selectTarget(self, entities, memory.targetId);
   memory.targetId = target?.id ?? null;
+  if (memory.strikeCooldown > 0) memory.strikeCooldown--;
 
-  switch (companionState(self, target)) {
+  switch (companionState(self, target, tuning.strikeMaxDy)) {
     case 'RECOVER':
       return { ...IDLE_INPUT };
 
-    case 'STRIKE':
-      return { ...walkToward(target!.x - self.x, target!.y - self.y, true), punch: true };
+    case 'STRIKE': {
+      const approach = walkToward(target!.x - self.x, target!.y - self.y, true);
+
+      if (shouldPowerMove(self, target!, entities, tuning)) {
+        memory.strikeCooldown = tuning.strikeCooldown;
+        return { ...approach, special: true };
+      }
+
+      // Resting between swings is what makes the buddy read as a fighter
+      // rather than a turret. It keeps walking through the pause.
+      if (memory.strikeCooldown > 0) return approach;
+      memory.strikeCooldown = tuning.strikeCooldown;
+
+      // The kick reaches further and hits harder at the cost of ten more
+      // frames of commitment, so it opens from the outer band; inside, it is
+      // down to which the hero is built for.
+      const outerBand = Math.abs(target!.x - self.x) > STRIKE_MAX_DX;
+      const useKick = outerBand || prefersKick(self.charId);
+      return { ...approach, punch: !useKick, kick: useKick };
+    }
 
     case 'ENGAGE':
       return walkToward(target!.x - self.x, target!.y - self.y, true);
