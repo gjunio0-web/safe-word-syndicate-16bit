@@ -26,6 +26,7 @@ import {
   PLAYER_PUSH_SHARE,
   ATTACKERS_BY_DIFFICULTY,
   PLAYER_KICK_REACH,
+  PLAYER_PUNCH_REACH,
   CASTING_DAMAGE_MULTIPLIER,
   ARENA_MIN_Y,
   ARENA_MAX_Y,
@@ -44,6 +45,7 @@ import {
   SAYONARA_TACKLE_KNOCKBACK,
   SAYONARA_TACKLE_KNOCKDOWN_FRAMES,
 } from './constants';
+import { decideCompanionInput } from './companionAi';
 import { sound } from './sound';
 import { STEP_MS } from './frameClock';
 
@@ -500,12 +502,13 @@ export class GameEngine {
     }
 
     // Update Player 2 / AI
+    //
+    // Both halves now end in the same call. A missing p2Input means nobody is
+    // holding a controller, so the policy supplies one — the buddy is a player
+    // whose buttons are pressed by code, not a second kind of entity with its
+    // own physics.
     if (this.player2 && this.player2.hp > 0) {
-      if (p2Input) {
-        this.updatePlayer(this.player2, p2Input);
-      } else {
-        this.updateAiCompanion(this.player2);
-      }
+      this.updatePlayer(this.player2, p2Input ?? decideCompanionInput(this.player2, this.entities));
     }
 
     // Update Camera position
@@ -1066,7 +1069,7 @@ export class GameEngine {
     sound.playPunch(sound.calculatePan(player.x, this.cameraX));
 
     // Generous Hitbox check (scaled for 1.5x character dimensions)
-    const reach = 110;
+    const reach = PLAYER_PUNCH_REACH;
     const inRange = this.entities.filter((e) => !e.isPlayer && e.hp > 0 && Math.abs(e.y - player.y) < 55);
     this.entities.forEach((target) => {
       if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, inRange) && Math.abs(target.y - player.y) < 55) {
@@ -1771,37 +1774,6 @@ export class GameEngine {
           enemy.action = 'IDLE';
         }
       }
-    }
-  }
-
-  private updateAiCompanion(companion: EntityState) {
-    if (companion.action !== 'IDLE' && companion.action !== 'WALK') {
-      return;
-    }
-
-    const enemy = this.entities.find((e) => !e.isPlayer && e.hp > 0);
-    if (enemy) {
-      const dx = enemy.x - companion.x;
-      const dy = enemy.y - companion.y;
-      const dist = Math.hypot(dx, dy);
-
-      companion.facing = dx > 0 ? 'RIGHT' : 'LEFT';
-      if (dist > 45) {
-        companion.vx = (dx / dist) * 3;
-        companion.vy = (dy / dist) * 2;
-        companion.action = 'WALK';
-      } else {
-        companion.vx = 0;
-        companion.vy = 0;
-        companion.action = 'IDLE';
-        if (companion.actionTimer === 0) {
-          this.performPunchCombo(companion);
-        }
-      }
-    } else {
-      companion.vx = 0;
-      companion.vy = 0;
-      companion.action = 'IDLE';
     }
   }
 

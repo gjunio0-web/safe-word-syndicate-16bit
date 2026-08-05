@@ -126,6 +126,17 @@ export const PLAYER_PUSH_SHARE = 0.15;
 export const PLAYER_KICK_REACH = 135;
 
 /**
+ * Reach of a player punch, the shorter of the two melee attacks.
+ *
+ * Lived as a bare `110` inside `performPunchCombo`. It is named here because
+ * the companion AI has to decide when a punch would land, and a policy that
+ * hardcodes its own copy of the number goes stale the moment combat is tuned —
+ * which is exactly how the old companion ended up with a strike gate of 45px
+ * against a body separation of 72, swinging at nothing for the whole campaign.
+ */
+export const PLAYER_PUNCH_REACH = 110;
+
+/**
  * Depth band the fighters may occupy.
  *
  * `STREET_TOP_Y` mirrors where `renderStageBackground` starts drawing the road:
