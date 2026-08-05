@@ -862,10 +862,19 @@ export default function App() {
               * should be updated to match, or this should stay a
               * screen-only line the script never sees.
               *
-              * Sayonara-killed keeps the original canon line untouched: the
-              * replacement was scoped to the headline shown, which was the
-              * freed ending's. The body paragraphs are still canon on both
-              * branches, word for word, only restyled.
+              * Sayonara-killed's headline was replaced too, and for a reason
+              * that only appeared once the freed one had changed. The old pair
+              * hinged on a shared word: "VICTORY! ... TRIUMPHS!" answered by
+              * "VICTORY — BUT NOT FOR EVERYONE". Replacing the first half left
+              * the second answering a line no longer in the game — it still
+              * read, but it had stopped being a reply. The new pair rebuilds
+              * the hinge on BLACK, which carries both senses on its own: the
+              * fashion cliché the slogan borrows, and the funeral. One ending
+              * says the colour came back; the other says what colour.
+              *
+              * The body paragraphs are untouched canon on both branches, word
+              * for word, only restyled — verified against the pre-credits
+              * revision.
               *
               * Sayonara-freed gets a neon accent on the last word, the same
               * device the title screen uses on its own name. Sayonara-killed
@@ -888,7 +897,7 @@ export default function App() {
               * and it only lands if the line is not itself in colour. */}
             <h1 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter">
               {sayonaraKilled ? (
-                <span className="text-zinc-300">VICTORY — BUT NOT FOR EVERYONE</span>
+                <span className="text-zinc-300">KINKY IS THE NEW BLACK. SO IS MOURNING.</span>
               ) : (
                 <span className="text-white">
                   KINKY IS THE NEW BLACK. <span className="text-[#ff00ff]">AGAIN!</span>
