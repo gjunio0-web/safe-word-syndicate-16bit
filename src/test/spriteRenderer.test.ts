@@ -312,3 +312,90 @@ describe('animation follows simulated time, not the wall clock', () => {
     expect(later.points).not.toEqual(early.points);
   });
 });
+
+/**
+ * Sayonara's build.
+ *
+ * She was drawn at roughly half the height of the box she stood in and less
+ * mass than a grunt, so the boss the whole first stage builds toward arrived
+ * looking like set dressing. These pin the three things that were wrong: the
+ * size, the fact that being down looked identical to being up, and the collar
+ * still burning after the spell that lit it was broken.
+ */
+describe('Sayonara reads as the animal her data describes', () => {
+  const shape = (recorder: RecordingContext) =>
+    recorder.points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('|');
+
+  /**
+   * The animal, without the furniture above it.
+   *
+   * The name plate and health bar hang off `height`, a long way over her head,
+   * and bounds() cannot tell them apart from the body. Anything drawn more
+   * than 140px up is one of them: the build itself lives inside 110.
+   */
+  const bodyBounds = (recorder: RecordingContext) => {
+    const body = recorder.points.filter((p) => p.y > -140);
+    return {
+      minX: Math.min(...body.map((p) => p.x)),
+      maxX: Math.max(...body.map((p) => p.x)),
+      minY: Math.min(...body.map((p) => p.y)),
+      maxY: Math.max(...body.map((p) => p.y)),
+    };
+  };
+
+  const dog = (over: Partial<EntityState> = {}) =>
+    spriteEnemy('BOSS_SAYONARA', {
+      width: ENEMIES.BOSS_SAYONARA.hitbox.width,
+      height: ENEMIES.BOSS_SAYONARA.hitbox.height,
+      ...over,
+    });
+
+  it('fills the box it declares instead of rattling around inside it', () => {
+    const box = bodyBounds(render(dog()));
+    const declared = ENEMIES.BOSS_SAYONARA.hitbox;
+
+    // Body only: the health bar and name plate hang far above the animal and
+    // are not part of the silhouette being measured.
+    const drawnHeight = -box.minY;
+    const overhang = Math.max(Math.abs(box.minX), Math.abs(box.maxX));
+
+    expect(drawnHeight, `drew ${drawnHeight.toFixed(0)}px tall`).toBeGreaterThan(
+      declared.height * 0.9
+    );
+    expect(drawnHeight).toBeLessThan(declared.height * 1.25);
+    expect(overhang, `reached ${overhang.toFixed(0)}px from centre`).toBeLessThan(
+      declared.width * 0.65
+    );
+  });
+
+  it('is built longer than she is tall, like something on four legs', () => {
+    const box = bodyBounds(render(dog()));
+    expect(box.maxX - box.minX).toBeGreaterThan(-box.minY);
+  });
+
+  it('carries more mass than the grunt she used to be outdrawn by', () => {
+    const hers = bodyBounds(render(dog()));
+    const grunt = bodyBounds(render(spriteEnemy('PURITY_PATROL')));
+    expect(hers.maxX - hers.minX).toBeGreaterThan(grunt.maxX - grunt.minX);
+  });
+
+  it('lies down when she is down, instead of standing there looking dangerous', () => {
+    const standing = render(dog({ action: 'IDLE' }));
+    const floored = render(dog({ action: 'IDLE', downed: true, hp: 1 }));
+
+    expect(shape(floored)).not.toBe(shape(standing));
+    expect(
+      -bodyBounds(floored).minY,
+      'a body on the floor is not as tall as one on its feet'
+    ).toBeLessThan(-bodyBounds(standing).minY);
+  });
+
+  it('puts the collar out once the spell holding it is broken', () => {
+    const leashed = render(dog({ downed: true, hp: 1 }));
+    const freed = render(dog({ downed: true, hp: 1, freed: true }));
+
+    // Same pose either way — the difference has to be the light, not the body.
+    expect(bodyBounds(freed)).toEqual(bodyBounds(leashed));
+    expect(freed.operations.join('|')).not.toBe(leashed.operations.join('|'));
+  });
+});

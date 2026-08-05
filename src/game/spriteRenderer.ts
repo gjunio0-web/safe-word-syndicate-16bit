@@ -1527,36 +1527,178 @@ function renderEnemySprite(
     }
 
     case 'BOSS_SAYONARA': {
-      // Armored Rottweiler walking steps
-      const p1 = stride1 * 0.8;
-      const p2 = stride2 * 0.8;
+      // The Old Guard, in the armour her handler put on her.
+      //
+      // She used to be drawn at roughly half the height of her own hitbox and
+      // less mass than a grunt in a polo shirt, which is a strange thing for
+      // the fight the dialogue builds up to. The build here fills the box she
+      // now declares: long and low, weight carried across the floor rather
+      // than above it, because a quadruped never gets to be tall and should
+      // not try.
+      //
+      // The outline is deliberately not the near-black every other enemy uses.
+      // A black dog outlined in black, on a nave rendered in black, measured
+      // 10.4 on the edge-contrast probe against a threshold of 20 — she was
+      // already a rumour on the final stage before anyone made her bigger.
+      const HIDE = '#1c1c20';
+      const HIDE_LOW = '#141418';
+      const TAN = '#8a4b1e';
+      const PLATE = '#2b2b33';
+      const SEAM = '#c2410c';
+      const RIM = '#585866';
 
-      ctx.fillStyle = '#27272a';
-      ctx.fillRect(-26 + p1, -10 - lift1, 11, 10);
-      ctx.fillRect(-13 + p2, -10 - lift2, 11, 10);
-      ctx.fillRect(2 + p1, -10 - lift1, 11, 10);
-      ctx.fillRect(15 + p2, -10 - lift2, 11, 10);
+      // Down means down. The walk cycle stops, the legs fold, and the whole
+      // body sinks — nothing else in the renderer reads `downed`, so a spared
+      // Sayonara used to stand there looking exactly like one still fighting.
+      const isDown = entity.downed === true;
+
+      // Drawn at a comfortable working size, then fitted to the box she
+      // declares in characterData. Without it she is built 175px across while
+      // resting 100px from the player, so her muzzle ends up inside him — a
+      // silhouette that lies about where the fight actually is.
+      ctx.save();
+      ctx.scale(0.8, 0.8);
+      const gait = isDown ? 0 : 1;
+      const legLen = isDown ? 7 : 18;
+      const drop = isDown ? 13 : 0;
+      const p1 = stride1 * 0.8 * gait;
+      const p2 = stride2 * 0.8 * gait;
+      const l1 = lift1 * gait;
+      const l2 = lift2 * gait;
+      const sway = isDown ? 0 : bodyY;
+
+      // The collar is the plot. It keeps its light until Mizydia falls, and
+      // goes dead the moment she does.
+      const collarLit = !entity.freed;
+
+      ctx.strokeStyle = RIM;
+      ctx.lineWidth = 2.5;
+
+      // Hind legs, then fore legs: the far pair sits a shade darker so the
+      // body reads as having two sides at this size.
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(-40 + p2, -legLen - l2 - drop, 13, legLen + l2);
+      ctx.strokeRect(-40 + p2, -legLen - l2 - drop, 13, legLen + l2);
+      ctx.fillRect(8 + p1, -legLen - l1 - drop, 13, legLen + l1);
+      ctx.strokeRect(8 + p1, -legLen - l1 - drop, 13, legLen + l1);
+
+      ctx.fillStyle = HIDE;
+      ctx.fillRect(-30 + p1, -legLen - l1 - drop, 14, legLen + l1);
+      ctx.strokeRect(-30 + p1, -legLen - l1 - drop, 14, legLen + l1);
+      ctx.fillRect(20 + p2, -legLen - l2 - drop, 14, legLen + l2);
+      ctx.strokeRect(20 + p2, -legLen - l2 - drop, 14, legLen + l2);
+
+      // Tan points on the paws, the way the breed wears them.
+      ctx.fillStyle = TAN;
+      ctx.fillRect(-40 + p2, -4 - l2 - drop, 13, 4);
+      ctx.fillRect(8 + p1, -4 - l1 - drop, 13, 4);
+      ctx.fillRect(-30 + p1, -4 - l1 - drop, 14, 4);
+      ctx.fillRect(20 + p2, -4 - l2 - drop, 14, 4);
 
       ctx.save();
-      ctx.translate(0, bodyY);
+      ctx.translate(0, sway - drop);
 
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(-30 + attackSwing * 14, -32, 60, 28);
-      ctx.strokeRect(-30, -32, 60, 28);
+      // Docked stub, back where the tail would be.
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(-52, -legLen - 26, 10, 9);
+      ctx.strokeRect(-52, -legLen - 26, 10, 9);
 
-      ctx.fillRect(20 + attackSwing * 22, -46 + attackSwing * 6, 24, 24);
-      ctx.strokeRect(20, -46, 24, 24);
-      ctx.fillStyle = '#c2410c';
-      ctx.fillRect(30 + attackSwing * 22, -38 + attackSwing * 6, 14, 16);
+      // Barrel. Deeper at the chest end, which is where she puts the weight.
+      ctx.fillStyle = HIDE;
+      ctx.fillRect(-44, -legLen - 30, 72, 30);
+      ctx.strokeRect(-44, -legLen - 30, 72, 30);
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(-44, -legLen - 10, 72, 10);
 
-      ctx.fillStyle = '#eab308';
-      ctx.fillRect(16 + attackSwing * 20, -40 + attackSwing * 6, 7, 20);
+      // Haunch. The back was one flat plank without it, and a Rottweiler is
+      // mostly rear end and shoulder.
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(-46, -legLen - 34, 22, 26);
+      ctx.strokeRect(-46, -legLen - 34, 22, 26);
 
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(26 + attackSwing * 22, -42 + attackSwing * 6, 16, 5);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(32 + attackSwing * 22, -32 + attackSwing * 6, 10, 4);
+      // Chest and belly tan.
+      ctx.fillStyle = TAN;
+      ctx.fillRect(16, -legLen - 20, 12, 18);
 
+      // Body armour: plates over the shoulders and flank, seams lit the same
+      // rust the rest of her kit is lit with.
+      ctx.fillStyle = PLATE;
+      ctx.fillRect(-24, -legLen - 34, 44, 16);
+      ctx.strokeRect(-24, -legLen - 34, 44, 16);
+      ctx.fillStyle = SEAM;
+      ctx.fillRect(-20, -legLen - 30, 36, 3);
+      ctx.fillStyle = PLATE;
+      ctx.fillRect(-40, -legLen - 26, 14, 20);
+      ctx.strokeRect(-40, -legLen - 26, 14, 20);
+
+      // Head, neck and collar ride forward on a lunge.
+      const reach = attackSwing * 20;
+      const nod = isDown ? 16 : attackSwing * 5;
+
+      ctx.save();
+      ctx.translate(reach, nod);
+
+      // Neck. Stretches instead of travelling, so the head can be thrown
+      // forward on a lunge without tearing away from the shoulders.
+      ctx.fillStyle = HIDE;
+      ctx.fillRect(20 - reach, -legLen - 40, 22 + reach, 24);
+      ctx.strokeRect(20 - reach, -legLen - 40, 22 + reach, 24);
+
+      // The collar itself: a heavy band with a housing at the throat.
+      ctx.fillStyle = PLATE;
+      ctx.fillRect(18, -legLen - 32, 26, 10);
+      ctx.strokeRect(18, -legLen - 32, 26, 10);
+      ctx.fillStyle = collarLit ? '#eab308' : '#3f3f46';
+      ctx.fillRect(26, -legLen - 30, 9, 6);
+      if (collarLit) {
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(19, -legLen - 29, 5, 4);
+        ctx.fillRect(38, -legLen - 29, 5, 4);
+      }
+
+      // Skull, muzzle, ears.
+      ctx.fillStyle = HIDE;
+      ctx.fillRect(28, -legLen - 58, 26, 22);
+      ctx.strokeRect(28, -legLen - 58, 26, 22);
+      ctx.fillRect(50, -legLen - 51, 19, 16);
+      ctx.strokeRect(50, -legLen - 51, 19, 16);
+      ctx.fillStyle = TAN;
+      ctx.fillRect(50, -legLen - 42, 19, 7);
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(64, -legLen - 51, 5, 6);
+
+      // Teeth, and only on the lunge. A dog that is always snarling is a
+      // decoration; one that snarls when it commits is a warning.
+      if (attackSwing > 0.15) {
+        ctx.fillStyle = '#f4f4f5';
+        ctx.fillRect(52, -legLen - 42, 15, 4);
+        ctx.fillStyle = HIDE_LOW;
+        ctx.fillRect(56, -legLen - 42, 2, 4);
+        ctx.fillRect(62, -legLen - 42, 2, 4);
+      }
+
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(28, -legLen - 63, 10, 10);
+      ctx.strokeRect(28, -legLen - 63, 10, 10);
+      ctx.fillRect(44, -legLen - 63, 10, 10);
+      ctx.strokeRect(44, -legLen - 63, 10, 10);
+
+      // Tan brow points, and under them the eye. Shut when she is down.
+      ctx.fillStyle = TAN;
+      ctx.fillRect(32, -legLen - 52, 7, 4);
+      ctx.fillRect(45, -legLen - 52, 7, 4);
+      if (isDown) {
+        ctx.fillStyle = HIDE_LOW;
+        ctx.fillRect(42, -legLen - 47, 8, 2);
+      } else {
+        ctx.fillStyle = collarLit ? '#f97316' : '#fef3c7';
+        ctx.fillRect(42, -legLen - 48, 6, 5);
+        ctx.fillStyle = '#0b0b0f';
+        ctx.fillRect(44, -legLen - 47, 2, 3);
+      }
+
+      ctx.restore();
+      ctx.restore();
       ctx.restore();
       break;
     }

@@ -2,9 +2,9 @@ import { createCanvas } from '@napi-rs/canvas';
 import { describe, expect, it } from 'vitest';
 import { renderEntitySprite } from '../game/spriteRenderer';
 import { renderStageBackground } from '../game/stageData';
-import { CHARACTERS } from '../game/characterData';
-import { CharacterId, StageConfig } from '../types';
-import { spriteHero } from './helpers';
+import { CHARACTERS, ENEMIES } from '../game/characterData';
+import { CharacterId, EntityState, StageConfig } from '../types';
+import { spriteEnemy, spriteHero } from './helpers';
 
 /**
  * Silhouette legibility.
@@ -47,7 +47,7 @@ const luminance = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g +
  * such pixel touching a non-sprite neighbour, the difference between the
  * sprite's brightness and the background's is one sample of the edge.
  */
-function edgeContrast(charId: CharacterId, stageType: StageConfig['bgType']): number {
+function edgeContrastOf(subject: EntityState, stageType: StageConfig['bgType']): number {
   const background = createCanvas(WIDTH, HEIGHT);
   const backgroundCtx = background.getContext('2d');
   renderStageBackground(
@@ -65,7 +65,7 @@ function edgeContrast(charId: CharacterId, stageType: StageConfig['bgType']): nu
   composedCtx.translate(WIDTH / 2, GROUND_Y);
   renderEntitySprite(
     composedCtx as unknown as CanvasRenderingContext2D,
-    spriteHero(charId),
+    subject,
     0,
     0,
     0
@@ -109,6 +109,9 @@ function edgeContrast(charId: CharacterId, stageType: StageConfig['bgType']): nu
   return samples === 0 ? 0 : total / samples;
 }
 
+const edgeContrast = (charId: CharacterId, stageType: StageConfig['bgType']) =>
+  edgeContrastOf(spriteHero(charId), stageType);
+
 describe('hero legibility against stage backgrounds', () => {
   for (const stageType of STAGE_TYPES) {
     for (const charId of HEROES) {
@@ -129,4 +132,39 @@ describe('hero legibility against stage backgrounds', () => {
       }
     }
   });
+});
+
+/**
+ * Sayonara, measured the same way the heroes are.
+ *
+ * A black dog in black armour, outlined in the near-black every other enemy is
+ * outlined in, on a nave rendered in black. Run through the arrangement above,
+ * she measured 19.3 on the Neon district and 11.1 on the Mega-Church — two of
+ * the three stages under the threshold the heroes are held to. Nobody had
+ * checked, because the harness only ever looked at the four playable fighters.
+ *
+ * Making her bigger without fixing that would have produced a larger rumour,
+ * so the lighter rim in her sprite is load-bearing and this is what holds it
+ * in place. She now reads 26.8 / 21.8 / 29.5 across the three.
+ *
+ * One fighter still does not pass and is deliberately not asserted on here:
+ * the Trad-Wife Striker reads 11.7 on the Mega-Church. It is real, it predates
+ * this work, and it is somebody's own patch — folding it in would mean
+ * recolouring a sprite in a change about a different one. The Matriarch reads
+ * 32.4 / 43.1 / 26.4 and passes everywhere; an earlier draft of this comment
+ * claimed she failed, which came from measuring her at a stand-in size rather
+ * than her own.
+ */
+describe('Sayonara reads against the stages she fights on', () => {
+  const dog = spriteEnemy('BOSS_SAYONARA', {
+    width: ENEMIES.BOSS_SAYONARA.hitbox.width,
+    height: ENEMIES.BOSS_SAYONARA.hitbox.height,
+  });
+
+  for (const stageType of STAGE_TYPES) {
+    it(`separates from ${stageType}`, () => {
+      const contrast = edgeContrastOf(dog, stageType);
+      expect(contrast, `measured ${contrast.toFixed(1)}`).toBeGreaterThan(MIN_EDGE_CONTRAST);
+    });
+  }
 });
