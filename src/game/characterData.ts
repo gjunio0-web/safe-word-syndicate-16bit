@@ -124,6 +124,21 @@ export interface EnemyInfo {
   power: number;
   attackRange: number;
   color: string;
+  /**
+   * How much room this fighter takes up, in world pixels.
+   *
+   * Size used to be a single question the engine asked at spawn — boss or not
+   * — so every boss inherited one silhouette. That worked while the only boss
+   * standing on two legs was the Matriarch. It read as nonsense the moment the
+   * other one was a dog: Sayonara carried a box half again taller than the
+   * animal drawn inside it, and the name plate that hangs off `height` floated
+   * a clear head above her.
+   *
+   * Declared per fighter and required, so a new enemy cannot quietly inherit
+   * someone else's build. `width` is the one the fight can feel — see
+   * `minSeparationX` in the engine.
+   */
+  hitbox: { width: number; height: number };
   weaponName?: string;
   /**
    * What the fighter looks like and does. The counterpart of a hero's
@@ -155,6 +170,7 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     speed: 1.8,
     power: 10,
     attackRange: 80,
+    hitbox: { width: 60, height: 120 },
     color: '#e5e5ea',
     weaponName: 'Picket Sign',
     description: 'Pressed khakis and polo shirts. March with synchronized, robotic stiffness wielding heavy picket signs.',
@@ -169,6 +185,7 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     speed: 1.4,
     power: 14,
     attackRange: 300,
+    hitbox: { width: 60, height: 120 },
     color: '#a29bfe',
     weaponName: 'Guilt Vials / Repression Darts',
     description: 'Throws slowing splash vials and repression darts that disable hero Power Moves temporarily.',
@@ -183,6 +200,7 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     speed: 2.7,
     power: 16,
     attackRange: 65,
+    hitbox: { width: 60, height: 120 },
     color: '#ff7675',
     weaponName: 'Cast-Iron Skillet & Rolling Pin',
     description: 'Fast and nimble. Uses cast-iron skillets to parry heavy attacks and counter with swift rolling pin strikes.',
@@ -197,6 +215,7 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     speed: 1.2,
     power: 25,
     attackRange: 250,
+    hitbox: { width: 105, height: 150 },
     color: '#d63031',
     weaponName: 'Status Quo Magic & Censure Barriers',
     description: 'Fights behind a mahogany boardroom altar table. Summons Censure Shields and Excommunication waves.',
@@ -211,6 +230,10 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     speed: 2.8,
     power: 20,
     attackRange: 90,
+    // Long and heavy rather than tall: a quadruped reads as a threat across the
+    // floor, not above it. Wider than the Matriarch, and shorter than a
+    // fighter who stands up.
+    hitbox: { width: 140, height: 95 },
     color: '#6c5ce7',
     weaponName: 'Heavy Knockback Tackle',
     description: 'An old female dog under Mizydia\'s control. Knocking out Mizydia\'s spell breaks her leash so she walks away freely!',

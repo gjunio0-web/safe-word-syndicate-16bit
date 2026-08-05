@@ -416,8 +416,8 @@ export class GameEngine {
       suppressedTimer: 0,
       comboHits: 0,
       comboTimer: 0,
-      width: isBoss ? 105 : 60,
-      height: isBoss ? 150 : 120,
+      width: info.hitbox.width,
+      height: info.hitbox.height,
       aiState: 'PATROL',
       aiTimer: 0,
       bossPhase: isBoss ? 1 : undefined,
@@ -933,6 +933,49 @@ export class GameEngine {
     player.prevJumpInput = input.jump;
   }
 
+  /**
+   * Whether this fighter is one of the two bosses.
+   *
+   * Written against `enemyType` rather than a flag on the entity so it stays
+   * true for a boss spawned by a test as well as by a wave.
+   */
+  private isBossEntity(entity: EntityState): boolean {
+    return entity.enemyType?.startsWith('BOSS') ?? false;
+  }
+
+  /**
+   * How far apart two bodies rest, horizontally.
+   *
+   * Everyone who is not a boss keeps the flat spacing this has always used:
+   * one number for two enemies, a wider one when a player is involved. Those
+   * are tuned values, and widening them across the board would loosen every
+   * crowd in the game.
+   *
+   * A boss instead takes up the room its own build says it takes. Half of each
+   * body meeting in the middle is what "she is bigger" has to mean if it is to
+   * mean anything on the floor — before this, `width` drew a shadow and an
+   * overlay and nothing else, so a larger Sayonara would have been larger only
+   * on the screen. The flat value stays as a floor, so this can only ever push
+   * bodies apart, never let them overlap further than they do today.
+   *
+   * The distances this actually moves, for the record, because a comment that
+   * says "bosses take up more room" hides how much: the player rests 100px
+   * from Sayonara and 82.5px from the Matriarch, against 72 for both before.
+   * The largest change is between the two of them — 34px to 122.5px, three and
+   * a half times — which visibly reframes the final fight. Grunt to grunt and
+   * player to grunt do not move at all.
+   *
+   * Depth is deliberately left alone. The walkable band is a couple of hundred
+   * pixels deep and `height` is not a measurement of it, so feeding height in
+   * here would space fighters by a number that describes the wrong axis.
+   */
+  private minSeparationX(a: EntityState, b: EntityState): number {
+    const betweenEnemies = !a.isPlayer && !b.isPlayer;
+    const base = betweenEnemies ? ENEMY_BODY_SEPARATION_X : PLAYER_BODY_SEPARATION_X;
+    if (!this.isBossEntity(a) && !this.isBossEntity(b)) return base;
+    return Math.max(base, (a.width + b.width) / 2);
+  }
+
   private resolveBodyCollisions() {
     const activeEntities = this.entities.filter((e) => e.hp > 0);
     for (let i = 0; i < activeEntities.length; i++) {
@@ -951,7 +994,7 @@ export class GameEngine {
         // Enemies crowd each other more tightly than they crowd the player.
         // A single shared spacing put every attacker outside its own reach.
         const betweenEnemies = !a.isPlayer && !b.isPlayer;
-        const minDx = betweenEnemies ? ENEMY_BODY_SEPARATION_X : PLAYER_BODY_SEPARATION_X;
+        const minDx = this.minSeparationX(a, b);
         const minDy = betweenEnemies ? ENEMY_BODY_SEPARATION_Y : PLAYER_BODY_SEPARATION_Y;
 
         if (absDx < minDx && absDy < minDy) {
@@ -1475,7 +1518,23 @@ export class GameEngine {
       }
     } else {
       // Melee AI (Purity Patrol, Trad-Wife Striker, Bosses)
-      const idealRange = Math.max(75, info.attackRange);
+      // Reach has to clear the distance bodies actually rest at.
+      //
+      // This branch is only entered once the enemy is inside `idealRange`, and
+      // separation decides how close it can ever get. Sayonara declares a
+      // 140px build, which holds her 100px from the player, against an
+      // attackRange of 90: she approached forever and never once swung.
+      // Silently — nothing threw, nothing logged, the suite stayed green.
+      //
+      // The floor keeps a fighter's reach at least as long as its own body
+      // keeps it away, so a build wider than its arm is a shorter fight rather
+      // than a mute one. It is the same trap the spacing comment below already
+      // records: a single shared number put every attacker outside its reach.
+      const idealRange = Math.max(
+        75,
+        info.attackRange,
+        this.minSeparationX(enemy, targetPlayer) + 4
+      );
 
       // No attack slot: hold the standoff ring and wait for one to open.
       // This is what keeps the crowd from shoving the committed attackers out

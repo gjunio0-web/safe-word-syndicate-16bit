@@ -10,9 +10,16 @@ import {
   startEngine,
 } from './helpers';
 import { STAGES } from '../game/stageData';
-import { ARENA_MAX_Y, ARENA_MIN_Y, OUTRO_MAX_FRAMES, STREET_TOP_Y } from '../game/constants';
+import {
+  ARENA_MAX_Y,
+  ARENA_MIN_Y,
+  OUTRO_MAX_FRAMES,
+  PLAYER_BODY_SEPARATION_X,
+  STREET_TOP_Y,
+} from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
+import { EnemyType } from '../types';
 
 describe('combat', () => {
   /**
@@ -815,5 +822,133 @@ describe('attack slots', () => {
     const [gruntId] = idsIn(engine, 'PURITY_PATROL');
     expect(slotsOf(engine).has(dogId), 'a fighter on the floor is not engaging').toBe(false);
     expect(slotsOf(engine).has(gruntId), 'the grunt inherits it').toBe(true);
+  });
+});
+
+/**
+ * Body size is data, and for a boss it is felt on the floor.
+ *
+ * Dimensions used to come from one question asked at spawn — boss or not —
+ * and `width` only ever drew a shadow. Both halves of that are what these
+ * tests pin: the numbers come from the fighter's own entry, and a boss's
+ * number decides how much room it keeps.
+ */
+describe('body size', () => {
+  /** Frames with every enemy's AI held down, so only separation moves bodies. */
+  const settle = (engine: GameEngine, frames = 120) => {
+    for (let i = 0; i < frames; i++) {
+      engine.entities.forEach((e) => {
+        if (!e.isPlayer) e.stunTimer = 10;
+      });
+      engine.update(NEUTRAL);
+    }
+  };
+
+  const restingGap = (type: EnemyType) => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type, dx: 10 }]);
+    settle(engine);
+    const enemy = engine.entities.find((e) => e.enemyType === type)!;
+    return Math.abs(enemy.x - engine.player1!.x);
+  };
+
+  it('spawns every fighter at the size its own entry declares', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    for (const info of Object.values(ENEMIES)) {
+      const spawned = engine.spawnEnemy(info.type, 1000, 300);
+      expect(spawned.width, `${info.name} width`).toBe(info.hitbox.width);
+      expect(spawned.height, `${info.name} height`).toBe(info.hitbox.height);
+    }
+  });
+
+  it('builds Sayonara long and low instead of tall like the Matriarch', () => {
+    const dog = ENEMIES.BOSS_SAYONARA.hitbox;
+    const matriarch = ENEMIES.BOSS_MADAM_MIZYDIA.hitbox;
+    const grunt = ENEMIES.PURITY_PATROL.hitbox;
+    expect(dog.width, 'wider than the woman behind the altar').toBeGreaterThan(matriarch.width);
+    expect(dog.height, 'and shorter than anyone who stands up').toBeLessThan(grunt.height);
+  });
+
+  it('leaves spacing between ordinary fighters exactly where it was', () => {
+    expect(restingGap('PURITY_PATROL')).toBeCloseTo(PLAYER_BODY_SEPARATION_X, 1);
+    expect(restingGap('TRAD_WIFE_STRIKER')).toBeCloseTo(PLAYER_BODY_SEPARATION_X, 1);
+  });
+
+  it('keeps the player further out from a boss, by half of each body', () => {
+    const dog = restingGap('BOSS_SAYONARA');
+    const expected = (ENEMIES.BOSS_SAYONARA.hitbox.width + 60) / 2; // 60 is the hero build
+    expect(dog).toBeCloseTo(expected, 1);
+    expect(dog, 'and further out than a grunt keeps you').toBeGreaterThan(
+      restingGap('PURITY_PATROL')
+    );
+  });
+
+  it('lets every fighter reach the player from where the bodies rest', () => {
+    // The mirror of the check below. A fighter whose own build holds it
+    // further away than it can swing approaches forever and never attacks,
+    // and it fails silently: no throw, no log, a green suite. That is exactly
+    // how Sayonara arrived here, 100px away with 90px of reach.
+    //
+    // Written as behaviour rather than arithmetic on purpose. An earlier
+    // version of this recomputed the engine's own reach formula and compared
+    // it against a term of itself, so it held for a fighter given a 400px
+    // build with the fix removed. It asserted nothing.
+    for (const type of Object.keys(ENEMIES) as EnemyType[]) {
+      const engine = startEngine();
+      advance(engine, 30);
+      stageEnemies(engine, [{ type, dx: 260 }]);
+
+      // Kept upright: once the player falls the engine stops and the
+      // measurement stops with it, which reads the same as never being hit.
+      const full = engine.player1!.hp;
+      let taken = 0;
+      for (let i = 0; i < 900; i++) {
+        engine.update(NEUTRAL);
+        if (engine.player1!.hp < full) taken += full - engine.player1!.hp;
+        engine.player1!.hp = full;
+        engine.player1!.invulnerableTimer = 0;
+      }
+      expect(taken, `${ENEMIES[type].name} never landed anything`).toBeGreaterThan(0);
+    }
+  });
+
+  it('lands hits on a stationary player instead of circling out of range', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx: 300 }]);
+
+    // Kept upright: once the player falls the engine stops and the measurement
+    // stops with it, which reads as "she never attacked" either way.
+    const before = engine.player1!.hp;
+    let taken = 0;
+    for (let i = 0; i < 600; i++) {
+      engine.update(NEUTRAL);
+      if (engine.player1!.hp < before) taken += before - engine.player1!.hp;
+      engine.player1!.hp = before;
+    }
+    expect(taken, 'the boss of the stage has to be able to hurt someone').toBeGreaterThan(0);
+  });
+
+  it('still lets the player land a punch on her from where she rests', () => {
+    // 110 is the punch reach in performPunch — the shorter of the two melee
+    // attacks. A boss you cannot hit without kicking would be a bug, not a
+    // bigger boss.
+    expect(restingGap('BOSS_SAYONARA')).toBeLessThan(110);
+  });
+
+  it('makes the two bosses share the altar instead of standing inside each other', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    advance(engine, 30);
+    stageEnemies(engine, [
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 300 },
+      { type: 'BOSS_SAYONARA', dx: 310 },
+    ]);
+    settle(engine);
+    const mizydia = engine.entities.find((e) => e.enemyType === 'BOSS_MADAM_MIZYDIA')!;
+    const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!;
+    const expected = (mizydia.width + dog.width) / 2;
+    expect(Math.abs(mizydia.x - dog.x)).toBeCloseTo(expected, 1);
   });
 });
