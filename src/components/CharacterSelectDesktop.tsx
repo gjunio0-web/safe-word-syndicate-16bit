@@ -6,6 +6,29 @@ import { CHARACTERS } from '../game/characterData';
 import { Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
+/**
+ * Module scope, both of them, because both derive from module constants and
+ * neither ever changes. Declared inside the component they were rebuilt on
+ * every render with identical contents, which is what made the dependency the
+ * lint rule asked for impossible to give: adding an array whose identity
+ * changes every render would have re-registered the keydown listener every
+ * render.
+ *
+ * MODE_ORDER is here for the same reason as charList even though the rule
+ * never flagged it — it is read inside applyMenuAction rather than in the
+ * effect body, so the dependency analysis does not reach it. Leaving it
+ * behind would have meant fixing the two the linter could see and keeping the
+ * third, in the same file, for no reason other than that nothing complained.
+ */
+const charList = Object.values(CHARACTERS);
+/*
+ * The three modes, in cycling order. Slot switching is deliberately not on the
+ * same axis: mode has three values and slot has two, so cycling the longer
+ * list gets the stick and the binary toggle gets a button. (This note used to
+ * sit beside the declaration inside the component; it moved with it.)
+ */
+const MODE_ORDER: GameMode[] = ['SINGLE', 'AI_COMPANION', 'COOP'];
+
 interface CharacterSelectDesktopProps {
   onSelect: (p1: CharacterId, p2?: CharacterId, mode?: GameMode) => void;
   onBack: () => void;
@@ -44,8 +67,6 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
     },
   };
 
-  const charList = Object.values(CHARACTERS);
-
   // Keyboard navigation support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,6 +102,32 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    /* These four are every piece of state this component holds, and that is
+     * the invariant this array depends on — not a list of what the handler
+     * happens to touch today.
+     *
+     * The lint rule asks for applyMenuAction, handleStart and
+     * selectCharacterForActiveSlot instead. All three are rebuilt on every
+     * render, so listing them would re-register the keydown listener every
+     * render; and all three read only from the four states below, so listing
+     * the states covers the same ground with a stable identity.
+     *
+     * What is left out, in full, because this comment is the inventory and a
+     * partial inventory is worse than none — the next person to audit this
+     * will trust it instead of redoing the count:
+     *   - onSelect, read by handleStart;
+     *   - onBack, read by applyMenuAction.
+     * Both are props captured in the listener's closure. A stale copy of
+     * either would matter if its identity changed without any of these four
+     * states changing, which does not happen today.
+     * (charList and MODE_ORDER used to belong on that list too, until they
+     * moved to module scope where they belonged.)
+     *
+     * The fragile part is that this holds by coincidence of maintenance. Add a
+     * fifth piece of state, read it inside applyMenuAction, and the listener
+     * goes stale while this warning stays word-for-word identical — four names
+     * it already lists. If a useState line is ever added above, add it here
+     * too. */
   }, [mode, activeSlot, selectedP1, selectedP2]);
 
   // Gamepad navigation. There is no separate cursor: moving the stick changes
@@ -94,11 +141,6 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   //   A / Start      begin
   //   B              back
   //
-  // Slot switching moved off the vertical axis because mode has three values
-  // and slot has two: cycling the longer list deserves the stick, and the
-  // binary toggle fits a button.
-  const MODE_ORDER: GameMode[] = ['SINGLE', 'AI_COMPANION', 'COOP'];
-
   // Two controllers means two people choosing at once; below that there is one
   // cursor and everything drives it.
   const padCount = useSyncExternalStore(subscribeGamepadConnection, connectedGamepadCount, () => 0);

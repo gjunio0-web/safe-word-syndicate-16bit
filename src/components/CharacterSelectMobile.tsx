@@ -49,6 +49,19 @@ const SLIDE_MS = 260;
 
 type SpacingTier = 'tight' | 'medium' | 'roomy';
 
+/**
+ * Tiers in the order the layout gives them up, roomiest first.
+ *
+ * Module scope, not component scope. As a `const` inside the component this
+ * array was rebuilt on every render, so its identity changed every time while
+ * its contents never did — which made the effect that reads it report a
+ * missing dependency that could not be added, because adding it would have
+ * re-run the effect on every render. Out here the identity is stable, the
+ * dependency is unnecessary rather than impossible, and the lint warning goes
+ * away because the reason for it does.
+ */
+const TIER_FALLBACK: SpacingTier[] = ['roomy', 'medium', 'tight'];
+
 // Every non-font spacing value in the portrait dossier, per tier. The
 // portrait's own size is decided first and locked (see the effect below,
 // and the DIRETIVA MÁXIMA it's built around) — these tiers only ever
@@ -596,7 +609,6 @@ export const CharacterSelectMobile: React.FC<CharacterSelectMobileProps> = ({ on
   extraSpacingRef.current = extraSpacing;
   const spacingFilledRef = useRef(false);
 
-  const TIER_FALLBACK: SpacingTier[] = ['roomy', 'medium', 'tight'];
   const [tier, setTier] = useState<SpacingTier>('tight');
   const tierRef = useRef<SpacingTier>('tight');
   tierRef.current = tier;
