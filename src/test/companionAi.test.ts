@@ -23,6 +23,7 @@ import {
 } from '../game/companionAi';
 import { PLAYER_BODY_SEPARATION_X } from '../game/constants';
 import { EntityState, GameSettings } from '../types';
+import { CHARACTERS } from '../game/characterData';
 import { startEngine, stageEnemies, NEUTRAL, input } from './helpers';
 import { GameEngine } from '../game/engine';
 import { STAGES } from '../game/stageData';
@@ -447,6 +448,51 @@ describe('companion catch-up', () => {
     // leash beyond the ceiling is a promise no amount of speed can keep.
     expect(LEASH_X + LEASH_TOLERANCE_X).toBeLessThan(TRAIL_CEILING_X);
     expect(CATCH_UP_ENGAGE_X).toBeLessThan(TRAIL_CEILING_X);
+  });
+
+  it('declares a ceiling the engine actually enforces', () => {
+    // The two assertions above only compare the leash against the constant.
+    // This one compares the constant against the engine: two humans, the
+    // slower one holding right and losing ground for the whole traversal, so
+    // nothing but the camera and the clamp decides how far apart they get.
+    // Change the camera lead or the clamp margin without changing the other,
+    // and this is what notices.
+    const engine = startEngine(0, 'FUN_MAKER', 'FEET_MASTER');
+    const hero = engine.player1!;
+    const trailer = engine.player2!;
+    let widest = 0;
+    for (let i = 0; i < 900; i++) {
+      engine.entities = engine.entities.filter((e) => e.isPlayer);
+      engine.update(input({ right: true }), input({ right: true }));
+      widest = Math.max(widest, hero.x - trailer.x);
+    }
+
+    // The trailer is clamped against last frame's camera and measured after
+    // this frame's, so the observed gap carries one frame of the hero's own
+    // speed on top of the geometric ceiling. Anything beyond that slack means
+    // the formula no longer describes the engine.
+    const oneHeroStride = CHARACTERS.FUN_MAKER.stats.speed * 0.9 + 2;
+    expect(widest).toBeGreaterThanOrEqual(TRAIL_CEILING_X);
+    expect(widest).toBeLessThan(TRAIL_CEILING_X + 2 * oneHeroStride);
+  });
+
+  it('switches between walking and running rarely enough to watch', () => {
+    // Collapsing the two thresholds into one leaves the gap where it is, so no
+    // distance assertion can tell the versions apart. What changes is how
+    // often the buddy flips gait: nine times across this traversal with the
+    // band, seventy-nine without it — an animation change most seconds.
+    const engine = startEngine(0, 'FUN_MAKER', 'FEET_MASTER');
+    let flips = 0;
+    let previous = false;
+    for (let i = 0; i < 900; i++) {
+      engine.entities = engine.entities.filter((e) => e.isPlayer);
+      engine.update(input({ right: true }), undefined);
+      if (engine.buddyIsCatchingUp !== previous) {
+        flips++;
+        previous = engine.buddyIsCatchingUp;
+      }
+    }
+    expect(flips).toBeLessThan(25);
   });
 
   it('pulls the buddy off the screen edge in a running engine', () => {
