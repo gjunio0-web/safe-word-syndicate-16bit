@@ -24,6 +24,7 @@ import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { advanceClock, createFrameClock, resetClock } from './game/frameClock';
 import { resolveKeyBinding } from './game/keyboard';
+import { secondFighterFor, secondSlotIsHuman } from './game/modes';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
@@ -540,17 +541,23 @@ export default function App() {
     stageIdx: number,
     p1Override?: CharacterId,
     p2Override?: CharacterId,
-    settingsOverride?: GameSettings
+    settingsOverride?: GameSettings,
+    modeOverride?: GameMode
   ) => {
+    // The mode has to travel as an argument for the same reason the fighters
+    // do: `setGameMode` has not landed yet when the selection screen starts
+    // the match in the same tick, so reading the state here reads the previous
+    // match's mode.
+    const mode = modeOverride ?? gameMode;
     const p1 = p1Override ?? p1Char;
-    const p2 = p2Override !== undefined ? p2Override : p2Char;
+    const p2 = secondFighterFor(mode, p2Override ?? p2Char);
     const stage = STAGES[stageIdx];
     engineRef.current = new GameEngine(
       stage,
       p1,
       p2,
       settingsOverride ?? settings,
-      gameMode === 'COOP'
+      secondSlotIsHuman(mode)
     );
     // Slots are not inherited between matches: co-op and solo assign them
     // differently, and a stale assignment would survive the mode change.
@@ -567,7 +574,7 @@ export default function App() {
     // Difficulty is chosen from the title screen's own modal now, not passed
     // through this screen, so `settings` already holds whatever the player
     // picked and there is nothing left to reconcile here.
-    startStage(0, p1, p2, settings);
+    startStage(0, p1, p2, settings, mode);
   };
 
   const handleNextStage = () => {
