@@ -29,6 +29,8 @@ import {
   PLAYER_PUNCH_REACH,
   CASTING_DAMAGE_MULTIPLIER,
   ARENA_MIN_Y,
+  CAMERA_LEAD_X,
+  PLAYER_CLAMP_MARGIN_X,
   ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
@@ -145,6 +147,16 @@ export class GameEngine {
    * policy stays a pure function of the world it is handed.
    */
   private companionMemory: CompanionMemory = newCompanionMemory();
+
+  /**
+   * Whether the AI buddy is sprinting to close a gap it cannot walk off.
+   *
+   * Exposed because the gait is visible on screen and nothing else reveals it:
+   * the position it settles at is the same either way.
+   */
+  public get buddyIsCatchingUp(): boolean {
+    return this.companionMemory.catchingUp;
+  }
 
   public stageStartBannerTimer: number = 210;
   public bossWarningTimer: number = 0;
@@ -567,8 +579,10 @@ export class GameEngine {
     const leaders = [this.player1, this.player2].filter(
       (p): p is EntityState => !!p && p.hp > 0
     );
-    const leadX = leaders.length ? Math.max(...leaders.map((p) => p.x)) : this.cameraX + 250;
-    const targetCameraX = Math.max(this.cameraX, leadX - 250);
+    const leadX = leaders.length
+      ? Math.max(...leaders.map((p) => p.x))
+      : this.cameraX + CAMERA_LEAD_X;
+    const targetCameraX = Math.max(this.cameraX, leadX - CAMERA_LEAD_X);
 
     // Limit camera scrolling during locked wave battles
     if (this.isWaveActive) {
@@ -582,7 +596,10 @@ export class GameEngine {
     // Keep players inside camera viewport bounds
     this.entities.forEach((ent) => {
       if (ent.isPlayer) {
-        ent.x = Math.max(this.cameraX + 20, Math.min(this.cameraX + 760, ent.x));
+        ent.x = Math.max(
+          this.cameraX + PLAYER_CLAMP_MARGIN_X,
+          Math.min(this.cameraX + 760, ent.x)
+        );
         ent.y = Math.max(ARENA_MIN_Y, Math.min(ARENA_MAX_Y, ent.y)); // Y depth bounds
       } else if (ent.hp > 0 && !ent.freed) {
         // Enforce hard arena boundaries for active enemies: pull inside if knocked/pushed too far out.

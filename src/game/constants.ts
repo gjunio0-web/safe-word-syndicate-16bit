@@ -64,6 +64,23 @@ export const ENEMY_BODY_SEPARATION_X = 34;
 export const ENEMY_BODY_SEPARATION_Y = 14;
 
 /**
+ * How far the camera trails the fighter furthest along the stage.
+ *
+ * The whole stage advances by this rule: waves trigger off cameraX, and the
+ * camera never rewinds. Whoever is in front is steering.
+ */
+export const CAMERA_LEAD_X = 250;
+
+/**
+ * How close to the left edge of the view a player may be pushed.
+ *
+ * Nobody leaves the screen backwards. A fighter slower than the leader is
+ * dragged along this edge rather than left behind, which is what caps how far
+ * apart two fighters can get while the camera is rolling.
+ */
+export const PLAYER_CLAMP_MARGIN_X = 20;
+
+/**
  * How many melee enemies may engage the player at once.
  *
  * Standard beat 'em up pacing: a couple of attackers commit while the rest

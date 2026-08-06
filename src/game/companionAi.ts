@@ -1,6 +1,11 @@
 import { CharacterId, EntityState, PlayerInput } from '../types';
 import { CHARACTERS } from './characterData';
-import { PLAYER_KICK_REACH, PLAYER_PUNCH_REACH } from './constants';
+import {
+  CAMERA_LEAD_X,
+  PLAYER_CLAMP_MARGIN_X,
+  PLAYER_KICK_REACH,
+  PLAYER_PUNCH_REACH,
+} from './constants';
 
 /**
  * The AI buddy's brain.
@@ -92,14 +97,18 @@ export const LEASH_X = 120;
 export const LEASH_TOLERANCE_X = 25;
 
 /**
- * How far the camera runs ahead of the leader, minus the viewport clamp.
+ * How far behind the leader a fighter can possibly be while the camera rolls.
  *
- * The camera sits at `leader − 250` and no player may be left of
- * `cameraX + 20`, so a trailing fighter is dragged along that edge and can
- * never fall more than this far behind. It is the ceiling on any leash: ask
- * for more than this and the engine simply cannot deliver it.
+ * Derived, not chosen: the camera sits CAMERA_LEAD_X behind whoever is in
+ * front, and no player may be pushed left of PLAYER_CLAMP_MARGIN_X, so the
+ * trailing fighter is dragged along that edge at exactly this distance. It is
+ * the ceiling on any leash — ask for more and the engine cannot deliver it.
+ *
+ * Derivation keeps this in step with the camera, but it does not prove the
+ * formula describes what the engine does. A test measures the real gap and
+ * checks it lands on this number.
  */
-export const TRAIL_CEILING_X = 230;
+export const TRAIL_CEILING_X = CAMERA_LEAD_X - PLAYER_CLAMP_MARGIN_X;
 
 /**
  * Gap at which the buddy stops walking and starts running.
