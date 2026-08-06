@@ -258,4 +258,15 @@ export const SAYONARA_BITE_KNOCKBACK = 11;
  * fifteen seconds of being chased, which is the same boss-with-an-off-switch
  * the bite was added to fix, wearing a different hat.
  */
-export const SAYONARA_RETREAT_PATIENCE = 20;
+export const SAYONARA_RETREAT_PATIENCE = 60;
+/**
+ * How long a hit keeps her in the fight rather than looking for a run-up.
+ *
+ * Backing away is the right answer to being followed and the wrong one to
+ * being hit: ground bought from a player who is chasing gets her the charge,
+ * ground bought from a player who is swinging is just taking the hits while
+ * facing away. A second and a half of memory means a player who keeps landing
+ * blows keeps her at close quarters, and one who stops gives her the room
+ * back.
+ */
+export const SAYONARA_PRESSURE_MEMORY = 90;

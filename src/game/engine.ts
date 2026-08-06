@@ -50,6 +50,7 @@ import {
   SAYONARA_BITE_KNOCKDOWN_FRAMES,
   SAYONARA_BITE_KNOCKBACK,
   SAYONARA_RETREAT_PATIENCE,
+  SAYONARA_PRESSURE_MEMORY,
 } from './constants';
 import {
   COMPANION_TUNING,
@@ -1283,6 +1284,11 @@ export class GameEngine {
   private damageEntity(target: EntityState, damage: number, attacker: EntityState) {
     if (target.invulnerableTimer > 0) return;
 
+    // Remember being hit, so the fighter can tell pressure from pursuit.
+    if (target.enemyType === 'BOSS_SAYONARA' && attacker.isPlayer) {
+      target.pressureTimer = SAYONARA_PRESSURE_MEMORY;
+    }
+
     // Casting leaves the Matriarch open.
     //
     // She already roots herself for the half second a wave takes to leave her
@@ -1453,6 +1459,28 @@ export class GameEngine {
 
     // Do not override movement/action if enemy is performing an attack, hurt, or power move
     if (enemy.action !== 'IDLE' && enemy.action !== 'WALK') {
+      // Cooldowns keep running while she is busy or being hit.
+      //
+      // Everything below this line is a decision, and a fighter mid-swing or
+      // mid-flinch has no decision to make — but the countdown to her next one
+      // is not a decision, and freezing it here meant every punch the player
+      // landed also bought them a longer wait for her reply.
+      //
+      // The cost is not mostly the flinch. Against a player attacking in
+      // bursts she spends 34 frames of 1800 in HURT — two per cent — and 562
+      // in this branch altogether, thirty-one per cent, nearly all of it her
+      // own bite. So what the freeze charged her for was chiefly acting at
+      // all, and secondarily being hit. An earlier draft of this comment put
+      // 255 frames and fourteen per cent on HURT alone, which is the whole
+      // branch's share misattributed to one state inside it.
+      //
+      // Action timers are untouched. What ticks is only the wait between one
+      // move and the next.
+      if (enemy.enemyType === 'BOSS_SAYONARA') {
+        enemy.chargeCooldown = Math.max(0, (enemy.chargeCooldown ?? 0) - 1);
+        enemy.biteCooldown = Math.max(0, (enemy.biteCooldown ?? 0) - 1);
+        enemy.pressureTimer = Math.max(0, (enemy.pressureTimer ?? 0) - 1);
+      }
       return;
     }
 
@@ -1479,7 +1507,7 @@ export class GameEngine {
     const arenaMaxX = this.cameraX + 760;
     const isOffScreen = enemy.x < arenaMinX || enemy.x > arenaMaxX;
 
-    // Once a fighter has been in the arena, being outside it is not the same
+    // Once she has fought inside the arena, being outside it is not the same
     // question any more.
     //
     // This branch exists to walk a freshly spawned enemy in from off-screen,
@@ -1492,9 +1520,9 @@ export class GameEngine {
     // the hardest difficulty played as the easiest: the more bodies pushing
     // her, the more of the fight she spent there.
     //
-    // So arrival is remembered. An enemy that has never been in the arena is
-    // still walked in; one that has carries on making its own decisions, and
-    // the position clamp further down is what keeps it on the field.
+    // So arrival is remembered. Enemies that have never been in the arena
+    // still get walked in; enemies that have carry on making their own
+    // decisions, and the position clamp is what keeps them on the field.
     if (!isOffScreen) enemy.hasEnteredArena = true;
 
     if (isOffScreen && !enemy.hasEnteredArena) {
@@ -1680,6 +1708,7 @@ export class GameEngine {
       enemy.facing = dx > 0 ? 'RIGHT' : 'LEFT';
       enemy.vy = Math.abs(dy) > 10 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
       enemy.biteCooldown = Math.max(0, (enemy.biteCooldown ?? 0) - 1);
+      enemy.pressureTimer = Math.max(0, (enemy.pressureTimer ?? 0) - 1);
 
       if (absDx > SAYONARA_CHARGE_MAX_RANGE) {
         enemy.vx = (dx > 0 ? 1 : -1) * info.speed;
@@ -1729,22 +1758,49 @@ export class GameEngine {
         const roomBehind = enemy.x + (dx > 0 ? -1 : 1) * info.speed * 0.75;
         const cornered = roomBehind <= arenaMinX + 70 || roomBehind >= arenaMaxX - 70;
 
-        // Counted in stalled frames rather than elapsed ones: what matters is
-        // not how long she has been backing away but whether backing away is
-        // earning her anything. A player who simply walks after her holds the
-        // gap at the resting distance, and she would otherwise retreat for the
-        // entire fight without ever reaching the band she is retreating
-        // towards — one bite and no charges across fifteen seconds of being
-        // chased, measured. Which is the same boss with an off switch the bite
-        // was added to fix, wearing a different hat.
-        const stalled = absDx <= (enemy.lastGap ?? 0) + 0.5;
-        enemy.lastGap = absDx;
-        const givingUp = (enemy.retreatFrames ?? 0) >= SAYONARA_RETREAT_PATIENCE;
+        // Judged over a window, not frame by frame: the question is whether
+        // backing away is earning her anything, and a single good frame is not
+        // an answer.
+        //
+        // A player who simply walks after her holds the gap at the resting
+        // distance, so without a limit she retreats for the whole fight and
+        // never reaches the band she is retreating towards. The first version
+        // of this compared the gap against the previous frame's and reset the
+        // count the moment it grew, which any real player does constantly —
+        // step in, swing, drift back, step in again. Against a stationary test
+        // player it looked fine; against someone actually playing she managed
+        // one charge and two bites in thirty seconds.
+        //
+        // So she remembers the gap she started backing away from and gives up
+        // if the whole attempt has not bought her the ground it needed.
+        enemy.retreatFrames = (enemy.retreatFrames ?? 0) + 1;
 
-        if (!cornered && !givingUp && enemy.chargeCooldown === 0) {
+        // One second of backing away is all she gets. If the charge band is not
+        // reached by then it is not going to be, and she fights with what she
+        // has.
+        //
+        // An earlier version also asked whether the retreat had bought ground,
+        // reopening the window when it had. It was removed rather than tested:
+        // across every scenario that could be built, the difference between
+        // judging that and not judging it sat inside the noise of the engine's
+        // own dice — small enough that a test pinning it would have been
+        // pinning a seed. A constant that cannot be shown to do anything is
+        // better deleted than documented.
+        const givingUp = enemy.retreatFrames >= SAYONARA_RETREAT_PATIENCE;
+
+        // Someone hitting her is not the same as someone walking after her.
+        //
+        // Both used to end with her backing away, which is the right answer to
+        // exactly one of them: ground bought from a player who is chasing gets
+        // her the run-up, and ground bought from a player who is swinging just
+        // means taking the hits while facing the wrong way. So a recent hit
+        // holds her in the fight — she stops looking for the charge and works
+        // with the jaws until the pressure lets up.
+        const underAttack = (enemy.pressureTimer ?? 0) > 0;
+
+        if (!cornered && !givingUp && !underAttack && enemy.chargeCooldown === 0) {
           enemy.vx = (dx > 0 ? -1 : 1) * info.speed * 0.75;
           enemy.action = 'WALK';
-          enemy.retreatFrames = stalled ? (enemy.retreatFrames ?? 0) + 1 : 0;
         } else if (
           enemy.biteCooldown === 0 &&
           absDx < SAYONARA_BITE_RANGE &&

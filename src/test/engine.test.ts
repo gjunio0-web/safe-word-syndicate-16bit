@@ -1404,3 +1404,106 @@ describe('arena entry', () => {
     expect(dog.x, 'hysteresis is not permission to leave').toBeLessThan(engine.cameraX + 830);
   });
 });
+
+/**
+ * She fights the player who is actually playing.
+ *
+ * Every earlier probe in this file used a stationary player, and against one
+ * she looked healthy: eight charges and eight bites over thirty seconds. In a
+ * real wave, against someone walking in and swinging, she managed one charge
+ * and two bites — the retreat rule read the gap against the previous frame
+ * alone, and a player stepping in and drifting back reset it constantly.
+ */
+describe('Sayonara under pressure', () => {
+  const dogAt = (dx: number) => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx }]);
+    const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!;
+    return { engine, dog };
+  };
+
+  /** Walks in, swings in bursts, and never stops moving. */
+  const pressure = (engine: GameEngine, frames: number) => {
+    const player = engine.player1!;
+    const full = player.hp;
+    let taken = 0;
+    let bites = 0;
+    let previous = '';
+    for (let i = 0; i < frames; i++) {
+      const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA');
+      const gap = dog ? Math.abs(dog.x - player.x) : 9999;
+      engine.update(input({ right: gap > 120, punch: i % 12 < 4 && gap < 160 }));
+      if (player.hp < full) taken += full - player.hp;
+      player.hp = full;
+      player.invulnerableTimer = 0;
+      if (dog) {
+        if (dog.action === 'PUNCH1' && previous !== 'PUNCH1') bites++;
+        previous = dog.action;
+      }
+    }
+    return { taken, bites };
+  };
+
+  it('lands hits on a player who keeps walking into her', () => {
+    const { engine } = dogAt(200);
+    const { taken, bites } = pressure(engine, 1200);
+    expect(bites, 'she managed two in thirty seconds before').toBeGreaterThan(4);
+    expect(taken).toBeGreaterThan(60);
+  });
+
+  it('backs off from a player who follows her, and stands to one who hits her', () => {
+    // Two things that used to end the same way and should not. Ground bought
+    // from someone chasing gets her the run-up; ground bought from someone
+    // swinging is just taking the hits while facing away.
+    const retreatOver = (hit: boolean) => {
+      const { engine, dog } = dogAt(150);
+      const player = engine.player1!;
+      for (let i = 0; i < 20; i++) engine.update(NEUTRAL);
+
+      const away = Math.sign(dog.x - player.x);
+      const startX = dog.x;
+      for (let i = 0; i < 40; i++) {
+        if (hit) dog.pressureTimer = 30;
+        engine.update(NEUTRAL);
+      }
+      return (dog.x - startX) * away;
+    };
+
+    expect(retreatOver(false), 'unhurt, she goes to fetch her run-up').toBeGreaterThan(20);
+    expect(retreatOver(true), 'hurt, she holds her ground').toBeLessThan(5);
+  });
+
+  it('learns it is under attack from being punched, not from being told', () => {
+    // The half of the rule the test above cannot reach: it sets the flag by
+    // hand, so it passes whether or not anything in the engine ever sets it.
+    const { engine, dog } = dogAt(150);
+    const player = engine.player1!;
+    expect(dog.pressureTimer ?? 0, 'nothing has touched her yet').toBe(0);
+
+    for (let i = 0; i < 120 && (dog.pressureTimer ?? 0) === 0; i++) {
+      const gap = Math.abs(dog.x - player.x);
+      engine.update(input({ right: gap > 100, punch: gap < 110 }));
+    }
+
+    expect(dog.pressureTimer ?? 0, 'a landed punch is what tells her').toBeGreaterThan(0);
+  });
+
+  it('does not have her next move pushed back by being hit', () => {
+    const { engine, dog } = dogAt(200);
+    for (let i = 0; i < 30; i++) engine.update(NEUTRAL);
+
+    dog.biteCooldown = 40;
+    dog.chargeCooldown = 40;
+    for (let i = 0; i < 20; i++) {
+      // Held in flinch: this is what a player standing on her produces, and it
+      // used to freeze the countdown to her reply along with everything else.
+      dog.action = 'HURT';
+      dog.actionTimer = 10;
+      engine.update(NEUTRAL);
+    }
+
+    expect(dog.biteCooldown, 'the wait ran while she was being hit').toBeLessThan(40);
+    expect(dog.chargeCooldown).toBeLessThan(40);
+  });
+});

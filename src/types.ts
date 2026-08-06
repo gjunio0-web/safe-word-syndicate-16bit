@@ -119,8 +119,8 @@ export interface EntityState {
   biteCooldown?: number;
   /** Frames of backing away that gained her no ground at all. */
   retreatFrames?: number;
-  /** Gap to the player last frame, to tell a retreat that works from one that does not. */
-  lastGap?: number;
+  /** Frames since a player last landed a hit, while it lasts. */
+  pressureTimer?: number;
   /** Set the first frame this enemy stands inside the arena, and never cleared. */
   hasEnteredArena?: boolean;
   aiTimer?: number;
