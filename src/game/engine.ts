@@ -1479,7 +1479,25 @@ export class GameEngine {
     const arenaMaxX = this.cameraX + 760;
     const isOffScreen = enemy.x < arenaMinX || enemy.x > arenaMaxX;
 
-    if (isOffScreen) {
+    // Once a fighter has been in the arena, being outside it is not the same
+    // question any more.
+    //
+    // This branch exists to walk a freshly spawned enemy in from off-screen,
+    // and it seized control of anyone outside the band for any reason —
+    // including a boss who had backed off to buy herself a run-up. Between the
+    // arena the AI reads (cameraX + 760) and the clamp the engine actually
+    // enforces (cameraX + 830) there is a seventy-pixel strip where a fighter
+    // is physically legal but has no say, and Sayonara spent 902 frames of
+    // 1800 parked in it, marched back and forth, deciding nothing. It is why
+    // the hardest difficulty played as the easiest: the more bodies pushing
+    // her, the more of the fight she spent there.
+    //
+    // So arrival is remembered. An enemy that has never been in the arena is
+    // still walked in; one that has carries on making its own decisions, and
+    // the position clamp further down is what keeps it on the field.
+    if (!isOffScreen) enemy.hasEnteredArena = true;
+
+    if (isOffScreen && !enemy.hasEnteredArena) {
       const targetX = enemy.x < arenaMinX ? arenaMinX + 70 : arenaMaxX - 70;
       enemy.vx = targetX > enemy.x ? info.speed : -info.speed;
       enemy.vy = Math.abs(dy) > 10 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;

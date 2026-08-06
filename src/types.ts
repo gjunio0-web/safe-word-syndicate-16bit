@@ -121,6 +121,8 @@ export interface EntityState {
   retreatFrames?: number;
   /** Gap to the player last frame, to tell a retreat that works from one that does not. */
   lastGap?: number;
+  /** Set the first frame this enemy stands inside the arena, and never cleared. */
+  hasEnteredArena?: boolean;
   aiTimer?: number;
 
   /**

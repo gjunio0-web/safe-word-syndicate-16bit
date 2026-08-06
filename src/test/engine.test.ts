@@ -1312,3 +1312,95 @@ describe('the buddy is help, not a spare life', () => {
     expect(engine.cameraX, 'the corpse dragged the view forward').toBe(before);
   });
 });
+
+/**
+ * Walking in is a one-time job.
+ *
+ * The arena-entry branch was written to march a freshly spawned enemy onto the
+ * screen, and it kept doing it for the rest of the fight: anyone outside the
+ * band the AI reads had its own logic skipped entirely, whether it had just
+ * spawned or had been fighting for twenty seconds and stepped back.
+ */
+describe('arena entry', () => {
+  it('marks a fighter as arrived the first frame it stands inside', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    engine.entities = engine.entities.filter((e) => e.isPlayer);
+    const dog = engine.spawnEnemy('BOSS_SAYONARA', engine.cameraX + 900, 300);
+    expect(dog.hasEnteredArena, 'not yet').toBeFalsy();
+
+    for (let i = 0; i < 240; i++) engine.update(NEUTRAL);
+    expect(dog.x).toBeLessThan(engine.cameraX + 760);
+    expect(dog.hasEnteredArena).toBe(true);
+  });
+
+  it('still walks in a fighter that has never arrived, which is its one job', () => {
+    // Narrowing the branch left its original purpose unguarded: marking every
+    // enemy as arrived on sight kills the escort outright and the rest of this
+    // suite stays green, so the next reader has no way to tell a live branch
+    // from a vestige.
+    //
+    // The two ranged fighters are what it is for. Spawned off-screen left at
+    // the offsets waves actually use, they hold their firing distance and have
+    // no reason to close, so without the escort they never enter at all —
+    // measured at six hundred frames for both, against 55 and 114 with it.
+    for (const type of ['CONVERSION_THERAPIST', 'BOSS_MADAM_MIZYDIA'] as EnemyType[]) {
+      const engine = startEngine();
+      advance(engine, 30);
+      engine.entities = engine.entities.filter((e) => e.isPlayer);
+      const enemy = engine.spawnEnemy(type, engine.cameraX - 40, 300);
+
+      let arrived = -1;
+      for (let i = 0; i < 300 && arrived < 0; i++) {
+        engine.update(NEUTRAL);
+        const rel = enemy.x - engine.cameraX;
+        if (rel >= 40 && rel <= 760) arrived = i;
+      }
+      expect(arrived, `${ENEMIES[type].name} never made it onto the field`).toBeGreaterThan(-1);
+    }
+  });
+
+  it('stops taking the wheel once the fighter has arrived', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    engine.entities = engine.entities.filter((e) => e.isPlayer);
+    const dog = engine.spawnEnemy('BOSS_SAYONARA', engine.cameraX + 600, 300);
+    for (let i = 0; i < 60; i++) engine.update(NEUTRAL);
+    expect(dog.hasEnteredArena, 'sanity: she got here').toBe(true);
+
+    // Both of them held in the strip between the arena the AI reads and the
+    // clamp the engine enforces, close enough that she has an obvious thing to
+    // do. Before this, that strip had no decisions in it: the escort returned
+    // ahead of her branch and she was walked back and forth instead, which
+    // measured as 120 frames of WALK and not one attack.
+    const player = engine.player1!;
+    dog.biteCooldown = 0;
+
+    let bites = 0;
+    let previous = dog.action;
+    for (let i = 0; i < 120; i++) {
+      dog.x = engine.cameraX + 800;
+      player.x = engine.cameraX + 700;
+      engine.update(NEUTRAL);
+      if (dog.action === 'PUNCH1' && previous !== 'PUNCH1') bites++;
+      previous = dog.action;
+      player.hp = player.maxHp;
+      player.invulnerableTimer = 0;
+    }
+    expect(bites, 'she fights from the strip instead of being escorted out of it').toBeGreaterThan(
+      0
+    );
+  });
+
+  it('leaves the position clamp as the thing that keeps her on the field', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    engine.entities = engine.entities.filter((e) => e.isPlayer);
+    const dog = engine.spawnEnemy('BOSS_SAYONARA', engine.cameraX + 600, 300);
+    for (let i = 0; i < 60; i++) engine.update(NEUTRAL);
+
+    dog.x = engine.cameraX + 2000;
+    for (let i = 0; i < 60; i++) engine.update(NEUTRAL);
+    expect(dog.x, 'hysteresis is not permission to leave').toBeLessThan(engine.cameraX + 830);
+  });
+});
