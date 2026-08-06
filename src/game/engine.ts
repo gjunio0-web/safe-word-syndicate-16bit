@@ -513,9 +513,21 @@ export class GameEngine {
     this.updateWaveTriggers();
 
     // Update Player 1
+    //
+    // The match ends when every *human* is down, which is not the same as
+    // every fighter. The condition here used to ask whether player two still
+    // had health, and the AI companion answers yes: a solo player who died
+    // with the buddy alive lost the keyboard and never got a game over. No
+    // input was routed anywhere, nothing revived them, and the fight carried
+    // on around a body — measured at ninety seconds with the stage no closer
+    // to finished, and with the camera anchored to the corpse it never even
+    // started, no wave ever triggering.
+    //
+    // A human second player is different and deliberately unchanged: co-op
+    // continues while either of them is standing.
     if (this.player1 && this.player1.hp > 0) {
       this.updatePlayer(this.player1, p1Input);
-    } else if (this.player1 && this.player1.hp <= 0 && (!this.player2 || this.player2.hp <= 0)) {
+    } else if (this.player1 && this.player1.hp <= 0 && !this.aHumanIsStanding()) {
       this.gameOver = true;
     }
 
@@ -540,10 +552,15 @@ export class GameEngine {
     }
 
     // Update Camera position
-    let leadX = this.player1?.x || 100;
-    if (this.player2 && this.player2.hp > 0 && this.player1) {
-      leadX = Math.max(this.player1.x, this.player2.x);
-    }
+    //
+    // Led by whoever is still standing. A dead player one used to keep his
+    // place in this maximum, which pinned the camera to where he fell: with a
+    // companion still fighting, the stage could not scroll, so no wave ever
+    // triggered and nothing at all happened for as long as anyone waited.
+    const leaders = [this.player1, this.player2].filter(
+      (p): p is EntityState => !!p && p.hp > 0
+    );
+    const leadX = leaders.length ? Math.max(...leaders.map((p) => p.x)) : this.cameraX + 250;
     const targetCameraX = Math.max(this.cameraX, leadX - 250);
 
     // Limit camera scrolling during locked wave battles
@@ -640,6 +657,17 @@ export class GameEngine {
    */
   private effectiveTriggerX(wave: import('../types').WaveConfig): number {
     return Math.min(wave.triggerX, maxWaveTriggerX(this.stage.length));
+  }
+
+  /**
+   * Whether anyone holding a controller is still on their feet.
+   *
+   * The AI companion is not a life. It fights, and it keeps fighting after the
+   * player goes down, but it cannot be the reason the match refuses to end.
+   */
+  private aHumanIsStanding(): boolean {
+    if (this.player1 && this.player1.hp > 0) return true;
+    return this.p2IsHuman && !!this.player2 && this.player2.hp > 0;
   }
 
   /** Player the enemies are currently converging on. */

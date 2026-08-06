@@ -22,7 +22,7 @@ import {
 } from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
-import { EnemyType, EntityState } from '../types';
+import { CharacterId, EnemyType, EntityState } from '../types';
 
 describe('combat', () => {
   /**
@@ -1243,5 +1243,72 @@ describe('Sayonara charges', () => {
     } finally {
       (ENEMIES.PURITY_PATROL as { hitbox: typeof original }).hitbox = original;
     }
+  });
+});
+
+/**
+ * Losing, with a companion on the field.
+ *
+ * Reported from play as "the character stopped answering the keyboard in stage
+ * two". It had not: the player was dead. The match refused to end because the
+ * AI buddy still had health, and a dead fighter is never handed its input, so
+ * the keyboard drove nothing and no game over ever arrived. Stage two is
+ * simply where a player first dies.
+ */
+describe('the buddy is help, not a spare life', () => {
+  const engineWith = (p2: CharacterId | undefined, p2IsHuman: boolean) => {
+    const engine = new GameEngine(STAGES[1], 'FEET_MASTER', p2, undefined, p2IsHuman);
+    engine.setActiveDialogue(null);
+    return engine;
+  };
+
+  it('ends the match when the solo player falls beside a living companion', () => {
+    const engine = engineWith('FUN_MAKER', false);
+    engine.player1!.hp = 0;
+    advance(engine, 5);
+
+    expect(engine.player2!.hp, 'the buddy is still standing').toBeGreaterThan(0);
+    expect(engine.gameOver, 'and the match is over anyway').toBe(true);
+  });
+
+  it('keeps a co-op match running while either person is standing', () => {
+    const engine = engineWith('FUN_MAKER', true);
+    engine.player1!.hp = 0;
+    advance(engine, 5);
+    expect(engine.gameOver, 'the second player still has a fight to finish').toBe(false);
+
+    engine.player2!.hp = 0;
+    advance(engine, 5);
+    expect(engine.gameOver, 'and it ends once both are down').toBe(true);
+  });
+
+  it('still ends a solo match with nobody in the second slot', () => {
+    const engine = engineWith(undefined, false);
+    engine.player1!.hp = 0;
+    advance(engine, 5);
+    expect(engine.gameOver).toBe(true);
+  });
+
+  /**
+   * The camera used to be led by `Math.max(player1.x, player2.x)` with no
+   * regard for whether either was alive, so a body pinned the view where it
+   * fell. Nothing downstream could recover: waves trigger off camera position,
+   * so none ever spawned.
+   */
+  it('follows whoever is still standing, not where the other one fell', () => {
+    const engine = engineWith('FUN_MAKER', true);
+    advance(engine, 30);
+    const fallen = engine.player1!;
+    const survivor = engine.player2!;
+
+    // The body is put well ahead of the survivor, which is the arrangement the
+    // old maximum got wrong: it took the furthest fighter without asking
+    // whether that fighter was alive, and the view left the living one behind.
+    fallen.hp = 0;
+    fallen.x = survivor.x + 900;
+    const before = engine.cameraX;
+    advance(engine, 60);
+
+    expect(engine.cameraX, 'the corpse dragged the view forward').toBe(before);
   });
 });
