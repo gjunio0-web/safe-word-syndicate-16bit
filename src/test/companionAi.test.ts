@@ -9,6 +9,11 @@ import {
   prefersKick,
   canStrike,
   COMPANION_TUNING,
+  catchUpScale,
+  CATCH_UP_ENGAGE_X,
+  CATCH_UP_RELEASE_X,
+  CATCH_UP_MULTIPLIER,
+  TRAIL_CEILING_X,
   POWER_MOVE_COST,
   KICK_MAX_DX,
   LEASH_X,
@@ -18,7 +23,7 @@ import {
 } from '../game/companionAi';
 import { PLAYER_BODY_SEPARATION_X } from '../game/constants';
 import { EntityState, GameSettings } from '../types';
-import { startEngine, stageEnemies, NEUTRAL } from './helpers';
+import { startEngine, stageEnemies, NEUTRAL, input } from './helpers';
 import { GameEngine } from '../game/engine';
 import { STAGES } from '../game/stageData';
 
@@ -385,5 +390,74 @@ describe('companion power move', () => {
       shieldHp: 150,
     });
     expect(shouldPowerMove(self, boss, [boss], tuning)).toBe(true);
+  });
+});
+
+describe('companion catch-up', () => {
+  const ally = (x: number) => at(x, 300);
+
+  it('sprints once the leash band is behind it', () => {
+    const memory = newCompanionMemory();
+    const self = buddy();
+    const hero = ally(self.x + CATCH_UP_ENGAGE_X + 1);
+    expect(catchUpScale(self, hero, true, memory)).toBe(CATCH_UP_MULTIPLIER);
+  });
+
+  it('walks again once back inside the band', () => {
+    const memory = newCompanionMemory();
+    const self = buddy();
+    catchUpScale(self, ally(self.x + CATCH_UP_ENGAGE_X + 1), true, memory);
+    expect(catchUpScale(self, ally(self.x + CATCH_UP_RELEASE_X - 1), true, memory)).toBe(1);
+  });
+
+  it('keeps sprinting between the two thresholds instead of stuttering', () => {
+    // Releasing at the engage line would flip every frame across it. Once
+    // running, it runs until the leash is actually reached.
+    const memory = newCompanionMemory();
+    const self = buddy();
+    catchUpScale(self, ally(self.x + CATCH_UP_ENGAGE_X + 1), true, memory);
+    const between = (CATCH_UP_ENGAGE_X + CATCH_UP_RELEASE_X) / 2;
+    expect(catchUpScale(self, ally(self.x + between), true, memory)).toBe(CATCH_UP_MULTIPLIER);
+  });
+
+  it('never sprints with something to fight', () => {
+    // The exception buys back a traversal the engine cannot walk off. It must
+    // not buy speed in a fight the player would otherwise have to earn.
+    const memory = newCompanionMemory();
+    const self = buddy();
+    expect(catchUpScale(self, ally(self.x + 400), false, memory)).toBe(1);
+    expect(memory.catchingUp).toBe(false);
+  });
+
+  it('never sprints ahead of the hero', () => {
+    const memory = newCompanionMemory();
+    const self = buddy();
+    expect(catchUpScale(self, ally(self.x - 400), true, memory)).toBe(1);
+  });
+
+  it('stands still when there is no hero left to follow', () => {
+    const memory = newCompanionMemory();
+    const self = buddy();
+    expect(catchUpScale(self, null, true, memory)).toBe(1);
+    expect(catchUpScale(self, at(self.x + 400, 300, { hp: 0 }), true, memory)).toBe(1);
+  });
+
+  it('asks for a leash the engine can actually deliver', () => {
+    // The camera drags anyone further back than this to the screen edge, so a
+    // leash beyond the ceiling is a promise no amount of speed can keep.
+    expect(LEASH_X + LEASH_TOLERANCE_X).toBeLessThan(TRAIL_CEILING_X);
+    expect(CATCH_UP_ENGAGE_X).toBeLessThan(TRAIL_CEILING_X);
+  });
+
+  it('pulls the buddy off the screen edge in a running engine', () => {
+    // The original symptom: a slow buddy behind a fast hero, pinned to the
+    // clamp for the whole traversal.
+    const engine = startEngine(0, 'FUN_MAKER', 'FEET_MASTER');
+    const buddyEnt = engine.player2!;
+    for (let i = 0; i < 400; i++) {
+      engine.entities = engine.entities.filter((e) => e.isPlayer);
+      engine.update(input({ right: true }), undefined);
+    }
+    expect(buddyEnt.x - (engine.cameraX + 20)).toBeGreaterThan(40);
   });
 });

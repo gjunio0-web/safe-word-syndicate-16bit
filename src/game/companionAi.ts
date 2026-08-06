@@ -92,6 +92,65 @@ export const LEASH_X = 120;
 export const LEASH_TOLERANCE_X = 25;
 
 /**
+ * How far the camera runs ahead of the leader, minus the viewport clamp.
+ *
+ * The camera sits at `leader − 250` and no player may be left of
+ * `cameraX + 20`, so a trailing fighter is dragged along that edge and can
+ * never fall more than this far behind. It is the ceiling on any leash: ask
+ * for more than this and the engine simply cannot deliver it.
+ */
+export const TRAIL_CEILING_X = 230;
+
+/**
+ * Gap at which the buddy stops walking and starts running.
+ *
+ * A buddy slower than the hero cannot close the leash on foot — the Feet
+ * Master loses 2.7px a frame to a running Fun Maker and ends up pinned to the
+ * screen edge for the whole traversal, animating a walk that goes nowhere.
+ * The thresholds are the leash band itself: sprint the moment the band is
+ * left behind, walk again once back inside it. Anything looser and the buddy
+ * settles at the wrong distance — releasing at 150 left it yo-yoing between
+ * 150 and the 230px ceiling, never reaching the position it was aiming for.
+ */
+export const CATCH_UP_ENGAGE_X = LEASH_X + LEASH_TOLERANCE_X;
+export const CATCH_UP_RELEASE_X = LEASH_X;
+
+/**
+ * How much faster the buddy moves while catching up.
+ *
+ * This is the one place the buddy stops playing by the hero's rules, and it is
+ * deliberate: no honest input can outrun a faster character. 2x clears the
+ * widest speed gap in the roster (3.8 against 6.5) with room to actually gain
+ * ground rather than merely hold station. It only ever applies while following
+ * with nothing to fight, so it can never win a fight the player would lose.
+ */
+export const CATCH_UP_MULTIPLIER = 2;
+
+/**
+ * Whether the buddy should be sprinting this frame, with hysteresis.
+ *
+ * Only while following: a buddy that has something to punch is where it needs
+ * to be already.
+ */
+export function catchUpScale(
+  self: EntityState,
+  ally: EntityState | null,
+  following: boolean,
+  memory: CompanionMemory
+): number {
+  if (!following || !ally || ally.hp <= 0) {
+    memory.catchingUp = false;
+    return 1;
+  }
+
+  const behind = ally.x - self.x;
+  if (behind > CATCH_UP_ENGAGE_X) memory.catchingUp = true;
+  else if (behind < CATCH_UP_RELEASE_X) memory.catchingUp = false;
+
+  return memory.catchingUp ? CATCH_UP_MULTIPLIER : 1;
+}
+
+/**
  * What the buddy is doing this frame.
  *
  * Named because "the companion is stuck" is a sentence someone will say about
@@ -107,9 +166,21 @@ const BUSY_ACTIONS = ['HURT', 'KNOCKDOWN', 'POWER_MOVE', 'BITING', 'RECOVERY'];
 export interface CompanionMemory {
   targetId: string | null;
   strikeCooldown: number;
+  /**
+   * Whether the buddy is currently sprinting to close a gap it cannot walk off.
+   *
+   * Lives in memory rather than being recomputed because the engine reads it
+   * after the policy has run: the decision of how fast to move belongs with
+   * the decision of where to move, and both are made in one place per frame.
+   */
+  catchingUp: boolean;
 }
 
-export const newCompanionMemory = (): CompanionMemory => ({ targetId: null, strikeCooldown: 0 });
+export const newCompanionMemory = (): CompanionMemory => ({
+  targetId: null,
+  strikeCooldown: 0,
+  catchingUp: false,
+});
 
 /** How sharp the buddy plays. */
 export interface CompanionTuning {
@@ -339,7 +410,10 @@ export function decideCompanionInput(
   memory.targetId = target?.id ?? null;
   if (memory.strikeCooldown > 0) memory.strikeCooldown--;
 
-  switch (companionState(self, target, tuning.strikeMaxDy)) {
+  const state = companionState(self, target, tuning.strikeMaxDy);
+  catchUpScale(self, ally, state === 'FOLLOW', memory);
+
+  switch (state) {
     case 'RECOVER':
       return { ...IDLE_INPUT };
 

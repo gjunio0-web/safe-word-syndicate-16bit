@@ -54,6 +54,7 @@ import {
 } from './constants';
 import {
   COMPANION_TUNING,
+  CATCH_UP_MULTIPLIER,
   CompanionMemory,
   decideCompanionInput,
   newCompanionMemory,
@@ -539,17 +540,22 @@ export class GameEngine {
     // whose buttons are pressed by code, not a second kind of entity with its
     // own physics.
     if (this.player2 && this.player2.hp > 0) {
-      this.updatePlayer(
-        this.player2,
-        p2Input ??
-          decideCompanionInput(
-            this.player2,
-            this.entities,
-            this.player1,
-            this.companionMemory,
-            COMPANION_TUNING
-          )
-      );
+      if (p2Input) {
+        this.updatePlayer(this.player2, p2Input);
+      } else {
+        // The policy decides direction and pace in the same pass: it already
+        // knows whether there is anything to fight, and the pace depends on
+        // that answer. It leaves the pace on the memory it was handed.
+        const aiInput = decideCompanionInput(
+          this.player2,
+          this.entities,
+          this.player1,
+          this.companionMemory,
+          COMPANION_TUNING
+        );
+        const scale = this.companionMemory.catchingUp ? CATCH_UP_MULTIPLIER : 1;
+        this.updatePlayer(this.player2, aiInput, scale);
+      }
     }
 
     // Update Camera position
@@ -807,7 +813,12 @@ export class GameEngine {
     }
   }
 
-  private updatePlayer(player: EntityState, input: PlayerInput) {
+  /**
+   * `speedScale` is 1 for anyone holding a controller. The AI buddy is the
+   * only caller that passes anything else, and only while it is following with
+   * nothing to fight — see CATCH_UP_MULTIPLIER for why that exception exists.
+   */
+  private updatePlayer(player: EntityState, input: PlayerInput, speedScale: number = 1) {
     if (player.stunTimer > 0) {
       player.stunTimer--;
       return;
@@ -828,7 +839,8 @@ export class GameEngine {
       if (player.comboTimer === 0) player.comboHits = 0;
     }
 
-    const moveSpeed = player.slowTimer > 0 ? 1.5 : CHARACTERS[player.charId!].stats.speed * 0.9 + 2;
+    const moveSpeed =
+      (player.slowTimer > 0 ? 1.5 : CHARACTERS[player.charId!].stats.speed * 0.9 + 2) * speedScale;
 
     // Direct Directional Facing Sync - Always align character facing with movement input
     if (input.left) {
