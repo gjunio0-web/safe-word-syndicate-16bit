@@ -150,6 +150,16 @@ interface PadActivity {
   timestamp: number;
   /** Frame at which that timestamp last changed. */
   lastChangeFrame: number;
+  /**
+   * Whether this entry's data has moved even once since it was first seen.
+   *
+   * Separate from staleness on purpose. Staleness says "quiet lately", which a
+   * controller resting on the table also says. This says "never once alive",
+   * which only a phantom says: an entry the browser lists for a device it is
+   * already listing under another index — a pad paired over Bluetooth and also
+   * seen over its cable — reports the same frozen timestamp forever.
+   */
+  everChanged: boolean;
 }
 
 const padActivity = new Map<number, PadActivity>();
@@ -169,8 +179,18 @@ function trackActivity(pads: Map<number, Gamepad>) {
 
   for (const [index, pad] of pads) {
     const previous = padActivity.get(index);
-    if (!previous || previous.timestamp !== pad.timestamp) {
-      padActivity.set(index, { timestamp: pad.timestamp, lastChangeFrame: assignmentFrame });
+    if (!previous) {
+      padActivity.set(index, {
+        timestamp: pad.timestamp,
+        lastChangeFrame: assignmentFrame,
+        everChanged: false,
+      });
+    } else if (previous.timestamp !== pad.timestamp) {
+      padActivity.set(index, {
+        timestamp: pad.timestamp,
+        lastChangeFrame: assignmentFrame,
+        everChanged: true,
+      });
     }
   }
 
@@ -240,7 +260,7 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
   // exactly like one switched off.
   const slotOrder: Array<'p1' | 'p2'> = coop ? ['p2', 'p1'] : ['p1', 'p2'];
   const held = (slot: 'p1' | 'p2') => (slot === 'p1' ? assignedP1Index : assignedP2Index);
-  const assign = (slot: 'p1' | 'p2', index: number) => {
+  const assign = (slot: 'p1' | 'p2', index: number | null) => {
     if (slot === 'p1') assignedP1Index = index;
     else assignedP2Index = index;
   };
@@ -258,6 +278,37 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
         assign(slot, index);
         break;
       }
+    }
+  }
+
+  // Evict a phantom from an earlier slot in favour of a pad that is alive.
+  //
+  // The loop above hands a free slot to whichever unclaimed pad has the lowest
+  // index, and "lowest index" is not "the one in someone's hands". A DualSense
+  // paired over Bluetooth and also seen over its cable is listed twice, and
+  // nothing says the live entry comes first. The phantom took player one on
+  // the opening frame and kept it: the only route into an occupied slot is the
+  // takeover above, and the real pad — already holding player two — is never
+  // in `unassigned` to attempt it. The player kept a controller the match
+  // would not read, while the title screen worked, because `readMenuState`
+  // merges every pad and never notices a dead one.
+  //
+  // The test is `everChanged`, not staleness. Staleness would evict a player
+  // who set their controller down for three seconds and hand their slot to
+  // player two mid-match. Never having moved at all is something only a
+  // phantom does — a real pad reports the moment it is touched, and the
+  // browser only lists it after a first press in the first place.
+  for (let earlier = 0; earlier < slotOrder.length; earlier++) {
+    const earlierIndex = held(slotOrder[earlier]);
+    if (earlierIndex !== null && padActivity.get(earlierIndex)?.everChanged) continue;
+
+    for (let later = earlier + 1; later < slotOrder.length; later++) {
+      const laterIndex = held(slotOrder[later]);
+      if (laterIndex === null || !padActivity.get(laterIndex)?.everChanged) continue;
+      assign(slotOrder[earlier], laterIndex);
+      if (earlierIndex === null) assign(slotOrder[later], null);
+      else assign(slotOrder[later], earlierIndex);
+      break;
     }
   }
 

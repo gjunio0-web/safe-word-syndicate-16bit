@@ -379,3 +379,66 @@ describe('the staleness window is counted in calls', () => {
     expect(result.p1?.punch).toBe(true);
   });
 });
+
+/**
+ * One controller listed twice.
+ *
+ * Reported from play: the pad worked on the title screen, worked well enough
+ * to start a match, and then did nothing in the fight. The browser listed a
+ * DualSense under two indices — paired over Bluetooth and also seen over its
+ * cable — and the phantom entry, having the lower index, took player one on
+ * the opening frame without ever reporting anything. The real pad landed on
+ * player two and could never move: the only route into an occupied slot needs
+ * the candidate to be unassigned, and it was not.
+ *
+ * The menus hid it, because `readMenuState` merges every listed pad and a dead
+ * entry costs nothing there.
+ */
+describe('a phantom entry never keeps a slot from a real pad', () => {
+  /** A frozen phantom at index 0 and a live pad at index 1, both listed. */
+  const listBoth = (liveTimestamp: number, pressed: boolean) =>
+    connect([
+      pad({ index: 0, timestamp: 100 }),
+      pad({ index: 1, timestamp: liveTimestamp, buttons: pressed ? { 0: true } : {} }),
+    ]);
+
+  it('gives player one to the pad that is actually reporting', () => {
+    listBoth(500, false);
+    readPlayerPads(false);
+
+    // The player presses jump. Only the live entry's data moves.
+    listBoth(516, true);
+    const pads = readPlayerPads(false);
+
+    expect(pads.p1).not.toBeNull();
+    expect(pads.p1!.jump).toBe(true);
+  });
+
+  it('does not strand the real pad on the second slot', () => {
+    listBoth(500, false);
+    readPlayerPads(false);
+    listBoth(516, true);
+    listBoth(532, true);
+    const pads = readPlayerPads(false);
+
+    // Whatever else is true, the phantom must not be the one player one reads.
+    expect(pads.p1).not.toEqual(NEUTRAL);
+  });
+
+  it('leaves two genuine pads where they are', () => {
+    // Both entries report. Neither is a phantom, so nobody is evicted and the
+    // lower index keeps player one — a resting player must never lose their
+    // slot to the other person.
+    connect([pad({ index: 0, timestamp: 100 }), pad({ index: 1, timestamp: 100 })]);
+    readPlayerPads(false);
+    connect([
+      pad({ index: 0, timestamp: 116, buttons: { 1: true } }),
+      pad({ index: 1, timestamp: 116, buttons: { 0: true } }),
+    ]);
+    const pads = readPlayerPads(false);
+
+    expect(pads.p1!.kick).toBe(true);
+    expect(pads.p1!.jump).toBe(false);
+    expect(pads.p2!.jump).toBe(true);
+  });
+});
