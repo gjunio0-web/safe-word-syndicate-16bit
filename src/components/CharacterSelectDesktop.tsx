@@ -3,6 +3,7 @@ import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
 import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
 import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
+import { menuReadersFor } from '../game/modes';
 import { Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
@@ -143,8 +144,12 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   //
   // Two controllers means two people choosing at once; below that there is one
   // cursor and everything drives it.
+  //
+  // Which of the two is live is decided by `menuReadersFor`, not here: the
+  // condition used to be spelled out twice, and the two spellings between them
+  // left a combination — two pads, solo mode — with no reader at all.
   const padCount = useSyncExternalStore(subscribeGamepadConnection, connectedGamepadCount, () => 0);
-  const twoPadsConnected = padCount >= 2;
+  const readers = menuReadersFor(padCount, mode);
 
   /**
    * One menu action, applied to a named slot.
@@ -199,10 +204,10 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
     }
   };
 
-  // Shared cursor: keyboard, and any controller while there is only one.
+  // Shared cursor: keyboard, and every controller in a solo game.
   useGamepadMenu(
     (action) => applyMenuAction(action, mode === 'SINGLE' ? 'P1' : activeSlot, true),
-    !twoPadsConnected
+    readers.shared
   );
 
   // One stream per player once both controllers are present, so each person
@@ -210,7 +215,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   useGamepadPlayerMenus(
     (player, action) => applyMenuAction(action, player === 2 ? 'P2' : 'P1', false),
     mode === 'COOP',
-    twoPadsConnected && mode !== 'SINGLE'
+    readers.perPlayer
   );
 
   /**
