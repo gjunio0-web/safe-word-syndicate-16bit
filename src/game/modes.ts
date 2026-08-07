@@ -42,15 +42,19 @@ export interface MenuReaderPlan {
  * which nothing was listening to. The controller was dead until the player
  * reached for the keyboard.
  *
- * Two pads is not the question on its own. The per-player reader only earns
- * its keep when there are two people to give a cursor each, which is what the
- * mode says. Everything else is one cursor, however many pads are plugged in.
+ * Pad count alone is the wrong question, and so is "not solo" — the first
+ * spelling of this fix used the latter and was still wrong for the buddy mode,
+ * where one person picks both fighters. A second cursor is wanted when a
+ * second *person* is choosing, which co-op means and nothing else does.
+ * Everywhere else there is one player, one cursor, and the shoulder buttons to
+ * move it between the two roster slots — a browser listing one controller
+ * twice must not cost that player their slot switch.
  *
  * Stated as one function returning both flags rather than two expressions in
  * the component, so "exactly one reader is always live" is a property that can
  * be tested instead of a coincidence of two booleans staying in step.
  */
 export function menuReadersFor(padCount: number, mode: GameMode): MenuReaderPlan {
-  const perPlayer = padCount >= 2 && mode !== 'SINGLE';
+  const perPlayer = padCount >= 2 && mode === 'COOP';
   return { shared: !perPlayer, perPlayer };
 }

@@ -57,16 +57,21 @@ describe('the character select screen always has a live reader', () => {
     }
   });
 
-  it('keeps the shared cursor in a solo game however many pads are listed', () => {
+  it('keeps one cursor whenever one person is choosing, however many pads are listed', () => {
     // The reported failure, stated directly: a DualSense listed twice by the
-    // browser puts padCount at 2 with one person holding one controller.
-    expect(menuReadersFor(2, 'SINGLE')).toEqual({ shared: true, perPlayer: false });
-    expect(menuReadersFor(4, 'SINGLE')).toEqual({ shared: true, perPlayer: false });
+    // browser puts padCount at 2 with one person holding one controller. The
+    // buddy mode is the same situation — one person picking both fighters —
+    // and an earlier version of this rule asked "not solo" and split their
+    // cursor in two, costing them the shoulder-button slot switch.
+    for (const padCount of [0, 1, 2, 4]) {
+      expect(menuReadersFor(padCount, 'SINGLE').shared, `solo, ${padCount}`).toBe(true);
+      expect(menuReadersFor(padCount, 'AI_COMPANION').shared, `buddy, ${padCount}`).toBe(true);
+    }
   });
 
-  it('gives each pad its own cursor only when two people are choosing', () => {
+  it('splits the cursors only for two people with two pads', () => {
     expect(menuReadersFor(2, 'COOP')).toEqual({ shared: false, perPlayer: true });
-    expect(menuReadersFor(2, 'AI_COMPANION')).toEqual({ shared: false, perPlayer: true });
+    expect(menuReadersFor(1, 'COOP')).toEqual({ shared: true, perPlayer: false });
   });
 
   it('keeps the shared cursor below two pads, whatever the mode', () => {

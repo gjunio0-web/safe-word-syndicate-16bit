@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
 import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
 import { CharacterId, GameMode } from '../types';
@@ -204,18 +204,26 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
     }
   };
 
-  // Shared cursor: keyboard, and every controller in a solo game.
-  useGamepadMenu(
-    (action) => applyMenuAction(action, mode === 'SINGLE' ? 'P1' : activeSlot, true),
-    readers.shared
-  );
+  // Both readers poll all the time; only the one the plan names acts.
+  //
+  // Switching them on and off instead meant a reader started mid-press, with
+  // no memory of the direction already held, and fired it again as if new.
+  // Since a keypress is what switches readers, the press bounced between them.
+  // Polling both keeps each one's press-edge memory continuous.
+  const readersRef = useRef(readers);
+  readersRef.current = readers;
 
-  // One stream per player once both controllers are present, so each person
-  // moves their own selection instead of both fighting over one cursor.
+  useGamepadMenu((action) => {
+    if (!readersRef.current.shared) return;
+    applyMenuAction(action, mode === 'SINGLE' ? 'P1' : activeSlot, true);
+  });
+
   useGamepadPlayerMenus(
-    (player, action) => applyMenuAction(action, player === 2 ? 'P2' : 'P1', false),
-    mode === 'COOP',
-    readers.perPlayer
+    (player, action) => {
+      if (!readersRef.current.perPlayer) return;
+      applyMenuAction(action, player === 2 ? 'P2' : 'P1', false);
+    },
+    mode === 'COOP'
   );
 
   /**
