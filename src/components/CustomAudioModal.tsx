@@ -32,26 +32,41 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({ isOpen, onCl
    */
   const preOpenTrackRef = React.useRef<string | null>(null);
 
+  /** Puts the real bgm back if a preview left it stopped or on the wrong track. */
+  const restorePreOpenTrack = React.useCallback(() => {
+    const shouldBe = preOpenTrackRef.current;
+    if (shouldBe && isBgmTrack(shouldBe) && (sound.getActiveTrack() !== shouldBe || !sound.isBgmPlaying())) {
+      sound.playBgm(shouldBe, true);
+    }
+  }, []);
+
+  /**
+   * Restoring hangs off `isOpen` rather than off the close buttons.
+   *
+   * It used to live in `handleClose`, which only the X and the footer button
+   * call. The gamepad's BACK shortcut closes overlays by flipping App's own
+   * state instead, so it never ran the restore: the preview kept playing over
+   * whatever screen the jukebox had been opened from, and nothing downstream
+   * ever noticed, because `screen` had not changed.
+   *
+   * Tied to the prop, every way of closing is covered — including ones added
+   * later, which is the point. `handleClose` no longer restores; doing it in
+   * both places is harmless (the check below no-ops the second call) but
+   * leaves two copies of a rule that would drift.
+   */
   React.useEffect(() => {
     if (isOpen) {
       setFileNames(
         Object.fromEntries(BGM_TRACK_IDS.map((id) => [id, sound.getCustomTrackName(id) || '']))
       );
       preOpenTrackRef.current = sound.getActiveTrack();
+      return;
     }
-  }, [isOpen]);
-
-  /** Puts the real bgm back if a preview left it stopped or on the wrong track. */
-  const restorePreOpenTrack = () => {
-    const shouldBe = preOpenTrackRef.current;
-    if (shouldBe && isBgmTrack(shouldBe) && (sound.getActiveTrack() !== shouldBe || !sound.isBgmPlaying())) {
-      sound.playBgm(shouldBe, true);
-    }
-  };
-
-  const handleClose = () => {
     restorePreOpenTrack();
     setPlayingTrack(null);
+  }, [isOpen, restorePreOpenTrack]);
+
+  const handleClose = () => {
     onClose();
   };
 
