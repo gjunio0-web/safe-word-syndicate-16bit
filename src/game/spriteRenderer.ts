@@ -1554,6 +1554,18 @@ function renderEnemySprite(
       const SEAM_DIM = '#7c2d12';
       const TAN_DARK = '#5c3113';
 
+      // Every coordinate below was hand-placed against the 140x95 box. Scaling
+      // the whole build keeps drawing and box in step by construction: one
+      // number, and no chance of a limb that grew while its strap did not.
+      // It scales about her feet, so she grows up and out and stays standing
+      // on the floor rather than sinking into it.
+      //
+      // The matching number is on her hitbox in characterData, with the
+      // measurements that make a tenth the ceiling rather than a preference.
+      const SIZE = 1.11;
+      ctx.save();
+      ctx.scale(SIZE, SIZE);
+
       // Down means down. The walk cycle stops, the legs fold, and the whole
       // body sinks — nothing else in the renderer reads `downed`, so a spared
       // Sayonara used to stand there looking exactly like one still fighting.
@@ -1794,6 +1806,7 @@ function renderEnemySprite(
         ctx.fillRect(43, -legLen - 48, 1.5, 1.5);
       }
 
+      ctx.restore();
       ctx.restore();
       ctx.restore();
       ctx.restore();

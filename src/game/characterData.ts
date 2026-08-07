@@ -233,7 +233,37 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     // Long and heavy rather than tall: a quadruped reads as a threat across the
     // floor, not above it. Wider than the Matriarch, and shorter than a
     // fighter who stands up.
-    hitbox: { width: 140, height: 95 },
+    //
+    // An eleventh larger than the 140x95 she was built at, and the drawing is
+    // scaled to match. The two are one decision: the box is what a punch has
+    // to land inside, so a box that grows alone leaves empty floor that still
+    // counts as dog.
+    //
+    // The size is bounded on both sides, which is why it is an odd number
+    // rather than a round one. Above: the bodies rest half of each width
+    // apart, so every pixel she gains pushes the player out by half of it, and
+    // at 160 wide that rest distance reaches the punch reach — a boss who can
+    // only be kicked is a bug wearing a costume. Below: her outline has to
+    // clear the suburb's stripes, and at some scales it lands on them and the
+    // contrast probe drops under its floor.
+    //
+    // What it costs, said plainly: the punch window is the gap between resting
+    // distance and punch reach, and it shrinks to a quarter of what it was.
+    //
+    //   140 wide -> rests at 100.0, punches from 100.0 to 110  (10.0px)
+    //   150 wide -> rests at 105.0, punches from 105.0 to 110  ( 5.0px)
+    //   155 wide -> rests at 107.5, punches from 107.5 to 110  ( 2.5px)
+    //
+    // Kick reach is 135 and untouched, so she is always kickable. But a player
+    // who wants to punch her now has 2.5px to stand in rather than 10. That is
+    // the trade, not a rounding note. The AI buddy is unaffected: it commits
+    // at 98 and was already past punching range at 140 wide.
+    //
+    // Contrast measured on the detail-pass sprite, which is the drawing this
+    // size is meant to wear: neon 35.7, suburb 24.0, church 43.5, against a
+    // floor of 20. Measured on the sprite without that pass the readings move,
+    // so the two belong together.
+    hitbox: { width: 155, height: 105 },
     color: '#6c5ce7',
     weaponName: 'Heavy Knockback Tackle',
     description: 'An old female dog under Mizydia\'s control. Knocking out Mizydia\'s spell breaks her leash so she walks away freely!',

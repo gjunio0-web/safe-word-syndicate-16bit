@@ -359,8 +359,13 @@ describe('Sayonara reads as the animal her data describes', () => {
     const drawnHeight = -box.minY;
     const overhang = Math.max(Math.abs(box.minX), Math.abs(box.maxX));
 
+    // 0.95 rather than 0.9. At 0.9 the floor sits at 94.5px, and the drawing
+    // at its previous scale is 99px tall — so shrinking the build back while
+    // leaving the box at its new size passed, which is exactly the half of
+    // "box and drawing are one decision" that nothing else here guards. The
+    // real drawing clears 0.95 by more than 10px.
     expect(drawnHeight, `drew ${drawnHeight.toFixed(0)}px tall`).toBeGreaterThan(
-      declared.height * 0.9
+      declared.height * 0.95
     );
     expect(drawnHeight).toBeLessThan(declared.height * 1.25);
     expect(overhang, `reached ${overhang.toFixed(0)}px from centre`).toBeLessThan(
