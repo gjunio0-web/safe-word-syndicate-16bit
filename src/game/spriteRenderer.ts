@@ -1546,6 +1546,13 @@ function renderEnemySprite(
       const PLATE = '#2b2b33';
       const SEAM = '#c2410c';
       const RIM = '#585866';
+      // Detail pass, all of it inside the silhouette she already had. At this
+      // size what reads as mass is density, not extra pixels: a plain block of
+      // hide is a shape, and the same block with a seam, a highlight and a
+      // shadow under it is an animal in armour.
+      const EDGE = '#6f6f80';
+      const SEAM_DIM = '#7c2d12';
+      const TAN_DARK = '#5c3113';
 
       // Down means down. The walk cycle stops, the legs fold, and the whole
       // body sinks — nothing else in the renderer reads `downed`, so a spared
@@ -1619,6 +1626,19 @@ function renderEnemySprite(
       ctx.fillRect(-30 + p1, -4 - l1, 14, 4);
       ctx.fillRect(20 + p2, -4 - l2, 14, 4);
 
+      // Toes. Two dark splits in each paw, which is what stops the foot from
+      // reading as a peg.
+      ctx.fillStyle = TAN_DARK;
+      for (const [px, pl, pw] of [
+        [-40 + p2, l2, 13],
+        [8 + p1, l1, 13],
+        [-30 + p1, l1, 14],
+        [20 + p2, l2, 14],
+      ] as Array<[number, number, number]>) {
+        ctx.fillRect(px + pw / 3, -3 - pl, 1.5, 3);
+        ctx.fillRect(px + (pw * 2) / 3, -3 - pl, 1.5, 3);
+      }
+
       ctx.save();
       ctx.translate(lean, sway);
 
@@ -1634,11 +1654,25 @@ function renderEnemySprite(
       ctx.fillStyle = HIDE_LOW;
       ctx.fillRect(-44, -legLen - 10, 72, 10);
 
+      // Light along the spine and a rib break across the flank. The spine
+      // catches the neon on stage one and the church red on stage three; it is
+      // the same trick that got her over the contrast threshold, used again
+      // for shape instead of legibility.
+      ctx.fillStyle = EDGE;
+      ctx.fillRect(-42, -legLen - 29, 68, 2);
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(-8, -legLen - 26, 2, 14);
+      ctx.fillRect(2, -legLen - 24, 2, 11);
+
       // Haunch. The back was one flat plank without it, and a Rottweiler is
       // mostly rear end and shoulder.
       ctx.fillStyle = HIDE_LOW;
       ctx.fillRect(-46, -legLen - 34, 22, 26);
       ctx.strokeRect(-46, -legLen - 34, 22, 26);
+      // The curve of the haunch, in two steps rather than a curve.
+      ctx.fillStyle = EDGE;
+      ctx.fillRect(-44, -legLen - 32, 12, 2);
+      ctx.fillRect(-44, -legLen - 30, 6, 2);
 
       // Chest and belly tan.
       ctx.fillStyle = TAN;
@@ -1651,9 +1685,23 @@ function renderEnemySprite(
       ctx.strokeRect(-24, -legLen - 34, 44, 16);
       ctx.fillStyle = SEAM;
       ctx.fillRect(-20, -legLen - 30, 36, 3);
+      ctx.fillStyle = SEAM_DIM;
+      ctx.fillRect(-20, -legLen - 22, 36, 2);
+      // Rivets down the plate. Four is enough to say bolted; more turns to
+      // noise at this size.
+      ctx.fillStyle = EDGE;
+      for (const rx of [-21, -8, 5, 16]) ctx.fillRect(rx, -legLen - 33, 2, 2);
       ctx.fillStyle = PLATE;
       ctx.fillRect(-40, -legLen - 26, 14, 20);
       ctx.strokeRect(-40, -legLen - 26, 14, 20);
+      ctx.fillStyle = EDGE;
+      ctx.fillRect(-38, -legLen - 22, 10, 2);
+
+      // Harness strap running from the shoulder plate down under the chest.
+      ctx.fillStyle = PLATE;
+      ctx.fillRect(12, -legLen - 26, 5, 20);
+      ctx.fillStyle = EDGE;
+      ctx.fillRect(12, -legLen - 18, 5, 2);
 
       // Head, neck and collar ride forward on a lunge.
       const reach = attackSwing * 20 + (running ? 16 : winding ? -6 : 0);
@@ -1672,8 +1720,18 @@ function renderEnemySprite(
       ctx.fillStyle = PLATE;
       ctx.fillRect(18, -legLen - 32, 26, 10);
       ctx.strokeRect(18, -legLen - 32, 26, 10);
+      ctx.fillStyle = EDGE;
+      for (const rx of [20, 24, 37, 41]) ctx.fillRect(rx, -legLen - 31, 2, 2);
       ctx.fillStyle = collarLit ? '#eab308' : '#3f3f46';
       ctx.fillRect(26, -legLen - 30, 9, 6);
+
+      // The tag. It hangs whether or not the collar is still lit, because the
+      // tag is hers and the light is Mizydia's.
+      ctx.fillStyle = PLATE;
+      ctx.fillRect(29, -legLen - 22, 6, 5);
+      ctx.strokeRect(29, -legLen - 22, 6, 5);
+      ctx.fillStyle = EDGE;
+      ctx.fillRect(30, -legLen - 21, 4, 1);
       if (collarLit) {
         ctx.fillStyle = '#dc2626';
         ctx.fillRect(19, -legLen - 29, 5, 4);
@@ -1688,6 +1746,13 @@ function renderEnemySprite(
       ctx.strokeRect(50, -legLen - 51, 19, 16);
       ctx.fillStyle = TAN;
       ctx.fillRect(50, -legLen - 42, 19, 7);
+      // Cheek points and the shadow under the jaw, which is what gives the
+      // head a near side and a far side.
+      ctx.fillRect(30, -legLen - 44, 8, 5);
+      ctx.fillStyle = HIDE_LOW;
+      ctx.fillRect(28, -legLen - 40, 24, 4);
+      ctx.fillStyle = EDGE;
+      ctx.fillRect(30, -legLen - 57, 22, 2);
       ctx.fillStyle = HIDE_LOW;
       ctx.fillRect(64, -legLen - 51, 5, 6);
 
@@ -1706,6 +1771,10 @@ function renderEnemySprite(
       ctx.strokeRect(28, -legLen - 63, 10, 10);
       ctx.fillRect(44, -legLen - 63, 10, 10);
       ctx.strokeRect(44, -legLen - 63, 10, 10);
+      // Inner ear, a shade warmer than the hide.
+      ctx.fillStyle = TAN_DARK;
+      ctx.fillRect(31, -legLen - 60, 4, 5);
+      ctx.fillRect(47, -legLen - 60, 4, 5);
 
       // Tan brow points, and under them the eye. Shut when she is down.
       ctx.fillStyle = TAN;
@@ -1719,6 +1788,10 @@ function renderEnemySprite(
         ctx.fillRect(42, -legLen - 48, 6, 5);
         ctx.fillStyle = '#0b0b0f';
         ctx.fillRect(44, -legLen - 47, 2, 3);
+        // A single lit pixel in the eye. It is the difference between a marble
+        // and something looking at you.
+        ctx.fillStyle = '#fff7ed';
+        ctx.fillRect(43, -legLen - 48, 1.5, 1.5);
       }
 
       ctx.restore();
