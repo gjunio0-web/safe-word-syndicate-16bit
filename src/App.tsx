@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import {
   GameScreen,
   CharacterId,
@@ -284,11 +284,39 @@ export default function App() {
     return engine.subscribeBark(() => setActiveBark(engine.activeBark));
   }, [engineVersion]);
 
-  // Requests fullscreen on the first real user gesture, then stops
-  // listening. Deliberately not inside AttractMode's own insert-coin
-  // handler: that screen unmounts on the very same tap, tearing its
-  // listeners down before a touch's pointerup fires. Mounted here instead,
-  // for the whole app's lifetime, so that natural pointerup still lands.
+  /**
+   * Asks for fullscreen, and stays armed until an attempt actually succeeds.
+   *
+   * It used to disarm on the first gesture, before knowing whether the
+   * request was honoured — fine while the only callers were pointer and key
+   * events, which the browser accepts, and wrong the moment a caller might be
+   * refused: one rejected attempt would have spent the single try and left a
+   * player who then reached for the keyboard with no fullscreen at all.
+   *
+   * Disarming on success rather than on attempt also means a player who
+   * deliberately leaves fullscreen is not dragged back in by their next
+   * keypress.
+   */
+  const fullscreenSettled = useRef(false);
+  const requestFullscreen = useCallback(() => {
+    if (fullscreenSettled.current || document.fullscreenElement) return;
+    const request = document.documentElement.requestFullscreen?.();
+    if (!request) return;
+    request.then(
+      () => {
+        fullscreenSettled.current = true;
+      },
+      () => {
+        // Refused. Stay armed: another kind of input may be accepted.
+      }
+    );
+  }, []);
+
+  // Requests fullscreen on the first real user gesture. Deliberately not
+  // inside AttractMode's own insert-coin handler: that screen unmounts on the
+  // very same tap, tearing its listeners down before a touch's pointerup
+  // fires. Mounted here instead, for the whole app's lifetime, so that
+  // natural pointerup still lands.
   //
   // pointerup rather than pointerdown: per the HTML spec, pointerdown only
   // counts as an activation-triggering event for mouse pointerType — touch
@@ -296,18 +324,26 @@ export default function App() {
   // AttractMode's own coin-insert and the audio-unlock arm() below listen,
   // is what silently failed on Android Chrome. keydown covers keyboard.
   useEffect(() => {
-    const requestFs = () => {
-      window.removeEventListener('pointerup', requestFs);
-      window.removeEventListener('keydown', requestFs);
-      document.documentElement.requestFullscreen?.().catch(() => {});
-    };
-    window.addEventListener('pointerup', requestFs);
-    window.addEventListener('keydown', requestFs);
+    window.addEventListener('pointerup', requestFullscreen);
+    window.addEventListener('keydown', requestFullscreen);
     return () => {
-      window.removeEventListener('pointerup', requestFs);
-      window.removeEventListener('keydown', requestFs);
+      window.removeEventListener('pointerup', requestFullscreen);
+      window.removeEventListener('keydown', requestFullscreen);
     };
-  }, []);
+  }, [requestFullscreen]);
+
+  // The controller, which fires no DOM events at all.
+  //
+  // Reported from play: starting the game from the pad never went fullscreen.
+  // The two listeners above are the only callers, and the Gamepad API has no
+  // button events — the pads are polled inside an animation frame — so a
+  // player who only touches the controller never reached the request. It was
+  // not being refused; it was never being made.
+  //
+  // Whether the browser honours a request whose activation came from a pad is
+  // a separate question this does not answer, and the retry above is what
+  // keeps a refusal from costing the keyboard its turn.
+  useGamepadMenu(requestFullscreen);
 
   // An abandoned cabinet goes back to attracting. Without this the attract
   // sequence would only ever be seen once per session.
