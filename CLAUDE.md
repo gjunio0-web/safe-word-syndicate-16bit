@@ -43,6 +43,28 @@ Fechar a lacuna custa `jsdom` e `@testing-library/react` em `devDependencies`
 mais um segundo ambiente no `vitest.config.ts`, mantendo os testes de motor em
 `node`. É decisão de projeto, não pendência de nenhum patch.
 
+### Segunda lacuna: o canvas de teste é mais permissivo que o navegador
+
+`@napi-rs/canvas` **aceita** atalhos de fonte que o CSS rejeita, e o
+`RecordingContext` guarda `font` como string crua. Medido lado a lado:
+
+```
+@napi-rs/canvas   aceita  'black 12px monospace'  ->  black 12px monospace
+Chromium          rejeita 'black 12px monospace'  ->  30px serif
+```
+
+`black` não é peso válido no atalho `font` (válidos: `normal`, `bold`,
+`bolder`, `lighter`, 100–900). No navegador a atribuição inteira é
+descartada e o texto sai na fonte anterior — defeito silencioso, já
+encontrado duas vezes: nos números de dano e no cabeçalho do banner de
+super (`02cd0cf`). **Nenhum teste rodando em `node` consegue enxergá-lo**:
+reinstalar a string quebrada deixa a suíte inteira verde.
+
+São treze `ctx.font` no projeto. Os doze restantes estão corretos hoje, e
+a próxima linha errada também não será pega. Fechar isso é validar o
+atalho no `RecordingContext`, ou uma sonda Playwright — o Chromium do
+ambiente está em `/opt/pw-browsers/chromium`.
+
 ### Enquanto a lacuna existir
 
 Quando uma regra de UI puder morar num módulo puro, vale movê-la para lá. É o
