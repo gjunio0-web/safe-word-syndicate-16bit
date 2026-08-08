@@ -1,4 +1,5 @@
 import { EntityState, CharacterId, EnemyType } from '../types';
+import { CHARACTERS } from './characterData';
 import feetMasterImg from '../assets/images/feet_master_portrait.webp';
 import funMakerImg from '../assets/images/fun_maker_portrait.webp';
 import omegaBikerImg from '../assets/images/omega_biker_portrait.webp';
@@ -69,12 +70,12 @@ export function renderEntitySprite(
   }
 
   // 5. Power Move Cut-In Banner with Full Roster Portrait Artwork
-  if (entity.isPlayer && entity.charId && entity.action === 'POWER_MOVE') {
+  if (entity.isPlayer && entity.charId && isPowerMovePose(entity.action)) {
     renderPowerMoveCutIn(ctx, entity.charId, entity.facing);
   }
 
   // 6. Motion Trail After-Images for Special Moves & Heavy Attacks
-  if (entity.action === 'POWER_MOVE' || entity.action === 'KICK') {
+  if (isPowerMovePose(entity.action) || entity.action === 'KICK') {
     ctx.save();
     ctx.globalAlpha = 0.3;
     ctx.translate(-18, 0);
@@ -96,6 +97,19 @@ export function renderEntitySprite(
   }
 
   ctx.restore();
+}
+
+/**
+ * Whether this pose is a hero's super.
+ *
+ * Angry Corso's is filed under BITING rather than POWER_MOVE — the engine
+ * overwrites the action so his bite reads as its own animation — and both the
+ * cut-in banner and the motion trail used to ask for POWER_MOVE by name. The
+ * result was that the one hero whose super moves him nowhere was also the one
+ * who never got the banner announcing it.
+ */
+function isPowerMovePose(action: EntityState['action']): boolean {
+  return action === 'POWER_MOVE' || action === 'BITING';
 }
 
 // ----------------------------------------------------------------------------
@@ -127,10 +141,12 @@ function renderPowerMoveCutIn(
   ctx.fillRect(-120, -50, 240, 60);
 
   // Theme Colors
-  let borderCol = '#00ffff';
-  if (charId === 'FUN_MAKER') borderCol = '#ff00ff';
-  if (charId === 'OMEGA_BIKER') borderCol = '#ffff00';
-  if (charId === 'ANGRY_CORSO') borderCol = '#ff4e00';
+  //
+  // Read from the roster rather than restated here. The four literals this
+  // replaces were a fifth palette in a game that already had four: the banner
+  // announced Omega Biker in yellow while everything else about him is the red
+  // of a brake light.
+  const borderCol = CHARACTERS[charId].colorTheme.accent;
 
   ctx.strokeStyle = borderCol;
   ctx.lineWidth = 3;
@@ -153,7 +169,10 @@ function renderPowerMoveCutIn(
 
   // OVERDRIVE text
   ctx.fillStyle = borderCol;
-  ctx.font = 'black 12px monospace';
+  // 'black' is not a valid weight in the CSS font shorthand, so the whole
+  // assignment was discarded and the banner's own headline fell back to the
+  // canvas default of 10px sans-serif -- the same bug the damage numbers had.
+  ctx.font = '900 12px monospace';
   ctx.fillText('OVERDRIVE SPECIAL!', -45, -28);
 
   ctx.fillStyle = '#ffffff';
@@ -873,7 +892,8 @@ function renderPlayerSprite(
       if (isHurt) ctx.rotate(0.2);
 
       if (isSpecial) {
-        ctx.fillStyle = 'rgba(245, 166, 35, 0.4)';
+        // Red, which is his: the amber this used to be is Feet Master's accent.
+        ctx.fillStyle = 'rgba(255, 59, 48, 0.4)';
         ctx.beginPath();
         ctx.arc(0, -42, 75, 0, Math.PI * 2);
         ctx.fill();
