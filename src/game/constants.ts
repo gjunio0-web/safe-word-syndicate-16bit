@@ -287,3 +287,29 @@ export const SAYONARA_RETREAT_PATIENCE = 60;
  * back.
  */
 export const SAYONARA_PRESSURE_MEMORY = 90;
+
+/**
+ * How long a power move owns the fighter.
+ *
+ * The number is not new — it is the `actionTimer` the move has always been
+ * given. It is declared here because the active window below is measured
+ * against it, and two frame counts that have to agree should not be a
+ * literal in one file and a literal in another.
+ */
+export const POWER_MOVE_FRAMES = 45;
+
+/**
+ * How many of those frames the move can still connect for.
+ *
+ * A super used to resolve entirely on the frame it was pressed: one pass over
+ * the entity list, then forty-four frames of animation with no hitbox behind
+ * it. Every verb in the roster's own descriptions — dragging enemies into a
+ * cyclone, pinning one down to bite it, sweeping the ones nearby — needs
+ * duration to be true, and a crowd that walks into the swing halfway through
+ * should be swept up by it.
+ *
+ * Each fighter is still hit at most once per activation, so this widens who
+ * the move catches without changing what it costs any single body. The
+ * remaining twenty frames are recovery: committed, no longer dangerous.
+ */
+export const POWER_MOVE_ACTIVE_FRAMES = 25;

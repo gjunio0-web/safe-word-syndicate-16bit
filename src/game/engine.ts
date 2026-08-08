@@ -26,6 +26,8 @@ import {
   ATTACKERS_BY_DIFFICULTY,
   PLAYER_KICK_REACH,
   PLAYER_PUNCH_REACH,
+  POWER_MOVE_FRAMES,
+  POWER_MOVE_ACTIVE_FRAMES,
   CASTING_DAMAGE_MULTIPLIER,
   ARENA_MIN_Y,
   CAMERA_LEAD_X,
@@ -156,6 +158,19 @@ export class GameEngine {
   public get buddyIsCatchingUp(): boolean {
     return this.companionMemory.catchingUp;
   }
+
+  /**
+   * Who each in-flight power move has already caught, keyed by the fighter
+   * swinging it.
+   *
+   * The move stays dangerous for a stretch of frames rather than a single
+   * one, so something has to remember that the grunt already thrown across
+   * the street does not get thrown again on the next frame. Kept on the
+   * engine instead of on `EntityState` because it is bookkeeping for one
+   * action, not something the HUD, the renderer or a save has any business
+   * seeing.
+   */
+  private powerMoveHits: Map<string, Set<string>> = new Map();
 
   public stageStartBannerTimer: number = 210;
   public bossWarningTimer: number = 0;
@@ -855,6 +870,24 @@ export class GameEngine {
       if (player.comboTimer === 0) player.comboHits = 0;
     }
 
+    // A power move already out stays out.
+    //
+    // It keeps connecting for its active window and then spends what is left
+    // of the animation recovering. Returning here rather than falling through
+    // costs nothing — every branch below tests for some other action — and it
+    // also freezes `facing` for the duration, which the directional moves
+    // need: Omega's cone is recomputed every frame now, and a player who
+    // taps back mid-swing should not get to sweep both halves of the street.
+    if (player.action === 'POWER_MOVE' || player.action === 'BITING') {
+      if (player.actionTimer > POWER_MOVE_FRAMES - POWER_MOVE_ACTIVE_FRAMES) {
+        this.resolvePowerMove(player, false);
+      } else {
+        this.powerMoveHits.delete(player.id);
+      }
+      player.prevJumpInput = input.jump;
+      return;
+    }
+
     const moveSpeed =
       (player.slowTimer > 0 ? 1.5 : CHARACTERS[player.charId!].stats.speed * 0.9 + 2) * speedScale;
 
@@ -1189,12 +1222,74 @@ export class GameEngine {
   private performPowerMove(player: EntityState) {
     player.powerMeter -= 30;
     player.action = 'POWER_MOVE';
-    player.actionTimer = 45;
+    player.actionTimer = POWER_MOVE_FRAMES;
     player.invulnerableTimer = 40;
+
+    // A super is a commitment, and it never read as one.
+    //
+    // Nothing here used to touch velocity, and the movement branch in
+    // `updatePlayer` only covers IDLE, WALK and JUMP — so whatever speed the
+    // fighter carried into the move survived all forty-five frames of it.
+    // Pressing the button mid-stride sent Feet Master 232 world pixels down
+    // the street and Fun Maker 397, and because the renderer decides it is
+    // walking from `vx` alone, the walk cycle played on top of the aura: a
+    // 360-degree whirlpool performed by a man strolling.
+    player.vx = 0;
+    player.vy = 0;
 
     sound.playSpecial(sound.calculatePan(player.x, this.cameraX));
 
     const charId = player.charId!;
+
+    // A fresh ledger per activation: the window below hits each body once.
+    this.powerMoveHits.set(player.id, new Set());
+
+    if (charId === 'FUN_MAKER') {
+      player.vz = 10; // Skyward launch — the cyclone rises with him.
+    } else if (charId === 'ANGRY_CORSO') {
+      player.action = 'BITING';
+      sound.playBite();
+    }
+
+    this.resolvePowerMove(player, true);
+
+    if (charId === 'FEET_MASTER') {
+      this.createShockwave(player.x, player.y, '#f5a623');
+    } else if (charId === 'FUN_MAKER') {
+      this.createShockwave(player.x, player.y, '#e2b036');
+    } else if (charId === 'OMEGA_BIKER') {
+      const shockDir = player.facing === 'RIGHT' ? 1 : -1;
+      this.createShockwave(player.x + shockDir * 60, player.y, '#ff3b30');
+    }
+  }
+
+  /**
+   * One frame of an active power move.
+   *
+   * Called on the frame the button is pressed and on every frame of the
+   * active window after it, so a fighter who walks into the swing late is
+   * still swept up by it. The hit ledger is what keeps that from meaning
+   * "damaged once per frame": anyone already in it is skipped.
+   *
+   * A fighter already on the floor can only be caught by the opening frame.
+   * The downed rule — she is hit only when there is nothing else to swing at
+   * — reads the field, and an open swing changes the field it is reading:
+   * the grunt standing over Sayonara is thrown clear of the radius by the
+   * first frame of the same move, and four frames later she is the only one
+   * left in it. Asking the question once, when the button is pressed, keeps
+   * the rule meaning what it was written to mean.
+   */
+  private resolvePowerMove(player: EntityState, opening = false) {
+    const alreadyHit = this.powerMoveHits.get(player.id);
+    if (!alreadyHit) return;
+
+    const charId = player.charId!;
+    const connect = (target: EntityState) => {
+      alreadyHit.add(target.id);
+    };
+    const catchable = (target: EntityState, candidates: EntityState[]) =>
+      !alreadyHit.has(target.id) &&
+      (opening ? this.isValidTarget(target, candidates) : !target.downed);
 
     if (charId === 'FEET_MASTER') {
       // Feet Master: Human Bat Swing (Massive 360 AoE)
@@ -1208,19 +1303,18 @@ export class GameEngine {
         if (
           !target.isPlayer &&
           target.hp > 0 &&
-          this.isValidTarget(target, swingRange) &&
+          catchable(target, swingRange) &&
           Math.hypot(target.x - player.x, target.y - player.y) < 200
         ) {
+          connect(target);
           this.damageEntity(target, 45, player);
           target.vx = target.x > player.x ? 12 : -12;
           target.vz = 6;
         }
       });
-      this.createShockwave(player.x, player.y, '#f5a623');
 
     } else if (charId === 'FUN_MAKER') {
       // Fun Maker: Rollercoaster Hurricane (Spin skyward cyclone)
-      player.vz = 10;
       const cycloneRange = this.entities.filter(
         (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 180
       );
@@ -1228,14 +1322,14 @@ export class GameEngine {
         if (
           !target.isPlayer &&
           target.hp > 0 &&
-          this.isValidTarget(target, cycloneRange) &&
+          catchable(target, cycloneRange) &&
           Math.hypot(target.x - player.x, target.y - player.y) < 180
         ) {
+          connect(target);
           this.damageEntity(target, 40, player);
           target.vz = 9; // Juggle enemies into the air!
         }
       });
-      this.createShockwave(player.x, player.y, '#e2b036');
 
     } else if (charId === 'OMEGA_BIKER') {
       // Omega Biker: Heavy Shockwave Kick (Destroys shields & heavy knockback)
@@ -1248,20 +1342,23 @@ export class GameEngine {
           ((shockDir === 1 && e.x > player.x) || (shockDir === -1 && e.x < player.x))
       );
       this.entities.forEach((target) => {
-        if (!target.isPlayer && target.hp > 0 && this.isValidTarget(target, shockRange) && Math.abs(target.y - player.y) < 60) {
+        if (
+          !target.isPlayer &&
+          target.hp > 0 &&
+          catchable(target, shockRange) &&
+          Math.abs(target.y - player.y) < 60
+        ) {
           if ((shockDir === 1 && target.x > player.x) || (shockDir === -1 && target.x < player.x)) {
+            connect(target);
             if (target.shieldHp) target.shieldHp = 0; // Guard breaker!
             this.damageEntity(target, 50, player);
             target.vx = shockDir * 18; // Massive screen kick
           }
         }
       });
-      this.createShockwave(player.x + shockDir * 60, player.y, '#ff3b30');
 
     } else if (charId === 'ANGRY_CORSO') {
       // Angry Corso: Feral Pup Rush & Bite (Pin down, bite, leech health!)
-      player.action = 'BITING';
-      sound.playBite();
       const biteRange = this.entities.filter(
         (e) => !e.isPlayer && e.hp > 0 && Math.hypot(e.x - player.x, e.y - player.y) < 150
       );
@@ -1269,9 +1366,10 @@ export class GameEngine {
         if (
           !target.isPlayer &&
           target.hp > 0 &&
-          this.isValidTarget(target, biteRange) &&
+          catchable(target, biteRange) &&
           Math.hypot(target.x - player.x, target.y - player.y) < 150
         ) {
+          connect(target);
           this.damageEntity(target, 55, player);
           // Leech health back!
           player.hp = Math.min(player.maxHp, player.hp + 25);

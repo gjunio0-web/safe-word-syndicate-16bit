@@ -19,6 +19,8 @@ import {
   SAYONARA_RECOVER_FRAMES,
   SAYONARA_TACKLE_DEPTH,
   STREET_TOP_Y,
+  POWER_MOVE_FRAMES,
+  POWER_MOVE_ACTIVE_FRAMES,
 } from '../game/constants';
 import { GameEngine } from '../game/engine';
 import { ENEMIES } from '../game/characterData';
@@ -1505,5 +1507,138 @@ describe('Sayonara under pressure', () => {
 
     expect(dog.biteCooldown, 'the wait ran while she was being hit').toBeLessThan(40);
     expect(dog.chargeCooldown).toBeLessThan(40);
+  });
+});
+
+/**
+ * Power moves.
+ *
+ * This whole area had no coverage at all: `performPowerMove` was reachable
+ * from `engine.test.ts` only by accident, and nothing pinned what it did. The
+ * cases below are written against what the roster promises on the character
+ * select screen, since that is the contract the player is shown.
+ */
+describe('power moves', () => {
+  const charged = (charId: CharacterId) => {
+    const engine = startEngine(0, charId);
+    advance(engine, 5);
+    const player = engine.player1!;
+    player.powerMeter = 100;
+    return { engine, player };
+  };
+
+  const HEROES: CharacterId[] = ['FEET_MASTER', 'FUN_MAKER', 'OMEGA_BIKER', 'ANGRY_CORSO'];
+
+  for (const charId of HEROES) {
+    it(`${charId} plants itself instead of sliding through the move`, () => {
+      const { engine, player } = charged(charId);
+      advance(engine, 10, input({ right: true }));
+      const startX = player.x;
+      engine.update(input({ right: true, special: true }));
+
+      // The move owns the fighter: horizontal travel for the whole animation
+      // should be nothing, against the two to four hundred pixels a retained
+      // walking velocity used to carry it.
+      advance(engine, POWER_MOVE_FRAMES - 1, input({ right: true }));
+      expect(Math.abs(player.x - startX), `${charId} drifted mid-super`).toBeLessThan(1);
+    });
+
+    it(`${charId} cannot be steered mid-super`, () => {
+      const { engine, player } = charged(charId);
+      player.facing = 'RIGHT';
+      engine.update(input({ special: true }));
+      advance(engine, 5, input({ left: true }));
+      expect(player.facing, `${charId} turned around mid-swing`).toBe('RIGHT');
+    });
+  }
+
+  it('keeps connecting while the window is open', () => {
+    const { engine, player } = charged('FEET_MASTER');
+    stageEnemies(engine, []);
+    engine.update(input({ special: true }));
+
+    // Nobody was in reach when the swing started.
+    expect(livingEnemies(engine)).toHaveLength(0);
+
+    const latecomer = engine.spawnEnemy('PURITY_PATROL', player.x + 120, player.y);
+    engine.update(NEUTRAL);
+    expect(latecomer.hp, 'walking into an open swing should hurt').toBeLessThan(latecomer.maxHp);
+  });
+
+  it('hits each body once per activation, however long the window is', () => {
+    const { engine } = charged('FEET_MASTER');
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 120 }]);
+    const boss = livingEnemies(engine)[0];
+    boss.shieldHp = 0;
+    const before = boss.hp;
+
+    engine.update(input({ special: true }));
+    const afterFirstFrame = boss.hp;
+    advance(engine, POWER_MOVE_FRAMES);
+
+    expect(afterFirstFrame, 'the swing should land immediately').toBeLessThan(before);
+    expect(boss.hp, 'and never twice on the same body').toBe(afterFirstFrame);
+  });
+
+  it('stops connecting once the active window closes', () => {
+    const { engine, player } = charged('FEET_MASTER');
+    stageEnemies(engine, []);
+    engine.update(input({ special: true }));
+    advance(engine, POWER_MOVE_ACTIVE_FRAMES + 2);
+
+    const latecomer = engine.spawnEnemy('PURITY_PATROL', player.x + 120, player.y);
+    engine.update(NEUTRAL);
+    expect(latecomer.hp, 'recovery frames are not a hitbox').toBe(latecomer.maxHp);
+  });
+
+  it('lets Omega Biker break a censure shield outright', () => {
+    const { engine, player } = charged('OMEGA_BIKER');
+    player.facing = 'RIGHT';
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 120 }]);
+    const boss = livingEnemies(engine)[0];
+    expect(boss.shieldHp).toBeGreaterThan(0);
+
+    engine.update(input({ special: true }));
+    expect(boss.shieldHp, 'the guard breaker is his whole reason to exist').toBe(0);
+  });
+
+  it('spares a downed Sayonara while anyone else is still standing', () => {
+    const { engine } = charged('FEET_MASTER');
+    stageEnemies(engine, [
+      { type: 'BOSS_SAYONARA', dx: 100 },
+      { type: 'PURITY_PATROL', dx: 140 },
+    ]);
+    const dog = engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!;
+    dog.downed = true;
+    const before = dog.hp;
+
+    engine.update(input({ special: true }));
+    advance(engine, POWER_MOVE_FRAMES);
+    expect(dog.hp, 'a wide swing must not finish her off by accident').toBe(before);
+  });
+
+  it('gives Angry Corso his health back once per body, not once per frame', () => {
+    const { engine, player } = charged('ANGRY_CORSO');
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 90 }]);
+    player.hp = 50;
+
+    engine.update(input({ special: true }));
+    const afterBite = player.hp;
+    advance(engine, POWER_MOVE_FRAMES);
+
+    expect(afterBite, 'the bite leeches').toBeGreaterThan(50);
+    expect(player.hp, 'and leeches once').toBe(afterBite);
+  });
+
+  it('sends Fun Maker skyward and brings him back down', () => {
+    const { engine, player } = charged('FUN_MAKER');
+    engine.update(input({ special: true }));
+    let peak = 0;
+    for (let i = 0; i < POWER_MOVE_FRAMES; i++) {
+      engine.update(NEUTRAL);
+      peak = Math.max(peak, player.z);
+    }
+    expect(peak, 'the cyclone rises').toBeGreaterThan(50);
+    expect(player.z, 'and lands before the animation is over').toBe(0);
   });
 });
