@@ -1201,13 +1201,42 @@ function renderPlayerSprite(
 // Grounded leg articulation & step mechanics
 // ----------------------------------------------------------------------------
 
+/**
+ * Per-enemy outline colour, defaulting to the near-black every grunt shares.
+ *
+ * The dark line is policy, not accident: heroes carry the bright outlines and
+ * the crowd is meant to sit behind them. But the line only works where there
+ * is something behind it to work against, and the Trad-Wife Striker is a dark
+ * figure in a dark dress traced in near-black, standing in a nave rendered in
+ * black. Measured through `edgeContrastOf`, she read 11.7 on the Mega-Church
+ * against a threshold of 20, and cleared Suburbia by 0.3. She was a rumour on
+ * one stage and nearly one on another.
+ *
+ * The rose here follows her own dress rather than introducing a new hue, and
+ * is deliberately dim: it lifts her to 44.0 / 35.0 / 41.3. An earlier draft of
+ * this comment claimed that put her in with the other two grunts, and that was
+ * wrong twice over — their range is 30.4 to 41.8, not 32.8 to 41.8, and 44.0
+ * clears all nine of their readings. She is now the brightest grunt in the
+ * game, which was a choice and should read as one.
+ *
+ * What holds is the part that matters: no enemy outshines the dimmest hero on
+ * the stage they share. Against Fun Maker she keeps 6.9 points of headroom on
+ * the Neon stage, where her 44.0 is measured. That rule is no longer a promise
+ * in a comment — `spriteLegibility.test.ts` asserts it for every enemy on
+ * every stage, because a comment is what a palette tweak walks straight
+ * through without anything saying a word.
+ */
+const ENEMY_OUTLINE: Partial<Record<EnemyType, string>> = {
+  TRAD_WIFE_STRIKER: '#e8829a',
+};
+
 function renderEnemySprite(
   ctx: CanvasRenderingContext2D,
   type: EnemyType,
   entity: EntityState,
   simTimeMs: number
 ) {
-  ctx.strokeStyle = '#090810';
+  ctx.strokeStyle = ENEMY_OUTLINE[type] ?? '#090810';
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
 
