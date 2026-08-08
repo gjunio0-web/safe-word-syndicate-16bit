@@ -820,6 +820,11 @@ export default function App() {
               crtFilter={settings.crtFilter}
               showHitboxes={settings.showHitboxes}
               touchControls={isMobile}
+              // Same source as the touch controls today, deliberately passed
+              // as its own question: a tablet, or a compact desktop layout,
+              // can answer these two differently later without either flag
+              // having to be untangled from the other first.
+              compactHud={isMobile}
             />
 
             {activeBark && !activeDialogue && <BarkOverlay line={activeBark} />}

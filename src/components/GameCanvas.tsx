@@ -18,6 +18,15 @@ interface GameCanvasProps {
    * a device query inside a component that is otherwise pure presentation.
    */
   touchControls?: boolean;
+  /**
+   * Whether the boss bar draws in its compact form.
+   *
+   * Separate from `touchControls`, which answers whether there are thumb
+   * clusters in the way. This answers whether the screen is small enough that
+   * a panel is too much furniture. They come from the same source today; a
+   * tablet is why they should not come from the same flag.
+   */
+  compactHud?: boolean;
 }
 
 // Stable across renders: useSyncExternalStore resubscribes when handed
@@ -30,6 +39,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   crtFilter,
   showHitboxes = false,
   touchControls = false,
+  compactHud = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -62,6 +72,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     areaHeight: area.height,
     landscape: area.width >= area.height,
     touchControls,
+    compact: compactHud,
   });
 
   useEffect(() => {
@@ -659,6 +670,84 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             : hostage
               ? 'SAYONARA — UNDER CONTROL'
               : 'PURITY COMMANDER';
+
+        if (compactHud) {
+          /*
+           * The phone form.
+           *
+           * The panel is gone — no border, no glow, no rounded box, no centred
+           * layout, no pinging dot. What is left is the sentence and the
+           * track, which is what the bar was ever for: who this is, what state
+           * they are in, and how much of them is left. A faint scrim survives
+           * so a bright frame of the fight cannot swallow the label.
+           *
+           * The colour is not decoration and does not go: amber against
+           * crimson, with the words UNDER CONTROL, is the only thing on screen
+           * separating the hostage from the enemy. The HP numbers stay too —
+           * they cost width, and width is not the scarce axis here. The shield
+           * folds into the same row as a count instead of taking a line of its
+           * own.
+           *
+           * The instruction line is the one thing that moves rather than
+           * shrinks. See below.
+           */
+          return (
+            <div
+              style={{ bottom: layout.bossBarBottom, maxWidth: layout.bossBarMaxWidth }}
+              className="absolute left-1/2 -translate-x-1/2 w-4/5 px-2 py-1 rounded-md bg-black/55 pointer-events-none z-30 font-mono"
+            >
+              <div className="flex justify-between items-baseline gap-2 text-[10px] leading-none mb-1">
+                <span
+                  className={`font-black uppercase tracking-wider truncate ${
+                    hostage ? 'text-amber-400' : 'text-red-500'
+                  }`}
+                >
+                  {hostage ? '⛓️' : '⚠️'} {name}
+                </span>
+                <span className="text-amber-300 font-bold shrink-0">
+                  {boss.shieldHp !== undefined && boss.shieldHp > 0 && (
+                    <span className="text-cyan-400">🛡️{boss.shieldHp} </span>
+                  )}
+                  {Math.ceil(boss.hp)}/{boss.maxHp}
+                </span>
+              </div>
+
+              <div className="w-full h-2 bg-zinc-950/90 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-150 ${
+                    hostage
+                      ? 'bg-gradient-to-r from-amber-600 to-yellow-300'
+                      : 'bg-gradient-to-r from-red-700 to-amber-500'
+                  }`}
+                  style={{ width: `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%` }}
+                />
+              </div>
+
+              {/*
+                * The instruction, on a fuse rather than a clock.
+                *
+                * It is the difference between the two endings and it cannot
+                * live permanently in a bar this size, so it shows at the start
+                * of the fight and goes when the fight is joined. "Joined" is
+                * the first damage anyone has done to her, not a timer: a timer
+                * runs during the boss dialogue, which freezes the simulation
+                * but not the wall clock, so a player who reads the overlay
+                * would come back to an instruction that had already expired
+                * without a single frame of fighting having happened.
+                *
+                * Read off hostageOnField rather than off this bar's own boss,
+                * because in the final stage this bar is Mizydia's and Sayonara
+                * is the one standing next to her — which is exactly the fight
+                * where the choice exists.
+                */}
+              {hud.hostageOnField && hud.hostageUntouched && (
+                <div className="mt-0.5 text-[9px] leading-tight text-amber-300/80 font-bold tracking-wide text-center">
+                  BREAK MIZYDIA'S SPELL TO FREE HER
+                </div>
+              )}
+            </div>
+          );
+        }
 
         return (
           <div
