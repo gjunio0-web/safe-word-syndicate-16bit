@@ -6,6 +6,7 @@ import {
   PLAYER_KICK_REACH,
   PLAYER_PUNCH_REACH,
 } from './constants';
+import { restingSeparationX } from './spacing';
 
 /**
  * The AI buddy's brain.
@@ -68,6 +69,30 @@ export const STRIKE_MAX_DY = 40;
  * combat tuning moves the reach, this moves with it.
  */
 export const STRIKE_MAX_DX = PLAYER_PUNCH_REACH - 12;
+
+/**
+ * The same band, raised to clear the target's own body.
+ *
+ * A punch decision written as a flat number assumes every opponent rests the
+ * same distance away, and they do not: a wide build claims half of itself, so
+ * Sayonara at 155 holds the buddy 107.5px off while the flat band commits at
+ * 98. The buddy walked into a wall it could not cross and never punched her.
+ * It was invisible because the kick still reached and her charge closed the
+ * gap on its own — landing hits by two accidents rather than by decision.
+ *
+ * The floor is the resting distance plus a pixel of settle, capped at the real
+ * reach: past that a punch is air no matter what the policy wants, and the
+ * band collapses to the reach so the outer-band check hands the swing to the
+ * kick. That cap is the honest answer for an opponent too wide to punch, and
+ * it is why this is not simply `resting + 2`.
+ *
+ * Mirrors the floor updateEnemyAi already puts under idealRange, from the same
+ * ruler, for the same reason.
+ */
+export function strikeBandFor(self: EntityState, target: EntityState): number {
+  const floor = restingSeparationX(self, target) + 1;
+  return Math.min(Math.max(STRIKE_MAX_DX, floor), PLAYER_PUNCH_REACH);
+}
 
 /**
  * How much closer a new enemy must be before the buddy drops the one it is
@@ -442,7 +467,7 @@ export function decideCompanionInput(
       // The kick reaches further and hits harder at the cost of ten more
       // frames of commitment, so it opens from the outer band; inside, it is
       // down to which the hero is built for.
-      const outerBand = Math.abs(target!.x - self.x) > STRIKE_MAX_DX;
+      const outerBand = Math.abs(target!.x - self.x) > strikeBandFor(self, target!);
       const useKick = outerBand || prefersKick(self.charId);
       return { ...approach, punch: !useKick, kick: useKick };
     }

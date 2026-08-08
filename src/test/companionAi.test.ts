@@ -14,6 +14,7 @@ import {
   CATCH_UP_RELEASE_X,
   CATCH_UP_MULTIPLIER,
   TRAIL_CEILING_X,
+  strikeBandFor,
   POWER_MOVE_COST,
   KICK_MAX_DX,
   LEASH_X,
@@ -21,7 +22,7 @@ import {
   STRIKE_MAX_DX,
   STRIKE_MAX_DY,
 } from '../game/companionAi';
-import { PLAYER_BODY_SEPARATION_X } from '../game/constants';
+import { PLAYER_BODY_SEPARATION_X, PLAYER_PUNCH_REACH } from '../game/constants';
 import { EntityState, GameSettings } from '../types';
 import { CHARACTERS } from '../game/characterData';
 import { startEngine, stageEnemies, NEUTRAL, input } from './helpers';
@@ -505,5 +506,65 @@ describe('companion catch-up', () => {
       engine.update(input({ right: true }), undefined);
     }
     expect(buddyEnt.x - (engine.cameraX + 20)).toBeGreaterThan(40);
+  });
+});
+
+describe('companion reach against a wide build', () => {
+  /**
+   * Runs the buddy against one enemy and reports which of its moves actually
+   * took health off. Damage is attributed to the action that just started,
+   * because a move deals its damage on the frame it opens.
+   *
+   * The probe holds three things still, each of which has silently ruined a
+   * measurement in this file's history: nobody is dragged by hand, so the
+   * camera never scrolls and no other wave arrives to muddy who hit what; both
+   * fighters are kept alive, so a mid-run death cannot read as "never
+   * attacked"; and the target is kept off the floor, since a downed enemy
+   * stops being a target at all.
+   */
+  function damageByMove(enemyType: 'BOSS_SAYONARA' | 'PURITY_PATROL'): Record<string, number> {
+    const engine = startEngine(0, 'FEET_MASTER', 'OMEGA_BIKER');
+    engine.entities = engine.entities.filter((e) => e.isPlayer);
+    const hero = engine.player1!;
+    const buddy = engine.player2!;
+    engine.spawnEnemy(enemyType, buddy.x + 260, buddy.y);
+    const target = engine.entities.find((e) => e.enemyType === enemyType)!;
+
+    const hits: Record<string, number> = {};
+    for (let i = 0; i < 2000; i++) {
+      hero.hp = hero.maxHp;
+      buddy.hp = buddy.maxHp;
+      target.hp = Math.max(target.hp, Math.round(target.maxHp / 2));
+      const before = target.hp;
+      // The hero holds nothing, so every point of damage is the buddy's.
+      engine.update(NEUTRAL, undefined);
+      if (target.hp < before) hits[buddy.action] = (hits[buddy.action] ?? 0) + 1;
+    }
+    return hits;
+  }
+
+  it('lands punches on a boss whose build outreaches the flat band', () => {
+    // Sayonara at 155 wide holds the buddy 107.5px off; the flat band commits
+    // at 98. Before the floor this came back with every point of damage from
+    // the kick and not one punch — and it looked fine in play, because the
+    // kick reaches and her charge closes the gap by itself.
+    const hits = damageByMove('BOSS_SAYONARA');
+    const punches = (hits.PUNCH1 ?? 0) + (hits.PUNCH2 ?? 0);
+    expect(punches, `damage by move: ${JSON.stringify(hits)}`).toBeGreaterThan(0);
+  });
+
+  it('still punches a default build, so the floor did not just widen everything', () => {
+    const hits = damageByMove('PURITY_PATROL');
+    const punches = (hits.PUNCH1 ?? 0) + (hits.PUNCH2 ?? 0);
+    expect(punches, `damage by move: ${JSON.stringify(hits)}`).toBeGreaterThan(0);
+  });
+
+  it('gives up the punch rather than swinging at air it cannot reach', () => {
+    // An opponent too wide to punch at all: the band stops at the real reach
+    // instead of chasing the body, so the outer-band check hands it to the
+    // kick. Without the cap the buddy would commit to a punch that is air.
+    const self = buddy();
+    const monster = at(self.x + 200, self.y, { width: 400 });
+    expect(strikeBandFor(self, monster)).toBe(PLAYER_PUNCH_REACH);
   });
 });
