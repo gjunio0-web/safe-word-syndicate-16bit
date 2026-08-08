@@ -152,6 +152,23 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   const readers = menuReadersFor(padCount, mode);
 
   /**
+   * Both slot boxes read as chosen, rather than one lit and one greyed out.
+   *
+   * The border was doing two jobs at once: naming whose slot it is, and
+   * marking where the cursor sits. In co-op that read as a mistake — both
+   * fighters have been picked, and the screen showed one of them dimmed as if
+   * it were still empty. Each box now carries its own accent the whole time,
+   * magenta for player one and cyan for player two, matching the labels
+   * already inside them.
+   *
+   * The SELECTING badge goes with it, in co-op only: with two pads there are
+   * two cursors, so a badge naming one of them is telling the wrong story. The
+   * buddy mode keeps both behaviours, because there one person really is
+   * moving a single cursor between the two slots and needs to see where it is.
+   */
+  const bothSlotsLit = mode === 'COOP';
+
+  /**
    * One menu action, applied to a named slot.
    *
    * Pulled out of the hook so the same logic can serve two callers: the shared
@@ -512,7 +529,9 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                 <div
                   onClick={() => setActiveSlot('P1')}
                   className={`bg-[#180829] border-2 ${
-                    activeSlot === 'P1' ? 'border-[#ff00ff] shadow-[0_0_20px_rgba(255,0,255,0.4)]' : 'border-[#333]'
+                    bothSlotsLit || activeSlot === 'P1'
+                      ? 'border-[#ff00ff] shadow-[0_0_20px_rgba(255,0,255,0.4)]'
+                      : 'border-[#333]'
                   } p-4 flex items-center gap-4 rounded-lg cursor-pointer transition-all min-h-[120px]`}
                 >
                   <div className="w-20 h-20 rounded-full border-2 border-[#ff00ff] bg-black overflow-hidden shrink-0 shadow-md">
@@ -521,7 +540,9 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-xs font-mono font-bold text-[#ff00ff]">PLAYER 1</span>
-                      {activeSlot === 'P1' && <span className="text-[10px] bg-[#ff00ff] text-black font-bold px-2 py-0.5 rounded uppercase">SELECTING</span>}
+                      {!bothSlotsLit && activeSlot === 'P1' && (
+                        <span className="text-[10px] bg-[#ff00ff] text-black font-bold px-2 py-0.5 rounded uppercase">SELECTING</span>
+                      )}
                     </div>
                     <h3 className="text-xl font-black text-[#00ffff] italic uppercase truncate">{featuredChar.name}</h3>
                     <p className="text-xs text-zinc-300 font-mono truncate mt-1">Special: {featuredChar.powerMoveName}</p>
@@ -532,7 +553,9 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                 <div
                   onClick={() => setActiveSlot('P2')}
                   className={`bg-[#180829] border-2 ${
-                    activeSlot === 'P2' ? 'border-[#00ffff] shadow-[0_0_20px_rgba(0,255,255,0.4)]' : 'border-[#333]'
+                    bothSlotsLit || activeSlot === 'P2'
+                      ? 'border-[#00ffff] shadow-[0_0_20px_rgba(0,255,255,0.4)]'
+                      : 'border-[#333]'
                   } p-4 flex items-center gap-4 rounded-lg cursor-pointer transition-all min-h-[120px]`}
                 >
                   <div className="w-20 h-20 rounded-full border-2 border-[#00ffff] bg-black overflow-hidden shrink-0 shadow-md">
@@ -543,7 +566,9 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                       <span className="text-xs font-mono font-bold text-[#00ffff]">
                         {mode === 'AI_COMPANION' ? 'AI BUDDY' : 'PLAYER 2'}
                       </span>
-                      {activeSlot === 'P2' && <span className="text-[10px] bg-[#00ffff] text-black font-bold px-2 py-0.5 rounded uppercase">SELECTING</span>}
+                      {!bothSlotsLit && activeSlot === 'P2' && (
+                        <span className="text-[10px] bg-[#00ffff] text-black font-bold px-2 py-0.5 rounded uppercase">SELECTING</span>
+                      )}
                     </div>
                     <h3 className="text-xl font-black text-[#ffff00] italic uppercase truncate">{p2Char.name}</h3>
                     <p className="text-xs text-zinc-300 font-mono truncate mt-1">Special: {p2Char.powerMoveName}</p>
