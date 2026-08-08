@@ -505,6 +505,27 @@ describe('power move poses', () => {
     expect(top(0), 'and is standing again when it ends').toBeGreaterThan(top(30));
   });
 
+  it('keeps Angry Corso\'s tattoos on him while he bites', () => {
+    // The bite drew a single unstroked rectangle where two arms belong, so it
+    // was the one action in the game where the flame marks disappeared. The
+    // helper that draws them uses quadratic curves and nothing else in this
+    // sprite does, which is what makes it countable from outside.
+    const curvesIn = (action: 'IDLE' | 'BITING') => {
+      const recorder = new RecordingContext();
+      renderEntitySprite(
+        asContext(recorder),
+        spriteHero('ANGRY_CORSO', { action, actionTimer: action === 'BITING' ? 30 : 0 }),
+        0,
+        0,
+        0
+      );
+      return recorder.curveCount;
+    };
+
+    expect(curvesIn('BITING'), 'the bite lost its flames').toBeGreaterThan(0);
+    expect(curvesIn('BITING')).toBeGreaterThanOrEqual(curvesIn('IDLE'));
+  });
+
   it("counts Angry Corso's bite as a super, so it gets the banner and the trail", () => {
     expect(isPowerMovePose('BITING')).toBe(true);
     expect(isPowerMovePose('POWER_MOVE')).toBe(true);

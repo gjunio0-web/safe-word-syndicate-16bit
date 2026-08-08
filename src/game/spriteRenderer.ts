@@ -1269,7 +1269,45 @@ function renderPlayerSprite(
       // 4. ARMS & SPIKED WRISTBANDS
       ctx.fillStyle = '#c27c4d';
       if (isBiting) {
-        ctx.fillRect(-10, -46, 30, 24);
+        // Both arms out in front, reaching for what he is about to land on.
+        //
+        // This used to be one unstroked 30x24 rectangle sitting at hip height,
+        // below the torso it was supposed to hang from, with neither outline
+        // nor tattoos. Standing upright it passed for shadow across the
+        // thighs; airborne, with the legs folded away, it was a bare patch of
+        // skin colour floating over his shorts.
+        //
+        // Drawn as two limbs on their own transforms so each carries a flame,
+        // because the bite was the one action in the game where he lost them.
+        const reachingArm = (shoulderX: number, shoulderY: number, angle: number) => {
+          ctx.save();
+          ctx.translate(shoulderX, shoulderY);
+          ctx.rotate(angle);
+
+          ctx.fillStyle = '#c27c4d';
+          ctx.beginPath();
+          ctx.roundRect(0, -7, 42, 14, 7);
+          ctx.fill();
+          ctx.stroke();
+
+          // Flame tattoo on the forearm, riding the limb like the standing
+          // ones ride the arm swing.
+          drawFlameMark(ctx, 24, 4, 11, '#ea580c', '#fbbf24');
+
+          // Fist, thrown open into a grab.
+          ctx.fillStyle = '#141414';
+          ctx.beginPath();
+          ctx.arc(43, 0, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.restore();
+        };
+
+        // Far arm first so the near one overlaps it, and pitched slightly
+        // higher: two limbs at identical heights read as one thick one.
+        reachingArm(2, -74, -0.2);
+        reachingArm(-2, -62, 0.12);
       } else if (isPunch) {
         ctx.fillRect(10, -72, 36, 16);
       } else {

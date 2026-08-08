@@ -68,6 +68,17 @@ export class RecordingContext {
   saveCount = 0;
   restoreCount = 0;
 
+  /**
+   * How many curved segments were laid down.
+   *
+   * The sprites are almost entirely rectangles, arcs and straight lines, so a
+   * quadratic curve is a strong signal for the handful of shapes drawn by
+   * helpers -- the flame tattoos being the one tests care about. Counting
+   * them is how a test can ask whether a detail survived a pose change
+   * without pinning its exact geometry.
+   */
+  curveCount = 0;
+
   /** True if restore() was ever called with nothing on the stack. */
   underflowed = false;
 
@@ -146,6 +157,7 @@ export class RecordingContext {
   }
 
   quadraticCurveTo(cx: number, cy: number, x: number, y: number) {
+    this.curveCount++;
     this.pending.push(apply(this.matrix, cx, cy), apply(this.matrix, x, y));
   }
 
