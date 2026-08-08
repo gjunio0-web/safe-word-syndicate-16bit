@@ -3,7 +3,7 @@ import { useGamepadMenu, useGamepadPlayerMenus } from '../hooks/useGamepadMenu';
 import { MenuAction, connectedGamepadCount, subscribeGamepadConnection } from '../game/gamepad';
 import { CharacterId, GameMode } from '../types';
 import { CHARACTERS } from '../game/characterData';
-import { menuReadersFor } from '../game/modes';
+import { menuReadersFor, modeEntry } from '../game/modes';
 import { Users, Bot, UserCheck, Play, User } from 'lucide-react';
 import { sound } from '../game/sound';
 
@@ -169,6 +169,21 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   const bothSlotsLit = mode === 'COOP';
 
   /**
+   * The one way this screen changes mode.
+   *
+   * Every route in — the three buttons and the controller's up and down —
+   * comes through here, because two of those routes used to do it themselves
+   * and did it differently. `modeEntry` holds the answer; this only spends it
+   * on state.
+   */
+  const changeMode = (next: GameMode) => {
+    const entry = modeEntry(next, selectedP2 ?? undefined);
+    setMode(next);
+    setSelectedP2(entry.secondFighter ?? null);
+    setActiveSlot(entry.cursor);
+  };
+
+  /**
    * One menu action, applied to a named slot.
    *
    * Pulled out of the hook so the same logic can serve two callers: the shared
@@ -200,13 +215,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
       const at = MODE_ORDER.indexOf(mode);
       const step = action === 'DOWN' ? 1 : -1;
       const next = MODE_ORDER[(at + step + MODE_ORDER.length) % MODE_ORDER.length];
-      setMode(next);
-      // Leaving a two-player mode must not strand the cursor on P2, nor leave a
-      // stale P2 highlight on the roster card.
-      if (next === 'SINGLE') {
-        setActiveSlot('P1');
-        setSelectedP2(null);
-      }
+      changeMode(next);
       sound.playSelect();
       return;
     }
@@ -352,9 +361,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
             <button
               onClick={() => {
                 sound.playPunch();
-                setMode('SINGLE');
-                setSelectedP2(null);
-                setActiveSlot('P1');
+                changeMode('SINGLE');
               }}
               className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
                 mode === 'SINGLE' ? 'bg-[#ff00ff] text-black shadow-md' : 'text-zinc-400 hover:text-white'
@@ -365,9 +372,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
             <button
               onClick={() => {
                 sound.playPunch();
-                setMode('AI_COMPANION');
-                if (!selectedP2) setSelectedP2('FUN_MAKER');
-                setActiveSlot('P2');
+                changeMode('AI_COMPANION');
               }}
               className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
                 mode === 'AI_COMPANION' ? 'bg-[#00ffff] text-black shadow-md' : 'text-zinc-400 hover:text-white'
@@ -378,9 +383,7 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
             <button
               onClick={() => {
                 sound.playPunch();
-                setMode('COOP');
-                if (!selectedP2) setSelectedP2('OMEGA_BIKER');
-                setActiveSlot('P2');
+                changeMode('COOP');
               }}
               className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
                 mode === 'COOP' ? 'bg-[#ffff00] text-black shadow-md' : 'text-zinc-400 hover:text-white'

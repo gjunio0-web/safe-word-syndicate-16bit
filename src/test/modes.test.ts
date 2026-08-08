@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { menuReadersFor, secondFighterFor, secondSlotIsHuman } from '../game/modes';
+import { menuReadersFor, modeEntry, secondFighterFor, secondSlotIsHuman } from '../game/modes';
 import { GameMode } from '../types';
 
 /**
@@ -23,6 +23,50 @@ describe('the second slot follows the mode, not the leftovers', () => {
 
   it('keeps the second player in co-op', () => {
     expect(secondFighterFor('COOP', 'ANGRY_CORSO')).toBe('ANGRY_CORSO');
+  });
+
+  /**
+   * Found while verifying an unrelated fix: entering the buddy mode with the
+   * controller started a solo match. The mode buttons filled the second slot
+   * with a default and moved the cursor onto it; the pad's up and down did
+   * neither, and the slot box draws a portrait even when nothing is chosen, so
+   * the screen showed a companion that was never passed to the engine.
+   */
+  describe('changing mode settles the second slot the same way, however it is changed', () => {
+    it('fills an empty second slot for the modes that have one', () => {
+      // Named characters rather than "not undefined": an empty slot is exactly
+      // what the defect produced, and `toBeDefined` would also accept a mode
+      // that filled it with the wrong fighter.
+      expect(modeEntry('AI_COMPANION', undefined).secondFighter).toBe('FUN_MAKER');
+      expect(modeEntry('COOP', undefined).secondFighter).toBe('OMEGA_BIKER');
+    });
+
+    it('never overwrites a fighter the player already chose', () => {
+      expect(modeEntry('AI_COMPANION', 'ANGRY_CORSO').secondFighter).toBe('ANGRY_CORSO');
+      expect(modeEntry('COOP', 'ANGRY_CORSO').secondFighter).toBe('ANGRY_CORSO');
+    });
+
+    it('empties the slot and takes the cursor back for a solo game', () => {
+      expect(modeEntry('SINGLE', 'ANGRY_CORSO')).toEqual({
+        secondFighter: undefined,
+        cursor: 'P1',
+      });
+    });
+
+    it('puts the cursor on the slot the player has just been given', () => {
+      expect(modeEntry('AI_COMPANION', undefined).cursor).toBe('P2');
+      expect(modeEntry('COOP', undefined).cursor).toBe('P2');
+    });
+
+    it('agrees with the rule the engine reads, so the screen cannot promise a fighter it does not pass', () => {
+      // The two used to disagree: the screen drew a companion while
+      // `secondFighterFor` was handed `undefined` and returned nothing. Pinning
+      // them against each other is what makes that state unreachable.
+      for (const mode of ['SINGLE', 'AI_COMPANION', 'COOP'] as GameMode[]) {
+        const entry = modeEntry(mode, undefined);
+        expect(secondFighterFor(mode, entry.secondFighter), mode).toBe(entry.secondFighter);
+      }
+    });
   });
 
   it('marks the slot human only in co-op', () => {

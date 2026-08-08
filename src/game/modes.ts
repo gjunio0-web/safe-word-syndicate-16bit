@@ -23,6 +23,34 @@ export function secondFighterFor(
 /** Whether the second slot is a person rather than the companion policy. */
 export const secondSlotIsHuman = (mode: GameMode) => mode === 'COOP';
 
+/** What changing to a mode does to the rest of the character select screen. */
+export interface ModeEntry {
+  /** Who the second slot should hold once the mode is in force. */
+  secondFighter: CharacterId | undefined;
+  /** Where the shared cursor belongs. */
+  cursor: 'P1' | 'P2';
+}
+
+/**
+ * Everything that has to happen when the player changes mode.
+ *
+ * The screen had two implementations of this and they disagreed. The mode
+ * buttons filled the second slot with a default and moved the cursor onto it;
+ * the controller's up and down did neither. Choosing "1P + AI BUDDY" with a
+ * pad therefore left the second slot empty while the screen still drew a
+ * fighter in it — the box falls back to a portrait when nothing is chosen —
+ * and the match started solo, with the buddy the player had just asked for
+ * nowhere in it.
+ *
+ * Stated once, as data, so a third way of changing mode cannot invent a fourth
+ * answer.
+ */
+export function modeEntry(mode: GameMode, chosen: CharacterId | undefined): ModeEntry {
+  if (mode === 'SINGLE') return { secondFighter: undefined, cursor: 'P1' };
+  const fallback: CharacterId = mode === 'COOP' ? 'OMEGA_BIKER' : 'FUN_MAKER';
+  return { secondFighter: chosen ?? fallback, cursor: 'P2' };
+}
+
 /** Which menu reader the character select screen runs. */
 export interface MenuReaderPlan {
   /** One cursor, driven by every controller at once. */
