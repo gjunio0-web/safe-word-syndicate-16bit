@@ -32,6 +32,14 @@ const at = (w: number, h: number, landscape: boolean, touchControls = true): Hud
   touchControls,
 });
 
+/** The same shape, asking for the compact bar. */
+const compactAt = (
+  w: number,
+  h: number,
+  landscape: boolean,
+  touchControls = true
+): HudLayoutInput => ({ ...at(w, h, landscape, touchControls), compact: true });
+
 describe('boss bar vs touch controls', () => {
   it.each(SHAPES)('clears both clusters on %s', (_name, w, h, landscape) => {
     const input = at(w, h, landscape);
@@ -217,5 +225,85 @@ describe('the boss bar stays on screen — swept, not sampled', () => {
   it('produces finite offsets even when nothing can fit', () => {
     const input: HudLayoutInput = { areaWidth: 320, areaHeight: 200, landscape: true, touchControls: true };
     expect(Number.isFinite(hudLayout(input).bossBarBottom)).toBe(true);
+  });
+});
+
+
+describe('the compact bar', () => {
+  /*
+   * Stated as behaviour, not as measurements. Asserting the constants back at
+   * themselves would be the constant-to-constant test this project has already
+   * thrown out once.
+   */
+
+  it('clears the thumb clusters on the phones the full bar collides with', () => {
+    for (const [w, h] of [
+      [667, 323],
+      [740, 308],
+    ] as const) {
+      const input = compactAt(w, h, true);
+      expect(hudLayout(input).bossBarBottom).toBe(BOSS_BAR_RESTING_BOTTOM);
+      for (const cluster of controlBoxes(input)) {
+        expect(overlaps(bossBarBox(input, hudLayout(input).bossBarBottom), cluster)).toBe(false);
+      }
+    }
+  });
+
+  it('is the narrowing that stops the lift — the full bar lifts on the same shapes', () => {
+    for (const [w, h] of [
+      [667, 323],
+      [740, 308],
+    ] as const) {
+      expect(hudLayout(at(w, h, true)).bossBarBottom).toBeGreaterThan(BOSS_BAR_RESTING_BOTTOM);
+    }
+  });
+
+  it('takes less of the container than the full bar, everywhere', () => {
+    for (const [, w, h, landscape] of SHAPES) {
+      const full = bossBarBox(at(w, h, landscape), hudLayout(at(w, h, landscape)).bossBarBottom);
+      const small = bossBarBox(
+        compactAt(w, h, landscape),
+        hudLayout(compactAt(w, h, landscape)).bossBarBottom
+      );
+      const area = (b: Box) => (b.right - b.left) * (b.bottom - b.top);
+      expect(area(small)).toBeLessThan(area(full));
+    }
+  });
+
+  it('stays on screen under the same sweep the full bar is held to', () => {
+    // The height in play here is the compact bar's tallest form — the one
+    // carrying the hostage instruction — so a container that only fits the
+    // resting form cannot push the taller one off the top for a few seconds
+    // at the start of the fight and then look fine in every screenshot taken
+    // afterwards.
+    for (let w = 320; w <= 1200; w += 20) {
+      for (let h = 140; h <= 900; h += 20) {
+        const input = compactAt(w, h, w >= h);
+        const bar = bossBarBox(input, hudLayout(input).bossBarBottom);
+        expect(bar.top).toBeGreaterThanOrEqual(0);
+        expect(bar.bottom).toBeLessThanOrEqual(h);
+      }
+    }
+  });
+
+  it('is a bar with a body, not a line the collision arithmetic can ignore', () => {
+    // A height of zero passes every other test here — narrower still clears the
+    // clusters, a zero-area box is smaller than the full one, and a bar with no
+    // height cannot be pushed off the top by the sweep. It would also switch
+    // off the collision avoidance this whole module exists for, silently. The
+    // floor is an absolute number rather than the constant: any bar carrying a
+    // line of text over a track is taller than this.
+    const input = compactAt(667, 323, true);
+    const bar = bossBarBox(input, hudLayout(input).bossBarBottom);
+    expect(bar.bottom - bar.top).toBeGreaterThan(20);
+  });
+
+  it('reports the width cap it was measured against, not the full one', () => {
+    const input = compactAt(1200, 600, true);
+    const bar = bossBarBox(input, hudLayout(input).bossBarBottom);
+    expect(bar.right - bar.left).toBe(hudLayout(input).bossBarMaxWidth);
+    expect(hudLayout(input).bossBarMaxWidth).toBeLessThan(
+      hudLayout(at(1200, 600, true)).bossBarMaxWidth
+    );
   });
 });

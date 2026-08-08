@@ -52,6 +52,17 @@ export interface HudLayoutInput {
   landscape: boolean;
   /** Whether the on-screen touch controls are mounted at all. */
   touchControls: boolean;
+  /**
+   * Whether the boss bar is rendering in its compact form.
+   *
+   * Separate from `touchControls` on purpose. That one answers "are there
+   * thumb clusters in the way"; this one answers "is the screen small enough
+   * that a panel is too much furniture". They are true together on every
+   * device shipping today, and folding them into one flag is how a tablet —
+   * touch controls, plenty of room — would lose its full bar without anyone
+   * having asked for that.
+   */
+  compact?: boolean;
   /** Display-cutout insets, if known. Only ever push the controls inward. */
   safeArea?: { left?: number; right?: number; bottom?: number };
 }
@@ -85,10 +96,40 @@ const DPAD_SIZE = { portrait: 144, landscape: 112 };
 /** Action grid: two columns of w-16 with gap-3 / w-[52px] with gap-2. */
 const ACTION_SIZE = { portrait: 64 * 2 + 12, landscape: 52 * 2 + 8 };
 
-/** Boss bar: w-4/5, max-w-lg, and its tallest form (the hostage variant). */
+/**
+ * Boss bar: w-4/5, and the two shapes it comes in, each at its tallest.
+ *
+ * `full` is the panel this game has always drawn — max-w-lg, measured with the
+ * second line that the hostage and the shielded Matriarch both carry.
+ *
+ * `compact` is the phone form: one row of text over a thin track, no panel.
+ * Its own tallest is the hostage variant, which keeps the instruction line
+ * until the fight is joined; the resting form underneath it is 30px.
+ *
+ * Width matters as much as height here, and for a different reason. Height is
+ * what the player loses to the HUD. Width is what decides whether the bar
+ * collides with the thumb clusters at all — at 512 it does, on every phone
+ * measured, and is lifted 132px into the middle of the fight. At 384 it clears
+ * them and stays at the resting offset. Narrowing the bar is what gets it out
+ * of the way; shortening it is what makes it small.
+ *
+ * The compact heights were read off the rendered elements in a browser at
+ * 667x375. Everything else in this file is the markup as specified, and the
+ * distance between the two kinds of number is worth recording: the full bar is
+ * written as 78 and measures 81. That optimism predates this change and is
+ * left alone rather than corrected in passing, because it moves the ceiling
+ * clamp, which is a separate behaviour with its own tests.
+ */
 const BOSS_BAR_WIDTH_FRACTION = 0.8;
-const BOSS_BAR_MAX_WIDTH = 512;
-const BOSS_BAR_HEIGHT = 78;
+const BOSS_BAR = {
+  full: { maxWidth: 512, height: 78 },
+  compact: { maxWidth: 384, height: 44 },
+} as const;
+
+/** The shape the given input is asking for. */
+function bossBarShape(input: HudLayoutInput) {
+  return input.compact ? BOSS_BAR.compact : BOSS_BAR.full;
+}
 /** Where it sat before this module existed, and still sits when nothing is in the way. */
 export const BOSS_BAR_RESTING_BOTTOM = 48;
 
@@ -182,12 +223,13 @@ export function controlBoxes(input: HudLayoutInput): Box[] {
 
 /** The boss bar's box for a given offset from the bottom. */
 export function bossBarBox(input: HudLayoutInput, bottom: number): Box {
-  const width = Math.min(input.areaWidth * BOSS_BAR_WIDTH_FRACTION, BOSS_BAR_MAX_WIDTH);
+  const shape = bossBarShape(input);
+  const width = Math.min(input.areaWidth * BOSS_BAR_WIDTH_FRACTION, shape.maxWidth);
   return {
     left: (input.areaWidth - width) / 2,
     right: (input.areaWidth + width) / 2,
     bottom: input.areaHeight - bottom,
-    top: input.areaHeight - bottom - BOSS_BAR_HEIGHT,
+    top: input.areaHeight - bottom - shape.height,
   };
 }
 
@@ -268,11 +310,14 @@ export function hudLayout(input: HudLayoutInput): HudLayout {
   // than a container under ~126px, so the bar walked off the top there
   // without any lift having happened at all. The ceiling is a property of the
   // container, so it belongs outside the branch that happens to move things.
-  bossBarBottom = Math.min(bossBarBottom, input.areaHeight - BOSS_BAR_HEIGHT - MIN_TOP_MARGIN);
+  bossBarBottom = Math.min(
+    bossBarBottom,
+    input.areaHeight - bossBarShape(input).height - MIN_TOP_MARGIN
+  );
 
   return {
     bossBarBottom,
-    bossBarMaxWidth: BOSS_BAR_MAX_WIDTH,
+    bossBarMaxWidth: bossBarShape(input).maxWidth,
   };
 }
 
