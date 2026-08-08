@@ -97,6 +97,33 @@ export interface HudSnapshot {
   isWaveActive: boolean;
   currentWaveIndex: number;
   stageCleared: boolean;
+  /**
+   * Whether a hostage is on the field, whoever owns the boss bar.
+   *
+   * `boss` above is one entity — the first one found — and the final stage
+   * fields two. Mizydia wins that search, so a HUD reading `boss` alone cannot
+   * tell that Sayonara is standing next to her, and the one screen where the
+   * player has to know she is savable is the one screen that could not say so.
+   *
+   * Separate from `boss.enemyType === 'BOSS_SAYONARA'` for exactly that
+   * reason: this answers "is there someone here to free", which is a fact
+   * about the field, not about whichever entity the bar happens to be drawing.
+   */
+  hostageOnField: boolean;
+  /**
+   * Whether the hostage has yet to be touched by anyone.
+   *
+   * The pair exists because the two facts expire at different moments. She is
+   * on the field until she is freed or finished; she is untouched only until
+   * the first damage lands. A HUD that has to say something once, at the start
+   * of the fight, needs the second one, and deriving it from her HP at the
+   * call site would put the same comparison in every reader.
+   *
+   * First damage rather than a timer, because the boss dialogue freezes the
+   * simulation and not the wall clock — a timer would burn down while the
+   * player reads the overlay and expire before a single frame of fighting.
+   */
+  hostageUntouched: boolean;
 }
 
 function sameFighter(a: HudFighter | null, b: HudFighter | null): boolean {
@@ -307,6 +334,15 @@ export class GameEngine {
       isWaveActive: this.isWaveActive,
       currentWaveIndex: this.currentWaveIndex,
       stageCleared: this.stageCleared,
+      // Alive and still collared. A freed Sayonara is walking out of the
+      // scene under her own power and there is nothing left to instruct the
+      // player about; a dead one is the ending that already went wrong.
+      hostageOnField: this.entities.some(
+        (e) => e.enemyType === 'BOSS_SAYONARA' && e.hp > 0 && !e.freed
+      ),
+      hostageUntouched: this.entities.some(
+        (e) => e.enemyType === 'BOSS_SAYONARA' && e.hp >= e.maxHp && !e.freed
+      ),
     };
   }
 
@@ -323,7 +359,9 @@ export class GameEngine {
       prev.bossWarningTitle === next.bossWarningTitle &&
       prev.isWaveActive === next.isWaveActive &&
       prev.currentWaveIndex === next.currentWaveIndex &&
-      prev.stageCleared === next.stageCleared;
+      prev.stageCleared === next.stageCleared &&
+      prev.hostageOnField === next.hostageOnField &&
+      prev.hostageUntouched === next.hostageUntouched;
 
     if (unchanged) return;
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createMenuDispatcher, REPEAT_DELAY_FRAMES } from '../hooks/useGamepadMenu';
 import { MenuState } from '../game/gamepad';
-import { advance, NEUTRAL, startEngine } from './helpers';
+import { advance, NEUTRAL, stageEnemies, startEngine } from './helpers';
+import { STAGES } from '../game/stageData';
 import { BGM_TRACK_IDS, BgmTrack, isBgmTrack, sound } from '../game/sound';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, fitViewport } from '../game/viewport';
 import { PLAYER_KICK_REACH } from '../game/constants';
@@ -99,6 +100,76 @@ describe('HUD snapshot', () => {
     const snapshot = engine.getHudSnapshot();
     advance(engine, 60);
     expect(engine.getHudSnapshot()).toBe(snapshot);
+  });
+
+  /*
+   * The final stage fields two bosses and the snapshot's `boss` is whichever
+   * one the search reaches first. These cover the fact the bar cannot carry.
+   */
+  it('reports the hostage even when the bar is drawing the other boss', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    stageEnemies(engine, [
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 200 },
+      { type: 'BOSS_SAYONARA', dx: 300 },
+    ]);
+    engine.update(NEUTRAL);
+
+    expect(engine.getHudSnapshot().boss!.enemyType).toBe('BOSS_MADAM_MIZYDIA');
+    expect(engine.getHudSnapshot().hostageOnField).toBe(true);
+  });
+
+  it('reports no hostage when there is nobody left to free', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    stageEnemies(engine, [{ type: 'BOSS_MADAM_MIZYDIA', dx: 200 }]);
+    engine.update(NEUTRAL);
+
+    expect(engine.getHudSnapshot().boss).not.toBeNull();
+    expect(engine.getHudSnapshot().hostageOnField).toBe(false);
+  });
+
+  it('stops reporting a hostage once the collar is off', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx: 250 }]);
+    engine.update(NEUTRAL);
+    expect(engine.getHudSnapshot().hostageOnField).toBe(true);
+
+    engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!.freed = true;
+    engine.update(NEUTRAL);
+    expect(engine.getHudSnapshot().hostageOnField).toBe(false);
+  });
+
+  it('stops calling the hostage untouched once she has taken a hit', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    stageEnemies(engine, [
+      { type: 'BOSS_MADAM_MIZYDIA', dx: 200 },
+      { type: 'BOSS_SAYONARA', dx: 300 },
+    ]);
+    engine.update(NEUTRAL);
+    expect(engine.getHudSnapshot().hostageUntouched).toBe(true);
+
+    engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!.hp -= 1;
+    engine.update(NEUTRAL);
+
+    expect(engine.getHudSnapshot().hostageUntouched).toBe(false);
+    // She is still there to be freed. The two facts expire separately.
+    expect(engine.getHudSnapshot().hostageOnField).toBe(true);
+  });
+
+  it('publishes when the hostage leaves the field', () => {
+    const engine = startEngine(STAGES.findIndex((s) => s.isFinalStage));
+    stageEnemies(engine, [{ type: 'BOSS_SAYONARA', dx: 250 }]);
+    engine.update(NEUTRAL);
+
+    let notifications = 0;
+    engine.subscribeHud(() => {
+      notifications++;
+    });
+
+    engine.entities.find((e) => e.enemyType === 'BOSS_SAYONARA')!.freed = true;
+    engine.update(NEUTRAL);
+
+    expect(notifications).toBeGreaterThan(0);
+    expect(engine.getHudSnapshot().hostageOnField).toBe(false);
   });
 
   it('publishes a new snapshot when the player takes damage while idle', () => {
