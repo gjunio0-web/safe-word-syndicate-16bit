@@ -516,6 +516,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                   );
                 })}
               </div>
+
+              {/* Special Meter Bar */}
+              {/*
+                Player two never had one. Not a regression — no commit in this
+                repository has ever mentioned it — but the meter has always
+                been theirs to spend: `buildHudSnapshot` fills `powerMeter` for
+                both fighters, a person in co-op holds the same power move
+                player one does, and the AI buddy spends it too
+                (`POWER_MOVE_COST` in companionAi.ts). The number was live and
+                only the bar was missing, so the second player had to guess
+                whether their power move would come out.
+
+                Mirrored, like the health bar and the name above it: this whole
+                block reads right to left. The amber is deliberately not the
+                cyan of player two's health — amber is what a power meter looks
+                like on this HUD, and using the slot colour instead would make
+                the two bars read as two measures of the same thing.
+              */}
+              <div className="mt-1.5 flex items-center gap-2 flex-row-reverse">
+                <span className="text-[9px] font-bold text-amber-300">POWER</span>
+                <div className="flex-1 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                  <div
+                    className="h-full bg-amber-400 transition-all"
+                    style={{ width: `${p2.powerMeter}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
             {/* P2 Arcade Portrait Badge */}
