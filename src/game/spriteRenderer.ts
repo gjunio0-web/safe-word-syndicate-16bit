@@ -1,6 +1,6 @@
 import { EntityState, CharacterId, EnemyType } from '../types';
 import { CHARACTERS } from './characterData';
-import { POWER_MOVE_FRAMES } from './constants';
+import { POWER_MOVE_FRAMES, PLAYER_KO_FALL_FRAMES, PLAYER_KO_FRAMES } from './constants';
 import feetMasterImg from '../assets/images/feet_master_portrait.webp';
 import funMakerImg from '../assets/images/fun_maker_portrait.webp';
 import omegaBikerImg from '../assets/images/omega_biker_portrait.webp';
@@ -88,9 +88,41 @@ export function renderEntitySprite(
 
   // 7. Main Sprite Rendering
   if (entity.isPlayer && entity.charId) {
+    /*
+     * Going down.
+     *
+     * One transform rather than a fallen pose drawn four times: every hero is
+     * built from the same standing skeleton in the switch below, and rotating
+     * that skeleton about the feet lays it out on the ground for all of them.
+     * A hand-drawn corpse per fighter would read better and is four times the
+     * surface to keep in step with every future change to the roster's art —
+     * this is the honest trade, not the ideal one.
+     *
+     * The pivot is the origin, which is where the feet are: the sprite is
+     * drawn upward in negative y. Rotating by a quarter turn towards negative
+     * x therefore drops the head *behind* the fighter, and since the facing
+     * flip is already applied above, falling backwards is automatic in both
+     * directions.
+     *
+     * The last stretch fades, so the body is gone before the engine takes it
+     * off the field rather than blinking out at full opacity.
+     */
+    if (entity.action === 'KO') {
+      const remaining = Math.max(0, Math.min(1, entity.actionTimer / PLAYER_KO_FRAMES));
+      const fallen = Math.min(1, (1 - remaining) * (PLAYER_KO_FRAMES / PLAYER_KO_FALL_FRAMES));
+      // Eased so the fall accelerates into the ground instead of sweeping
+      // round at a constant rate, which reads as a hinge rather than a fall.
+      const tipped = fallen * fallen;
+      ctx.rotate(-tipped * Math.PI * 0.5);
+      const fadeFrames = PLAYER_KO_FRAMES * 0.2;
+      if (entity.actionTimer < fadeFrames) {
+        ctx.globalAlpha *= Math.max(0, entity.actionTimer / fadeFrames);
+      }
+    }
     renderPlayerSprite(ctx, entity.charId, entity, simTimeMs);
     // Unobtrusive Arcade Player Arrow Indicator high above head (never covers face!)
-    renderPlayerIndicator(ctx, entity);
+    // Not over a body: the arrow says "this one is yours to drive".
+    if (entity.action !== 'KO') renderPlayerIndicator(ctx, entity);
   } else if (entity.enemyType) {
     renderEnemySprite(ctx, entity.enemyType, entity, simTimeMs);
     // Render Overhead Arcade Health Bar for Enemies

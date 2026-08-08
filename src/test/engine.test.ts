@@ -1642,3 +1642,120 @@ describe('power moves', () => {
     expect(player.z, 'and lands before the animation is over').toBe(0);
   });
 });
+
+/**
+ * What happens to a fighter who runs out of health.
+ *
+ * Reported from play: a fallen player did not leave the screen the way a
+ * defeated enemy does. Measured before the fix, in a co-op match with the
+ * second player killed: still in `entities` at frame 900, pose `IDLE` —
+ * standing, because the fatal hit only set `HURT` for eighteen frames and
+ * nothing followed it — and screen x pinned at PLAYER_CLAMP_MARGIN_X, because
+ * the viewport clamp had no health check and shoved the body along the street
+ * behind the survivor. An enemy killed in the same run left after 18 frames.
+ */
+describe('a fallen fighter goes down and is taken off the field', () => {
+  const coopEngine = () => {
+    const engine = new GameEngine(STAGES[1], 'FEET_MASTER', 'FUN_MAKER', undefined, true);
+    engine.setActiveDialogue(null);
+    return engine;
+  };
+
+  it('lays the body down instead of leaving it on its feet', () => {
+    const engine = coopEngine();
+    const fallen = engine.player2!;
+    fallen.hp = 0;
+    advance(engine, 1);
+
+    expect(fallen.action, 'the pose says defeated').toBe('KO');
+  });
+
+  it('keeps the body around long enough to be read, then clears it', () => {
+    // Absolute frame counts on both sides, not PLAYER_KO_FRAMES: a test written
+    // against the constant passes whatever the constant is, including zero,
+    // which is the failure this is here to catch. 30 frames is half a second
+    // and 150 is two and a half.
+    const engine = coopEngine();
+    const fallen = engine.player2!;
+    fallen.hp = 0;
+
+    advance(engine, 80);
+    expect(engine.entities.includes(fallen), 'still there more than a second later').toBe(true);
+
+    advance(engine, 70);
+    expect(engine.entities.includes(fallen), 'and gone well before the next wave').toBe(false);
+
+    // 80 rather than something safely small, because the timer was being
+    // decremented twice a frame — once by the generic entity tick and once by
+    // the death pass — and the body left in half the time it was given. A
+    // loose lower bound passed that happily; this does not.
+  });
+
+  it('leaves it lying there longer than an enemy corpse', () => {
+    // The two rules share one filter now, so this pins the difference that
+    // makes them distinguishable at all: the body has an animation the enemy's
+    // eighteen frames do not cover.
+    const engine = coopEngine();
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 90 }]);
+    const enemy = engine.entities.find((e) => !e.isPlayer)!;
+    const fallen = engine.player2!;
+    enemy.hp = 0;
+    fallen.hp = 0;
+
+    advance(engine, 30);
+    expect(engine.entities.includes(enemy), 'the enemy is cleared quickly').toBe(false);
+    expect(engine.entities.includes(fallen), 'the fighter is not').toBe(true);
+  });
+
+  it('leaves the body where it fell instead of dragging it along', () => {
+    const engine = coopEngine();
+    const fallen = engine.player2!;
+    // Well behind the viewport's left edge, which is exactly where the clamp
+    // used to snap a body forward to.
+    fallen.x = engine.cameraX - 200;
+    fallen.hp = 0;
+    const fellAt = fallen.x;
+
+    advance(engine, 40, input({ right: true }));
+    expect(fallen.x, 'the ground it fell on does not move').toBe(fellAt);
+  });
+
+  it('stops the body sliding on whatever knockback killed it', () => {
+    // Nothing integrates a dead player's movement, so a leftover velocity would
+    // never decay — and the walk cycle keys off vx, which would leave the
+    // corpse running on the ground.
+    const engine = coopEngine();
+    const fallen = engine.player2!;
+    fallen.vx = 12;
+    fallen.vy = 5;
+    fallen.hp = 0;
+    advance(engine, 1);
+
+    expect(fallen.vx, 'no horizontal drift').toBe(0);
+    expect(fallen.vy, 'no vertical drift').toBe(0);
+  });
+
+  it('has the last word over an attack that poses the body after killing it', () => {
+    // This is why death is decided in a pass of its own rather than inside
+    // damageEntity: the Sayonara tackle and bite both set KNOCKDOWN *after*
+    // dealing their damage, so a pose written at the moment of the fatal hit
+    // would be overwritten by the very attack that caused it.
+    const engine = coopEngine();
+    const fallen = engine.player2!;
+    fallen.hp = 0;
+    fallen.action = 'KNOCKDOWN';
+    fallen.actionTimer = 40;
+    advance(engine, 1);
+
+    expect(fallen.action, 'death wins the frame').toBe('KO');
+  });
+
+  it('does not touch a fighter who is still standing', () => {
+    const engine = coopEngine();
+    const standing = engine.player2!;
+    advance(engine, 20, input({ right: true }));
+
+    expect(standing.action).not.toBe('KO');
+    expect(engine.entities.includes(standing), 'and stays on the field').toBe(true);
+  });
+});

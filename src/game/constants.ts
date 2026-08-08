@@ -313,3 +313,29 @@ export const POWER_MOVE_FRAMES = 45;
  * remaining twenty frames are recovery: committed, no longer dangerous.
  */
 export const POWER_MOVE_ACTIVE_FRAMES = 25;
+
+/**
+ * How long a fallen fighter takes to reach the ground.
+ *
+ * A player who ran out of health used to be left exactly as the fatal hit
+ * found them: `HURT` for eighteen frames, then back to `IDLE`, standing.
+ * Nothing removed them either — the filter that clears bodies from the arena
+ * excluded `isPlayer` by name — and the clamp that keeps players inside the
+ * viewport has no health check, so the corpse was dragged along at the screen's
+ * left margin, on its feet, for the rest of the stage. Measured: still in
+ * `entities` at frame 900, pose `IDLE`, screen x pinned at
+ * PLAYER_CLAMP_MARGIN_X, while an enemy killed in the same run left after 18.
+ */
+export const PLAYER_KO_FALL_FRAMES = 18;
+
+/** Frames the body lies there before it is taken off the field. */
+export const PLAYER_KO_LINGER_FRAMES = 72;
+
+/**
+ * The whole life of a body, from the fatal hit to removal.
+ *
+ * Long enough to be read as "your partner is down" rather than as a fighter
+ * blinking out of existence, and short enough that the arena is clear again
+ * before the next wave arrives.
+ */
+export const PLAYER_KO_FRAMES = PLAYER_KO_FALL_FRAMES + PLAYER_KO_LINGER_FRAMES;

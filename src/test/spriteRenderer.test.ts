@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { isPowerMovePose, renderEntitySprite } from '../game/spriteRenderer';
-import { POWER_MOVE_FRAMES } from '../game/constants';
+import {
+  POWER_MOVE_FRAMES,
+  PLAYER_KO_FALL_FRAMES,
+  PLAYER_KO_FRAMES,
+  PLAYER_KO_LINGER_FRAMES,
+} from '../game/constants';
 import { CHARACTERS, ENEMIES } from '../game/characterData';
 import { CharacterId, EnemyType, EntityState } from '../types';
 
@@ -22,6 +27,7 @@ const ACTIONS: EntityAction[] = [
   'JUMP',
   'HURT',
   'KNOCKDOWN',
+  'KO',
   'POWER_MOVE',
   'JUMP_ATTACK',
   'RECOVERY',
@@ -184,6 +190,94 @@ describe('defeated entities', () => {
     const recorder = render(spriteEnemy('PURITY_PATROL', { hp: 0, action: 'HURT', actionTimer: 10 }));
     expect(recorder.points.length).toBeGreaterThan(0);
     expect(recorder.depth).toBe(0);
+  });
+});
+
+/**
+ * A fallen player reads as a body on the ground.
+ *
+ * Reported from play: a defeated fighter did not leave the screen the way an
+ * enemy does. The engine now clears them, and this is the other half — before
+ * it, the fatal hit left `HURT` for eighteen frames and then `IDLE`, so the
+ * fighter stood there at zero health in a resting stance.
+ *
+ * Measured from the drawn geometry rather than from the transform, because the
+ * transform is the thing under test: a rotation that was applied to nothing, or
+ * applied and immediately undone, would satisfy any assertion about the call
+ * and none about where the ink landed.
+ */
+describe('the KO pose puts the fighter on the ground', () => {
+  const extent = (recorder: RecordingContext) => {
+    const xs = recorder.points.map((p) => p.x);
+    const ys = recorder.points.map((p) => p.y);
+    return {
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
+      highest: Math.min(...ys),
+    };
+  };
+
+  for (const charId of HEROES) {
+    it(`${charId} ends up wider than tall`, () => {
+      const standing = extent(render(spriteHero(charId, { action: 'IDLE' })));
+      // Late in the animation: the fall is over and the body is down.
+      const down = extent(
+        render(spriteHero(charId, { action: 'KO', hp: 0, actionTimer: PLAYER_KO_LINGER_FRAMES / 2 }))
+      );
+
+      expect(standing.height, 'a standing fighter is taller than wide').toBeGreaterThan(
+        standing.width
+      );
+      expect(down.width, 'a fallen one is not').toBeGreaterThan(down.height);
+    });
+  }
+
+  it('starts upright and finishes flat, rather than snapping over', () => {
+    const at = (actionTimer: number) =>
+      extent(render(spriteHero('FEET_MASTER', { action: 'KO', hp: 0, actionTimer })));
+
+    const justHit = at(PLAYER_KO_FRAMES);
+    const midFall = at(PLAYER_KO_FRAMES - PLAYER_KO_FALL_FRAMES / 2);
+    const down = at(PLAYER_KO_LINGER_FRAMES / 2);
+
+    // Width, not height. Rotating a tall narrow silhouette makes its bounding
+    // box *taller* before it makes it shorter — h·cos0 + w·sin0 rises while 0
+    // is small — so height is not monotonic through a fall and asserting on it
+    // fails against correct code. Width is: h·sin0 + w·cos0 climbs the whole
+    // quarter turn whenever the body is taller than it is wide.
+    expect(justHit.height, 'still on its feet on the frame it dies').toBeGreaterThan(justHit.width);
+    expect(midFall.width, 'further over halfway through the fall').toBeGreaterThan(justHit.width);
+    expect(down.width, 'and all the way over once it lands').toBeGreaterThan(midFall.width);
+    expect(down.height, 'ending shorter than it started').toBeLessThan(justHit.height);
+  });
+
+  it('fades out before the engine takes the body away', () => {
+    const alphaOf = (actionTimer: number) => {
+      const recorder = render(spriteHero('FEET_MASTER', { action: 'KO', hp: 0, actionTimer }));
+      return Math.max(...recorder.alphas);
+    };
+
+    expect(alphaOf(PLAYER_KO_LINGER_FRAMES / 2), 'solid while it lies there').toBe(1);
+    expect(alphaOf(2), 'nearly gone on the last frames').toBeLessThan(0.5);
+  });
+
+  it('drops the player arrow, which points at a fighter to drive', () => {
+    // By the badge's own text, not by where the topmost ink lands. The first
+    // version of this compared the highest drawn point, on the reasoning that
+    // the indicator sits well above the head — but the KO rotation turns the
+    // whole local space, badge included, so the arrow stops being the topmost
+    // thing whether or not it is drawn. That test passed with the indicator
+    // put back, which is the mutation it existed to catch.
+    const badge = (recorder: RecordingContext) =>
+      recorder.operations.some((op) => op === 'fillText:1P' || op === 'fillText:2P');
+
+    expect(badge(render(spriteHero('FEET_MASTER', { action: 'IDLE' }))), 'drawn while standing').toBe(
+      true
+    );
+    expect(
+      badge(render(spriteHero('FEET_MASTER', { action: 'KO', hp: 0, actionTimer: PLAYER_KO_LINGER_FRAMES / 2 }))),
+      'and not over a body'
+    ).toBe(false);
   });
 });
 

@@ -53,6 +53,7 @@ import {
   SAYONARA_BITE_KNOCKBACK,
   SAYONARA_RETREAT_PATIENCE,
   SAYONARA_PRESSURE_MEMORY,
+  PLAYER_KO_FRAMES,
 } from './constants';
 import {
   COMPANION_TUNING,
@@ -608,8 +609,13 @@ export class GameEngine {
     }
 
     // Keep players inside camera viewport bounds
+    //
+    // Living players only. This had no health check, so a fallen fighter was
+    // shoved along by the viewport's left edge for the rest of the stage — the
+    // body followed the survivor down the street instead of staying where it
+    // went down. A body belongs to the ground it fell on.
     this.entities.forEach((ent) => {
-      if (ent.isPlayer) {
+      if (ent.isPlayer && ent.hp > 0) {
         ent.x = Math.max(
           this.cameraX + PLAYER_CLAMP_MARGIN_X,
           Math.min(this.cameraX + 760, ent.x)
@@ -660,13 +666,19 @@ export class GameEngine {
     this.updateItems();
     this.updateParticles();
 
-    // Remove dead non-boss enemies after animation
-    // Keep the corpse only while its death animation still has frames left.
+    this.updateFallenPlayers();
+
+    // Remove dead bodies once their death animation has run out.
+    //
     // The condition used to be `actionTimer < 60`, which is always true for a
     // corpse — death sets actionTimer to 18 and it counts down to 0 — so the
     // filter preserved exactly what it was meant to discard. Bodies piled up
     // in the arena and kept being drawn.
-    this.entities = this.entities.filter((ent) => ent.isPlayer || ent.hp > 0 || ent.actionTimer > 0);
+    //
+    // It also read `ent.isPlayer || ...`, which exempted players from the
+    // clear-up entirely. One rule for everybody now; `updateFallenPlayers`
+    // above is what gives a fallen player the animation this filter waits for.
+    this.entities = this.entities.filter((ent) => ent.hp > 0 || ent.actionTimer > 0);
 
     // Check wave clear status
     // A downed Sayonara is out of the fight without being dead, so she must
@@ -1086,6 +1098,41 @@ export class GameEngine {
    */
   private minSeparationX(a: EntityState, b: EntityState): number {
     return restingSeparationX(a, b);
+  }
+
+  /**
+   * Puts a fighter who has run out of health on the ground, and counts the
+   * body down to removal.
+   *
+   * Runs after everything that can damage or reposition a fighter this frame,
+   * which is why it is a pass of its own rather than a branch inside
+   * `damageEntity`. Several attacks set a pose *after* calling that — the
+   * Sayonara tackle and bite both follow the damage with `KNOCKDOWN` — so a
+   * pose written at the moment of the fatal hit would be overwritten by the
+   * same attack that caused it. Deciding here means the last word each frame
+   * belongs to death.
+   *
+   * The body's velocity is zeroed on the way down. Nothing integrates a dead
+   * player's movement — `updatePlayer` is guarded on health — so a leftover
+   * knockback would never decay, and the walk cycle keys off `vx`: the corpse
+   * would lie on the ground running.
+   */
+  private updateFallenPlayers() {
+    for (const ent of this.entities) {
+      if (!ent.isPlayer || ent.hp > 0) continue;
+
+      if (ent.action !== 'KO') {
+        ent.action = 'KO';
+        ent.actionFrame = 0;
+        ent.actionTimer = PLAYER_KO_FRAMES;
+        ent.vx = 0;
+        ent.vy = 0;
+        ent.vz = 0;
+        ent.z = 0;
+      } else if (ent.actionTimer > 0) {
+        ent.actionTimer--;
+      }
+    }
   }
 
   private resolveBodyCollisions() {
@@ -2083,6 +2130,18 @@ export class GameEngine {
   }
 
   private updateEntityPhysics(ent: EntityState) {
+    // A body is not physics.
+    //
+    // Measured in the browser before this line existed: the death timer fell
+    // by two every frame, because the generic tick below runs on every entity
+    // and `updateFallenPlayers` ticks it as well. The body left the field in
+    // half the time it was given. Worse, the tick that reaches zero here puts
+    // the entity back into `IDLE` — a fallen fighter standing up again, for
+    // the one frame before death reclaimed it.
+    //
+    // The whole death animation has one owner.
+    if (ent.action === 'KO') return;
+
     ent.x += ent.vx;
     ent.y += ent.vy;
 

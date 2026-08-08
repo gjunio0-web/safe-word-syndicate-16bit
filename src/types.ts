@@ -71,7 +71,7 @@ export interface EntityState {
   powerMeter: number; // 0 to 100 for Power Move
   
   // Animation & Action state
-  action: 'IDLE' | 'WALK' | 'PUNCH1' | 'PUNCH2' | 'PUNCH3' | 'KICK' | 'POWER_MOVE' | 'JUMP' | 'JUMP_ATTACK' | 'GRAB' | 'THROW' | 'HURT' | 'KNOCKDOWN' | 'RECOVERY' | 'BITING' | 'FLYING';
+  action: 'IDLE' | 'WALK' | 'PUNCH1' | 'PUNCH2' | 'PUNCH3' | 'KICK' | 'POWER_MOVE' | 'JUMP' | 'JUMP_ATTACK' | 'GRAB' | 'THROW' | 'HURT' | 'KNOCKDOWN' | 'KO' | 'RECOVERY' | 'BITING' | 'FLYING';
   actionFrame: number;
   actionTimer: number;
   invulnerableTimer: number;
