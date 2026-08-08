@@ -181,7 +181,19 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
       const at = charList.findIndex((c) => c.id === current);
       const step = action === 'RIGHT' ? 1 : -1;
       const next = charList[(at + step + charList.length) % charList.length];
-      if (next) selectCharacterForSlot(next.id, slot, shared);
+      // Browsing the roster, which is not the same as committing to a fighter.
+      //
+      // This used to pass `shared` straight through as `advanceCursor`, so the
+      // first press of left or right on a shared cursor picked a fighter for
+      // player one *and* jumped the cursor to player two. Reported from play,
+      // in the buddy mode: the arrows appeared to switch slots instead of
+      // moving along the roster. They were doing both, and the jump is what
+      // the player saw.
+      //
+      // A click on a portrait still advances — there the player named a
+      // fighter and is done with that slot. A direction key only says "show me
+      // the next one", and the whole point of holding it is to keep going.
+      if (next) selectCharacterForSlot(next.id, slot, false);
       return;
     }
     if (action === 'UP' || action === 'DOWN') {
