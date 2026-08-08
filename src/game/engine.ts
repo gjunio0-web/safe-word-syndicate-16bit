@@ -19,7 +19,6 @@ import {
   BARK_DURATION_FRAMES,
   OUTRO_MAX_FRAMES,
   VIEWPORT_WIDTH,
-  PLAYER_BODY_SEPARATION_X,
   PLAYER_BODY_SEPARATION_Y,
   ENEMY_BODY_SEPARATION_X,
   ENEMY_BODY_SEPARATION_Y,
@@ -34,7 +33,6 @@ import {
   ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
-  DEFAULT_BUILD_WIDTH,
   SAYONARA_TELEGRAPH_FRAMES,
   SAYONARA_CHARGE_FRAMES,
   SAYONARA_RECOVER_FRAMES,
@@ -63,6 +61,7 @@ import {
 } from './companionAi';
 import { sound } from './sound';
 import { STEP_MS } from './frameClock';
+import { restingSeparationX } from './spacing';
 
 /**
  * What the HUD actually shows, in display form.
@@ -1047,41 +1046,13 @@ export class GameEngine {
   /**
    * How far apart two bodies rest, horizontally.
    *
-   * Everyone who is not a boss keeps the flat spacing this has always used:
-   * one number for two enemies, a wider one when a player is involved. Those
-   * are tuned values, and widening them across the board would loosen every
-   * crowd in the game.
-   *
-   * Anyone built wider than that instead takes up the room their own build
-   * says they take. The rule used to ask whether the fighter was a boss, which
-   * happened to be true of everyone unusually wide and was the wrong question:
-   * it meant the only fighter the rule could be exercised on was Sayonara, and
-   * once she stopped using the melee branch there was no way left to test it
-   * at all. Asking about the build instead changes nothing today — every
-   * current fighter lands on the same number either way, verified — and leaves
-   * the rule reachable. Half of each
-   * body meeting in the middle is what "she is bigger" has to mean if it is to
-   * mean anything on the floor — before this, `width` drew a shadow and an
-   * overlay and nothing else, so a larger Sayonara would have been larger only
-   * on the screen. The flat value stays as a floor, so this can only ever push
-   * bodies apart, never let them overlap further than they do today.
-   *
-   * The distances this actually moves, for the record, because a comment that
-   * says "bosses take up more room" hides how much: the player rests 100px
-   * from Sayonara and 82.5px from the Matriarch, against 72 for both before.
-   * The largest change is between the two of them — 34px to 122.5px, three and
-   * a half times — which visibly reframes the final fight. Grunt to grunt and
-   * player to grunt do not move at all.
-   *
-   * Depth is deliberately left alone. The walkable band is a couple of hundred
-   * pixels deep and `height` is not a measurement of it, so feeding height in
-   * here would space fighters by a number that describes the wrong axis.
+   * The rule and everything behind it live in `spacing.ts`, which is the only
+   * place that answers this — reach floors elsewhere in the engine and in the
+   * companion policy read the same function. This stays a method so the call
+   * sites below read as they always have.
    */
   private minSeparationX(a: EntityState, b: EntityState): number {
-    const betweenEnemies = !a.isPlayer && !b.isPlayer;
-    const base = betweenEnemies ? ENEMY_BODY_SEPARATION_X : PLAYER_BODY_SEPARATION_X;
-    if (a.width <= DEFAULT_BUILD_WIDTH && b.width <= DEFAULT_BUILD_WIDTH) return base;
-    return Math.max(base, (a.width + b.width) / 2);
+    return restingSeparationX(a, b);
   }
 
   private resolveBodyCollisions() {
