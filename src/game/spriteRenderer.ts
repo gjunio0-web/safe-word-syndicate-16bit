@@ -1,5 +1,6 @@
 import { EntityState, CharacterId, EnemyType } from '../types';
 import { CHARACTERS } from './characterData';
+import { POWER_MOVE_FRAMES } from './constants';
 import feetMasterImg from '../assets/images/feet_master_portrait.webp';
 import funMakerImg from '../assets/images/fun_maker_portrait.webp';
 import omegaBikerImg from '../assets/images/omega_biker_portrait.webp';
@@ -108,8 +109,25 @@ export function renderEntitySprite(
  * result was that the one hero whose super moves him nowhere was also the one
  * who never got the banner announcing it.
  */
-function isPowerMovePose(action: EntityState['action']): boolean {
+export function isPowerMovePose(action: EntityState['action']): boolean {
   return action === 'POWER_MOVE' || action === 'BITING';
+}
+
+/**
+ * How far off the ground Angry Corso's pounce has carried him, in sprite units.
+ *
+ * His super is the only one in the roster that promises a jump — leaps over
+ * the target, pins it, bites — and the engine deliberately does not give him
+ * one: the move is a radius around where he already stands, and putting real
+ * height on him would change who it catches. So the leap lives here, in the
+ * drawing only, and the hitbox stays exactly where it was.
+ *
+ * Up over the first third and down across the rest, landing at zero on the
+ * final frame so the pose hands back to idle without a step.
+ */
+function pounceHeight(phase: number): number {
+  const rise = phase < 1 / 3 ? phase * 3 : 1 - (phase - 1 / 3) * 1.5;
+  return Math.max(0, rise) * 44;
 }
 
 // ----------------------------------------------------------------------------
@@ -370,6 +388,22 @@ function renderPlayerSprite(
   const isSpecial = entity.action === 'POWER_MOVE';
   const isBiting = entity.action === 'BITING';
   const isJumping = entity.z > 0;
+
+  /**
+   * How far through a super this frame is: 0 on the frame it commits, 1 as the
+   * animation runs out.
+   *
+   * Every hero used to hold its idle stance for the whole forty-five frames,
+   * with the aura circle doing all the work. The roster promises a whirlwind,
+   * a corkscrew, an armoured kick and a pounce, and a body that never leaves
+   * its standing pose delivers none of them. Driven by `actionTimer` rather
+   * than simulated time so the pose is a function of the move's own progress:
+   * pausing holds it, and two fighters mid-super are each at their own point.
+   */
+  const specialPhase =
+    isSpecial || isBiting
+      ? 1 - Math.max(0, Math.min(1, entity.actionTimer / POWER_MOVE_FRAMES))
+      : 0;
   const isHurt = entity.action === 'HURT' || entity.action === 'KNOCKDOWN';
 
   // WALKING & GROUNDED MOTION CALCULATIONS
@@ -410,6 +444,17 @@ function renderPlayerSprite(
       ctx.save();
       if (isHurt) ctx.rotate(0.2);
 
+      // Human Bat Swing: two full turns about the hips over the animation.
+      //
+      // Pivoted at the waist rather than the feet, because a whirlwind that
+      // rotates about the soles reads as a body tipping over rather than one
+      // spinning in place.
+      if (isSpecial) {
+        ctx.translate(0, -42);
+        ctx.rotate(specialPhase * Math.PI * 4);
+        ctx.translate(0, 42);
+      }
+
       // Special Aura Energy Burst
       if (isSpecial) {
         const auraGrad = ctx.createRadialGradient(0, -42, 10, 0, -42, 70);
@@ -425,6 +470,13 @@ function renderPlayerSprite(
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(0, -42, 55 + Math.sin(simTimeMs / 50) * 8, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // The swept edge of the swing, trailing the arms.
+        ctx.strokeStyle = 'rgba(245, 166, 35, 0.9)';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.arc(0, -60, 62, Math.PI * 0.15, Math.PI * 0.85);
         ctx.stroke();
       }
 
@@ -554,7 +606,30 @@ function renderPlayerSprite(
       // 4. MUSCULAR ARMS & BLACK GRAPPLING GLOVES
       ctx.fillStyle = '#e8a87c'; // Tan skin
 
-      if (isPunch) {
+      if (isSpecial) {
+        // Both arms locked out straight: he is holding somebody by the ankles
+        // and the ankles are the far end of the swing.
+        ctx.beginPath();
+        ctx.roundRect(-56, -70, 46, 15, 7);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.roundRect(10, -70, 46, 15, 7);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#18181e';
+        ctx.beginPath();
+        ctx.arc(-58, -62, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(58, -62, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (isPunch) {
         ctx.beginPath();
         ctx.ellipse(-20, -64, 7, 14, -0.2, 0, Math.PI * 2);
         ctx.fill();
@@ -674,6 +749,21 @@ function renderPlayerSprite(
       ctx.save();
       if (isHurt) ctx.rotate(-0.2);
       if (isFlying) ctx.rotate(0.12); // Forward soaring angle in flight
+
+      // Rollercoaster Hurricane: a corkscrew, spun about the vertical axis.
+      //
+      // Horizontal squash carries the spin, because a body turning away from
+      // the camera and back is what a corkscrew looks like from the side; the
+      // tilt only rocks, since rotating him a full turn in the picture plane
+      // read as a man falling over rather than one drilling upward. Squash is
+      // floored at a third rather than allowed to reach zero, because a frame
+      // where the hero is one pixel wide reads as a dropped frame.
+      if (isSpecial) {
+        ctx.translate(0, -46);
+        ctx.rotate(0.3 * Math.sin(specialPhase * Math.PI * 4));
+        ctx.scale(0.3 + 0.7 * Math.abs(Math.cos(specialPhase * Math.PI * 3)), 1);
+        ctx.translate(0, 46);
+      }
 
       if (isFlying || isJumping || isSpecial) {
         const jetGlow = 18 + Math.sin(simTimeMs / 30) * 6;
@@ -891,16 +981,35 @@ function renderPlayerSprite(
       ctx.save();
       if (isHurt) ctx.rotate(0.2);
 
+      /**
+       * The Omega Knockback Boot is a kick, and the super was the one action
+       * in which he did not kick: the extended-leg pose lives behind `isKick`
+       * and the power move never reached it. It does now, so the move that
+       * breaks censure shields has a boot at the end of it.
+       */
+      const kickPose = isKick || isSpecial;
+
       if (isSpecial) {
         // Red, which is his: the amber this used to be is Feet Master's accent.
-        ctx.fillStyle = 'rgba(255, 59, 48, 0.4)';
+        ctx.fillStyle = 'rgba(255, 59, 48, 0.18)';
         ctx.beginPath();
         ctx.arc(0, -42, 75, 0, Math.PI * 2);
         ctx.fill();
+
+        // The kinetic wave, thrown ahead of the boot and widening as the move
+        // runs out.
+        ctx.strokeStyle = 'rgba(255, 59, 48, 0.7)';
+        ctx.lineWidth = 4;
+        for (let ring = 0; ring < 3; ring++) {
+          const reach = 52 + ring * 18 + specialPhase * 22;
+          ctx.beginPath();
+          ctx.arc(30, -48, reach, -0.75, 0.75);
+          ctx.stroke();
+        }
       }
 
       // 1. CYBERNETIC ARMORED BIKER BOOTS
-      if (isKick) {
+      if (kickPose) {
         drawArcadeBoot(ctx, -18, -12, 16, 14, '#0f0f14');
         drawArcadeBoot(ctx, 12, -54, 44, 24, '#0f0f14');
         ctx.fillStyle = '#f5a623';
@@ -912,7 +1021,7 @@ function renderPlayerSprite(
 
       // 2. KEVLAR TROUSERS
       ctx.fillStyle = '#1e1e24';
-      if (isKick) {
+      if (kickPose) {
         ctx.fillRect(-18, -44, 16, 34);
         ctx.fillRect(4, -44, 16, 34);
       } else {
@@ -1037,14 +1146,38 @@ function renderPlayerSprite(
       if (isHurt) ctx.rotate(0.2);
 
       if (isSpecial || isBiting) {
-        ctx.fillStyle = 'rgba(34, 197, 94, 0.35)';
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
         ctx.beginPath();
         ctx.arc(0, -42, 70, 0, Math.PI * 2);
         ctx.fill();
+
+        // Feral Pup Rush & Bite: he leaves the ground and comes down on the
+        // target rather than leaning at it. Drawn after the aura so the glow
+        // stays a ring on the floor instead of travelling up with him.
+        const lunge = 0.5 - specialPhase * 0.28;
+        ctx.translate(0, -34);
+        ctx.rotate(lunge);
+        ctx.translate(0, 34);
+        ctx.translate(0, -pounceHeight(specialPhase));
       }
 
+      /**
+       * Height reached this frame, and whether the legs should be under him.
+       *
+       * A leap read as a leap needs the hind legs to stop pretending there is
+       * floor beneath them — a body at head height still standing on two
+       * planted boots reads as a bug, not a pounce.
+       */
+      const pounceLift = isSpecial || isBiting ? pounceHeight(specialPhase) : 0;
+      const airborne = pounceLift > 1;
+      const tuck = pounceLift * 0.45;
+
       // 1. TACTICAL CAMO BOOTS
-      if (isKick) {
+      if (airborne) {
+        // Folded under the body, trailing paw slightly higher than the lead.
+        drawArcadeBoot(ctx, -14, -18 - tuck, 16, 14, '#333338');
+        drawArcadeBoot(ctx, 8, -24 - tuck, 16, 14, '#333338');
+      } else if (isKick) {
         drawArcadeBoot(ctx, -18, -12, 16, 14, '#333338');
         drawArcadeBoot(ctx, 12, -52, 40, 22, '#333338');
       } else {
@@ -1054,7 +1187,26 @@ function renderPlayerSprite(
 
       // 2. OLIVE TACTICAL CARGO SHORTS
       ctx.fillStyle = '#3f4e38';
-      if (isKick) {
+      if (airborne) {
+        // Thighs drawn short and folded to meet the tucked boots.
+        ctx.beginPath();
+        ctx.moveTo(-16, -44);
+        ctx.lineTo(-14, -18 - tuck);
+        ctx.lineTo(2, -18 - tuck);
+        ctx.lineTo(-2, -44);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(2, -44);
+        ctx.lineTo(8, -24 - tuck);
+        ctx.lineTo(24, -24 - tuck);
+        ctx.lineTo(16, -44);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (isKick) {
         ctx.fillRect(-18, -44, 16, 34);
         ctx.fillRect(4, -44, 16, 34);
       } else {

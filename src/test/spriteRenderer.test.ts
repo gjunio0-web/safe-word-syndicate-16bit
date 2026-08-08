@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { renderEntitySprite } from '../game/spriteRenderer';
+import { isPowerMovePose, renderEntitySprite } from '../game/spriteRenderer';
+import { POWER_MOVE_FRAMES } from '../game/constants';
 import { CHARACTERS, ENEMIES } from '../game/characterData';
 import { CharacterId, EnemyType, EntityState } from '../types';
 
@@ -424,5 +425,95 @@ describe('Sayonara reads as the animal her data describes', () => {
     // Same pose either way — the difference has to be the light, not the body.
     expect(bodyBounds(freed)).toEqual(bodyBounds(leashed));
     expect(freed.operations.join('|')).not.toBe(leashed.operations.join('|'));
+  });
+});
+
+/**
+ * Power move poses.
+ *
+ * The supers were the only actions in the game that drew the standing body: a
+ * whirlwind, a corkscrew, an armoured kick and a pounce all rendered as the
+ * idle stance with a coloured circle behind it. These pin the poses as poses —
+ * that the body leaves its stance at all, and that it keeps moving through the
+ * animation rather than snapping to one frame and holding it.
+ */
+describe('power move poses', () => {
+  const shape = (recorder: RecordingContext) =>
+    recorder.points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('|');
+
+  const poseOf = (charId: CharacterId, actionTimer: number) =>
+    shape(
+      render(
+        spriteHero(charId, {
+          action: charId === 'ANGRY_CORSO' ? 'BITING' : 'POWER_MOVE',
+          actionTimer,
+        })
+      )
+    );
+
+  for (const charId of HEROES) {
+    it(`${charId} leaves its standing pose to throw its super`, () => {
+      const idle = shape(render(spriteHero(charId, { action: 'IDLE' })));
+      expect(poseOf(charId, POWER_MOVE_FRAMES)).not.toBe(idle);
+    });
+
+    it(`${charId} keeps moving through the super`, () => {
+      // Sampled at the commit and near the end: a pose driven by actionTimer
+      // differs across the move, a pose that ignores it does not.
+      expect(poseOf(charId, POWER_MOVE_FRAMES)).not.toBe(poseOf(charId, 6));
+    });
+  }
+
+  it('stays inside the containment box on every frame of every super', () => {
+    // The geometry suite above samples one frame per pose, at actionTimer 0 --
+    // which for a super is the frame it ends on, with the leap already landed
+    // and the swing already unwound. That is the cheapest frame in the whole
+    // animation, so it proves nothing about the expensive ones. Measured
+    // worst case across the full sweep: 238px, at the peak of Corso's pounce.
+    const LIMIT = 260;
+    for (const charId of HEROES) {
+      for (let actionTimer = 0; actionTimer <= POWER_MOVE_FRAMES; actionTimer++) {
+        const box = render(
+          spriteHero(charId, {
+            action: charId === 'ANGRY_CORSO' ? 'BITING' : 'POWER_MOVE',
+            actionTimer,
+          })
+        ).bounds()!;
+        const worst = Math.max(
+          Math.abs(box.minX),
+          Math.abs(box.maxX),
+          Math.abs(box.minY),
+          Math.abs(box.maxY)
+        );
+        expect(
+          worst,
+          `${charId} reached ${worst.toFixed(0)}px at actionTimer ${actionTimer}`
+        ).toBeLessThan(LIMIT);
+      }
+    }
+  });
+
+  it('takes Angry Corso off the ground and lands him before the move ends', () => {
+    // The leap exists only in the drawing -- the engine keeps him planted --
+    // so the guard has to be the drawing: the body sits higher at the peak
+    // than at rest, and is back down by the final frame.
+    const top = (actionTimer: number) =>
+      render(spriteHero('ANGRY_CORSO', { action: 'BITING', actionTimer })).bounds()!.minY;
+
+    const grounded = render(spriteHero('ANGRY_CORSO', { action: 'IDLE' })).bounds()!.minY;
+    expect(top(30), 'he leaves the ground a third of the way in').toBeLessThan(grounded);
+    expect(top(0), 'and is standing again when it ends').toBeGreaterThan(top(30));
+  });
+
+  it("counts Angry Corso's bite as a super, so it gets the banner and the trail", () => {
+    expect(isPowerMovePose('BITING')).toBe(true);
+    expect(isPowerMovePose('POWER_MOVE')).toBe(true);
+    expect(isPowerMovePose('KICK')).toBe(false);
+
+    // The trail draws the body a second time, so the bite should cost roughly
+    // twice the geometry of a pose that has no trail behind it.
+    const bite = render(spriteHero('ANGRY_CORSO', { action: 'BITING' })).points.length;
+    const idle = render(spriteHero('ANGRY_CORSO', { action: 'IDLE' })).points.length;
+    expect(bite).toBeGreaterThan(idle * 1.5);
   });
 });
