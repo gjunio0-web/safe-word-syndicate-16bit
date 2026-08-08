@@ -160,6 +160,17 @@ interface PadActivity {
    * seen over its cable — reports the same frozen timestamp forever.
    */
   everChanged: boolean;
+  /**
+   * Frame at which a control on this pad was last off its resting position.
+   *
+   * This is the record of "somebody is holding this one", and it is a
+   * different question from both of the above. `timestamp` advances on a pad
+   * nobody has touched — Chrome refreshes it every poll — so it cannot tell an
+   * idle controller apart from one in use; only an actual button or stick can.
+   *
+   * `-1` means never touched since the entry appeared.
+   */
+  lastActiveFrame: number;
 }
 
 const padActivity = new Map<number, PadActivity>();
@@ -173,25 +184,23 @@ let assignmentFrame = 0;
  * has no way to tell "idle" from "powered down" until the OS reports the
  * disconnect, which can take a long time or never happen. `Gamepad.timestamp`
  * does tell them apart: it stops advancing the moment the data stops arriving.
+ *
+ * It also records when each pad was last actually touched, which is what
+ * decides who gets player one below.
  */
 function trackActivity(pads: Map<number, Gamepad>) {
   assignmentFrame++;
 
   for (const [index, pad] of pads) {
     const previous = padActivity.get(index);
-    if (!previous) {
-      padActivity.set(index, {
-        timestamp: pad.timestamp,
-        lastChangeFrame: assignmentFrame,
-        everChanged: false,
-      });
-    } else if (previous.timestamp !== pad.timestamp) {
-      padActivity.set(index, {
-        timestamp: pad.timestamp,
-        lastChangeFrame: assignmentFrame,
-        everChanged: true,
-      });
-    }
+    const entry: PadActivity = previous
+      ? previous.timestamp !== pad.timestamp
+        ? { ...previous, timestamp: pad.timestamp, lastChangeFrame: assignmentFrame, everChanged: true }
+        : previous
+      : { timestamp: pad.timestamp, lastChangeFrame: assignmentFrame, everChanged: false, lastActiveFrame: -1 };
+
+    if (hasActivity(pad)) entry.lastActiveFrame = assignmentFrame;
+    padActivity.set(index, entry);
   }
 
   for (const index of [...padActivity.keys()]) {
@@ -233,9 +242,20 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
   if (assignedP1Index !== null && !pads.has(assignedP1Index)) assignedP1Index = null;
   if (assignedP2Index !== null && !pads.has(assignedP2Index)) assignedP2Index = null;
 
+  // Unclaimed pads, most recently touched first.
+  //
+  // Sorting by index instead was the reported defect: the player drove the
+  // menus and picked their fighter with one controller, the match started, and
+  // the *other* controller — idle on the table, but listed first — was handed
+  // player one. Nothing about a browser's ordering says which device is in
+  // somebody's hands; the only evidence of that is a control having moved.
+  //
+  // Index remains the tie-break, so a world where nothing has been touched yet
+  // assigns exactly as it did before.
+  const touchedAt = (index: number) => padActivity.get(index)?.lastActiveFrame ?? -1;
   const unassigned = [...pads.keys()]
     .filter((i) => i !== assignedP1Index && i !== assignedP2Index)
-    .sort((a, b) => a - b);
+    .sort((a, b) => touchedAt(b) - touchedAt(a) || a - b);
 
   // Assign each unclaimed pad to the first slot it may take.
   //
@@ -321,10 +341,35 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
   return { p1: read(assignedP1Index), p2: read(assignedP2Index) };
 }
 
-/** Drops every assignment. Called when a match starts, so slots are not inherited. */
+/**
+ * Drops every assignment. Called when a match starts, so slots are not
+ * inherited, and again on the way back to the title screen.
+ *
+ * What it deliberately does *not* drop is `padActivity`. That map is knowledge
+ * about the devices — which of them are phantoms, which are still reporting,
+ * which one somebody has been using — and none of that stops being true
+ * because a match began. Clearing it here is what made the reported defect
+ * possible: the assignment was rebuilt on the first frame of gameplay with no
+ * record of who had just been pressing buttons, so it fell back to browser
+ * order and could hand player one to the controller lying on the table.
+ *
+ * Nothing needs to clear it: `trackActivity` already forgets any index that
+ * leaves `navigator.getGamepads()`.
+ */
 export function resetPadAssignments() {
   assignedP1Index = null;
   assignedP2Index = null;
+}
+
+/**
+ * Forgets the devices as well as the slots.
+ *
+ * Exists for tests, which need each case to start in a world where no
+ * controller has ever been seen. The game has no such moment — a page load is
+ * already that world.
+ */
+export function forgetPadDevices() {
+  resetPadAssignments();
   padActivity.clear();
   assignmentFrame = 0;
 }

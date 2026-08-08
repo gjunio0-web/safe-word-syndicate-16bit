@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   connectedGamepadCount,
+  forgetPadDevices,
   mapGamepadToInput,
   mergeInputs,
   readPlayerPads,
@@ -49,8 +50,11 @@ function connect(pads: Gamepad[]) {
   });
 }
 
+// The game keeps what it knows about the devices across a match; a test has to
+// start from a machine no controller has ever been plugged into, or one case's
+// idea of which pad is a phantom leaks into the next.
 afterEach(() => {
-  resetPadAssignments();
+  forgetPadDevices();
   connect([]);
 });
 
@@ -149,6 +153,45 @@ describe('player assignment', () => {
 
     const pads = readPlayerPads(false);
     expect(pads.p1).not.toBeNull();
+  });
+
+  /**
+   * Reported from play: the menus were driven and the fighter picked with one
+   * controller, and in the match the other controller moved the character.
+   *
+   * Both pads are listed the whole time; only one of them is ever touched. The
+   * assignment used to be built in browser order, which says nothing about
+   * which device is in somebody's hands, and the match's reset threw away the
+   * one thing that did — the record of what had just been pressed.
+   *
+   * The two pads are deliberately given the *same* timestamp behaviour here:
+   * the idle one is as alive as the used one by every measure except having
+   * been touched. Distinguishing them by staleness or by `everChanged` is not
+   * enough, and a version of this that leant on either would pass while the
+   * player kept losing their controller.
+   */
+  it('hands player one to the pad that was being used, not to the lowest index', () => {
+    const idle = (timestamp: number) => pad({ index: 0, timestamp });
+    const used = (timestamp: number, pressing: boolean) =>
+      pad({ index: 1, timestamp, buttons: pressing ? { 0: true } : {} });
+
+    // Character select: index 1 walks the roster and confirms.
+    for (let frame = 1; frame <= 40; frame++) {
+      connect([idle(frame), used(frame, frame > 20)]);
+      readPlayerPads(false);
+    }
+
+    // The match begins. Slots are released and the button is already back up.
+    resetPadAssignments();
+    connect([idle(41), used(41, false)]);
+
+    const pads = readPlayerPads(false);
+    expect(pads.p1, 'the pad that chose the fighter should drive it').not.toBeNull();
+
+    // Named rather than inferred: only index 1 is pressing on this frame.
+    connect([idle(42), used(42, true)]);
+    expect(readPlayerPads(false).p1?.jump, 'player one reads the used pad').toBe(true);
+    expect(readPlayerPads(false).p2?.jump ?? false, 'player two is not the used pad').toBe(false);
   });
 });
 
@@ -349,14 +392,27 @@ describe('the staleness window is counted in calls', () => {
     // time — the only kind of pad the hand-over logic will ever move into an
     // abandoned slot, since a pad already holding P2 never re-enters that
     // check.
+    //
+    // Pad 0 presses once, on the opening call, and is then left alone. That
+    // press is what makes it the holder of P1: free slots go to whichever
+    // unclaimed pad was touched most recently, so a pad that had never been
+    // touched would not be holding a slot for this test to take away.
+    connect([
+      pad({ index: 0, timestamp: 0, buttons: { 2: true } }),
+      pad({ index: 1, timestamp: 5, buttons: { 2: true } }),
+      pad({ index: 2, timestamp: 7, buttons: { 2: true } }),
+    ]);
+
+    let calls = 0;
+    let result = readPlayerPads(false);
+    calls++;
+
     connect([
       pad({ index: 0, timestamp: 0 }),
       pad({ index: 1, timestamp: 5, buttons: { 2: true } }),
       pad({ index: 2, timestamp: 7, buttons: { 2: true } }),
     ]);
 
-    let calls = 0;
-    let result;
     do {
       result = readPlayerPads(false);
       calls++;
