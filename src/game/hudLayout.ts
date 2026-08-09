@@ -133,6 +133,33 @@ function bossBarShape(input: HudLayoutInput) {
 /** Where it sat before this module existed, and still sits when nothing is in the way. */
 export const BOSS_BAR_RESTING_BOTTOM = 48;
 
+/**
+ * Where the compact bar rests instead: level with the thumb controls.
+ *
+ * 12 is the controls' own distance from the bottom in landscape — CONTROL_PAD
+ * plus CONTROL_ROW_PAD — so the bar becomes the middle of the same bottom row
+ * rather than a third thing floating above it, and the 36px it gives back go
+ * to the fight.
+ *
+ * It can go this low because on a phone the compact bar never crosses a
+ * cluster horizontally, and two boxes that do not overlap on one axis cannot
+ * overlap at all. Measured on every landscape shape in the test set: at 384
+ * wide the bar spans [142,526] of 667 while the clusters end at 120 and start
+ * at 547, and the gap only widens on larger phones. Portrait is the exception
+ * — there the bar does cross both clusters — and it needs no exception here,
+ * because the lift below still fires and still clears them.
+ *
+ * Kept apart from BOSS_BAR_RESTING_BOTTOM rather than lowering that one: the
+ * full bar is a panel with a border and a glow, and putting it against the
+ * bottom edge of a desktop window is a different question nobody has asked.
+ */
+export const BOSS_BAR_COMPACT_RESTING_BOTTOM = 12;
+
+/** Where the given shape rests when nothing is in its way. */
+function restingBottom(input: HudLayoutInput): number {
+  return input.compact ? BOSS_BAR_COMPACT_RESTING_BOTTOM : BOSS_BAR_RESTING_BOTTOM;
+}
+
 /** Player cards: top-3, and p-2.5 around a 56px portrait inside a 2px border. */
 const HUD_CARD_TOP = 12;
 const HUD_CARD_HEIGHT = 80;
@@ -273,7 +300,7 @@ export function barkBox(input: HudLayoutInput, top: number): Box {
 export function hudLayout(input: HudLayoutInput): HudLayout {
   const clusters = controlBoxes(input);
 
-  let bossBarBottom = BOSS_BAR_RESTING_BOTTOM;
+  let bossBarBottom = restingBottom(input);
   const resting = bossBarBox(input, bossBarBottom);
   const hit = clusters.filter((cluster) => overlaps(resting, cluster));
 

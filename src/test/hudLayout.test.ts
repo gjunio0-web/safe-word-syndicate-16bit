@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   BARK_RESTING_TOP,
   BARK_TOP_CLEAR_OF_CARDS,
+  BOSS_BAR_COMPACT_RESTING_BOTTOM,
   BOSS_BAR_RESTING_BOTTOM,
   barkBox,
   bossBarBox,
@@ -242,9 +243,34 @@ describe('the compact bar', () => {
       [740, 308],
     ] as const) {
       const input = compactAt(w, h, true);
-      expect(hudLayout(input).bossBarBottom).toBe(BOSS_BAR_RESTING_BOTTOM);
+      expect(hudLayout(input).bossBarBottom).toBe(BOSS_BAR_COMPACT_RESTING_BOTTOM);
       for (const cluster of controlBoxes(input)) {
         expect(overlaps(bossBarBox(input, hudLayout(input).bossBarBottom), cluster)).toBe(false);
+      }
+    }
+  });
+
+  it('rests level with the thumb controls, not above them', () => {
+    // The point of the compact bar is the scene height it hands back, and the
+    // offset is part of that: 48px of clearance is furniture the phone form
+    // does not need. Stated against the full bar's resting offset rather than
+    // against its own constant, so a compact bar that quietly went back to
+    // floating fails here.
+    const input = compactAt(667, 323, true);
+    expect(hudLayout(input).bossBarBottom).toBeLessThan(BOSS_BAR_RESTING_BOTTOM);
+  });
+
+  it('stays clear of the clusters at the lower offset, on every phone shape', () => {
+    // Lowering a box can only create an overlap through the vertical axis, and
+    // the reason this is safe is that the horizontal axis already separates
+    // them on a landscape phone. That is the property worth pinning: it is
+    // what makes the offset a free choice rather than a lucky one.
+    for (const [name, w, h, landscape] of SHAPES) {
+      if (!landscape) continue;
+      const input = compactAt(w, h, landscape);
+      const bar = bossBarBox(input, hudLayout(input).bossBarBottom);
+      for (const cluster of controlBoxes(input)) {
+        expect(bar.left < cluster.right && cluster.left < bar.right, name).toBe(false);
       }
     }
   });
