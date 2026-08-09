@@ -99,9 +99,10 @@ export interface EntityState {
   /**
    * Where Sayonara is in a tackle.
    *
-   * Her weapon has always been called a Heavy Knockback Tackle in her data and
-   * has never existed: she fell into the generic melee branch and threw the
-   * same punch, with the same push of nine, as a grunt in a polo shirt. A
+   * Her data called this a Heavy Knockback Tackle for a long time and the move
+   * did not exist: she fell into the generic melee branch and threw the same
+   * punch, with the same push of nine, as a grunt in a polo shirt. The field
+   * now reads Collared Rush & Bite, which names both halves. A
    * charge has to be readable to be fair, so it is a sequence rather than a
    * single frame of damage — wind up where the player can see it, commit, and
    * be caught out if it misses.

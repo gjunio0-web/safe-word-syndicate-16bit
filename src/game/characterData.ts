@@ -265,7 +265,7 @@ export const ENEMIES: Record<EnemyType, EnemyInfo> = {
     // so the two belong together.
     hitbox: { width: 155, height: 105 },
     color: '#6c5ce7',
-    weaponName: 'Heavy Knockback Tackle',
+    weaponName: 'Collared Rush & Bite',
     description: 'An old female dog under Mizydia\'s control. Knocking out Mizydia\'s spell breaks her leash so she walks away freely!',
     // Stops at the collar. What happens to it is the last beat of the
     // campaign, and the codex opens from the title screen.

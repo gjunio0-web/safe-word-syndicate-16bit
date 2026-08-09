@@ -1788,11 +1788,12 @@ export class GameEngine {
     if (enemy.enemyType === 'BOSS_SAYONARA') {
       // The Old Guard runs at you.
       //
-      // Her data has said Heavy Knockback Tackle since the beginning and the
-      // engine has never built one: she shared the generic melee branch with
-      // the Purity Patrol, so the fastest fighter in the game walked into
-      // punching distance and threw a grunt's punch with a grunt's push of
-      // nine. What follows is the move her own description promises.
+      // Her data said Heavy Knockback Tackle for a long time and the engine
+      // never built one: she shared the generic melee branch with the Purity
+      // Patrol, so the fastest fighter in the game walked into punching
+      // distance and threw a grunt's punch with a grunt's push of nine. What
+      // follows is the rush her codex entry — now Collared Rush & Bite —
+      // promises, and the bite below is the other half.
       //
       // It runs as a small state machine rather than a damage roll, because a
       // charge that cannot be seen coming is not a fight, it is a tax. She

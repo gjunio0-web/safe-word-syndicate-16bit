@@ -189,13 +189,14 @@ export const BARK_DURATION_FRAMES = 200;
 export const OUTRO_MAX_FRAMES = 420;
 
 /**
- * Sayonara's Heavy Knockback Tackle.
+ * Sayonara's rush, the first half of the Collared Rush & Bite.
  *
- * The move is named in her data and was never built: she used the generic
- * melee branch, so the fastest fighter in the game closed to punching distance
- * and threw a grunt's punch. A charge is the shape her own description asks
- * for, and a charge is only fair if the player can see it coming, so the
- * numbers below are a sequence rather than a damage figure.
+ * History: her data named a Heavy Knockback Tackle from the beginning and the
+ * move was never built. She used the generic melee branch, so the fastest
+ * fighter in the game closed to punching distance and threw a grunt's punch. A
+ * charge is the shape her own description asks for, and a charge is only fair
+ * if the player can see it coming, so the numbers below are a sequence rather
+ * than a damage figure.
  *
  * The wind-up is the whole contract. Half a second of a dog dropping into a
  * crouch is enough time to move, and if the player does move, the recovery is

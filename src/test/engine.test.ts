@@ -950,11 +950,12 @@ describe('body size', () => {
 });
 
 /**
- * The Heavy Knockback Tackle.
+ * The rush half of the Collared Rush & Bite.
  *
- * Named in her data since the beginning and never built: she shared the melee
- * branch with the Purity Patrol, so the fastest fighter in the game closed to
- * punching distance and threw a grunt's punch with a grunt's push of nine.
+ * History: her data named a Heavy Knockback Tackle for a long time and the
+ * move was never built. She shared the melee branch with the Purity Patrol, so
+ * the fastest fighter in the game closed to punching distance and threw a
+ * grunt's punch with a grunt's push of nine.
  *
  * These pin the contract that makes a charge fair rather than punishing: it is
  * announced, it cannot be steered once committed, it connects once, and
