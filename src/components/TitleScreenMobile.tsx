@@ -35,8 +35,13 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
           <span className="text-[#00ffff] font-mono text-xs landscape:text-[10px] tracking-tighter block">SYSTEM STATUS: RADICAL</span>
           <span className="text-xl landscape:text-sm font-black italic uppercase text-white">THE SAFE-WORD SYNDICATE<span className="text-[#ff00ff]">.</span></span>
         </div>
+        {/* The banner's own VS line is gone.
+          *
+          * It was already hidden in landscape, and in portrait it said what
+          * the logo block below says in full — twice on one screen, the
+          * second time in grey at the size of a footnote. Removing it takes
+          * two wrapped lines off the tallest block on the shortest phone. */}
         <div className="text-right">
-          <div className="text-xs landscape:hidden font-mono text-gray-400">VS ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS</div>
           <button
             onClick={onStartBrawl}
             className={`bg-transparent border-0 py-2.5 landscape:py-1 px-0 -my-2.5 landscape:my-0 cursor-pointer text-lg landscape:text-xs font-black animate-pulse ${audioUnlocked ? 'text-[#ffff00]' : 'text-[#00ffff]'}`}
@@ -50,7 +55,41 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
         * landscape - the logo block on the left, actions on the right,
         * both vertically centered against each other so neither reads
         * as an afterthought. */}
-      <div className="flex flex-col landscape:flex-row landscape:flex-1 landscape:min-h-0 landscape:items-center landscape:justify-center landscape:gap-6 my-auto landscape:my-0">
+      {/* Portrait spacing, in two rules, because a short phone and a tall one
+        * are two different problems.
+        *
+        * The gap itself is the hole the flavour panel left. That panel was the
+        * only thing separating the VS line from START BRAWL — the two halves
+        * of this block are siblings in a column with no gap of their own — so
+        * removing it left the subtitle sitting directly on the button, at 0px
+        * on all three phone shapes.
+        *
+        * Where the column fits, `my-auto` centres the whole body and the space
+        * above the logo comes out of the leftover on its own; gap-10 is then
+        * just the distance between the two halves.
+        *
+        * Where it does not fit there is no leftover to place, `my-auto`
+        * collapses to zero, and the logo ends up against the banner's magenta
+        * rule with the entire gap below it. At 375x667 the column measures 732
+        * against 643 of visible height. There the space has to be written
+        * rather than left over, so the same total is split in half: 20 above
+        * the text block and 20 under it. Same total either way, so balancing
+        * the short screen costs it no extra overflow.
+        *
+        * The threshold is where the two rules cross. The column is 756px tall
+        * including the root's border, so the leftover above the body is
+        * (h - 756) / 2; the written halves are always 20 and 20. The two are
+        * equally far from even when |leftover - 40| equals leftover, which is
+        * leftover = 20, so h = 796.
+        *
+        * That figure is a correction: this first shipped at 836 from the same
+        * algebra solved wrongly, and the sweep caught it — at 830 the written
+        * halves gave 57 and 20 where the leftover alone gives 37 and 40.
+        * Measured after the fix at 640, 667, 699, 760, 790, 800, 830, 844 and
+        * 900.
+        *
+        * Landscape has its own row layout and is untouched by both. */}
+      <div className="flex flex-col gap-10 [@media(max-height:796px)]:pt-5 [@media(max-height:796px)]:gap-5 landscape:pt-0 landscape:flex-row landscape:flex-1 landscape:min-h-0 landscape:items-center landscape:justify-center landscape:gap-6 my-auto landscape:my-0">
         {/* Main Title Logo */}
         <div className="space-y-4 landscape:space-y-1.5 max-w-3xl landscape:max-w-none mx-auto landscape:mx-0 landscape:flex-1 landscape:text-left">
           <h1 className="text-4xl md:text-6xl landscape:text-5xl font-black italic tracking-tighter uppercase leading-none text-white drop-shadow-[0_0_25px_rgba(255,0,255,0.5)]">
@@ -59,11 +98,17 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
           <p className="text-lg md:text-2xl landscape:text-xl font-black italic text-[#00ffff] font-mono uppercase tracking-wider">
             VS THE ULTRA EVIL LEAGUE OF CONSERVATIVE CHRISTIANS
           </p>
-          {/* Flavor text, not information the player needs to start -
-              the first thing to drop when landscape has no room. */}
-          <p className="text-xs md:text-sm landscape:hidden text-gray-300 max-w-lg mx-auto font-mono leading-relaxed border-2 border-[#333] p-4 bg-[#111]">
-            Defeat the monochromatic syndicate enforcing a dull gray status quo! Play as Feet Master, Fun Maker, Omega Biker, or Angry Corso!
-          </p>
+          {/* The flavour text that used to sit here is gone.
+            *
+            * It was already hidden in landscape as the first thing to drop
+            * when there was no room; portrait kept it, and it was the tallest
+            * block on the screen — a bordered panel of prose between the logo
+            * and the only button that starts the game. What it said, the
+            * roster names included, the player meets on the next screen
+            * anyway.
+            *
+            * The height it gave back is spent on the elements that stayed,
+            * not reclaimed: see the spacing below. */}
         </div>
 
         {/* Actions
@@ -101,6 +146,18 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
           * NORMAL / EASY / PUNK HARD — so a full row turns it into a readout
           * of what you are about to start on, not just a way in.
           *
+          * Portrait on a phone now uses those same two columns rather than
+          * one. Stacked, the three buttons read as a list of equals under
+          * START BRAWL; paired, the ranking is visible in the shape — one
+          * full-width row that changes the fight, one row of two that only
+          * open a panel. It also gives the block back a row of height on the
+          * shortest phone, which is the one that does not fit.
+          *
+          * The sm: overrides keep a tablet exactly as it was. At 640px and up
+          * the grid is still three across with difficulty in a single column,
+          * because there the row has the width for it and this component
+          * serves tablets too.
+          *
           * Colour carries the same ranking: magenta to begin, cyan for the
           * choice that changes the fight, grey for the two that only show you
           * things. The jukebox gave up its cyan glow here — with difficulty
@@ -112,10 +169,10 @@ export const TitleScreenMobile: React.FC<TitleScreenProps> = ({
           * behind landscape:, and the grid collapses to one column there,
           * which is what the flex row already did.
           */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 landscape:grid-cols-2 gap-3 landscape:gap-1.5 w-full">
+          <div className="grid grid-cols-2 sm:grid-cols-3 landscape:grid-cols-2 gap-3 landscape:gap-1.5 w-full">
             <button
               onClick={onOpenDifficulty}
-              className="w-full px-3 py-3 landscape:py-1.5 landscape:min-h-11 landscape:col-span-2 bg-[#0a1826] hover:bg-[#10243a] border-2 border-[#00ffff] text-[#00ffff] shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-colors font-black text-[11px] landscape:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
+              className="w-full px-3 py-3 landscape:py-1.5 landscape:min-h-11 col-span-2 sm:col-span-1 landscape:col-span-2 bg-[#0a1826] hover:bg-[#10243a] border-2 border-[#00ffff] text-[#00ffff] shadow-[0_0_15px_rgba(0,255,255,0.3)] transition-colors font-black text-[11px] landscape:text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 landscape:gap-1 whitespace-nowrap"
             >
               <Gauge className="w-4 h-4 landscape:w-3 landscape:h-3 shrink-0 text-[#00ffff]" />
               {difficulty === 'PUNK_HARD' ? 'PUNK HARD' : difficulty === 'EASY' ? 'EASY' : 'NORMAL'}
