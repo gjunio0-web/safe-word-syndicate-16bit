@@ -169,6 +169,28 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
   const bothSlotsLit = mode === 'COOP';
 
   /**
+   * Whether there is a single active slot to talk about.
+   *
+   * The row below — the TAB hint, the CHOOSING badge, the pulsing highlight on
+   * whichever of the two buttons is current — all say the same thing: "this is
+   * the slot your next press lands on". With two controllers that sentence has
+   * no referent. Each pad is locked to its own slot, `menuReadersFor` has put
+   * the per-player readers in charge, and nothing a pad does moves an active
+   * slot. Saying it anyway sends a player looking for a TAB key that would not
+   * help them.
+   *
+   * Read off the reader plan rather than off the pad count, so the row agrees
+   * with whichever reader is actually running instead of re-deriving the same
+   * condition a second way — the mistake that once left a combination with no
+   * reader at all.
+   *
+   * The cost is a keyboard player who has two pads plugged in and is not using
+   * them: they keep the cursor, and lose the hint that says so. That is the
+   * rarer of the two, and the row is a hint rather than the mechanism.
+   */
+  const sharedCursor = readers.shared;
+
+  /**
    * The one way this screen changes mode.
    *
    * Every route in — the three buttons and the controller's up and down —
@@ -411,9 +433,11 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
         * every size, since this bar never renders there. */}
       {mode !== 'SINGLE' && (
         <div className="mt-3 px-2 py-[7px] flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 text-[10px] sm:text-xs font-mono text-zinc-400">
-            <span className="text-[#00ffff] font-bold">CLICK TAB TO SWITCH SELECTING SLOT:</span>
-          </div>
+          {sharedCursor && (
+            <div className="flex items-center gap-2 text-[10px] sm:text-xs font-mono text-zinc-400">
+              <span className="text-[#00ffff] font-bold">CLICK TAB TO SWITCH SELECTING SLOT:</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               onClick={() => {
@@ -421,13 +445,13 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                 setActiveSlot('P1');
               }}
               className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border-2 transition-all cursor-pointer ${
-                activeSlot === 'P1'
+                sharedCursor && activeSlot === 'P1'
                   ? 'bg-[#ff00ff] text-black border-white shadow-[0_0_15px_rgba(255,0,255,0.6)] animate-pulse'
                   : 'bg-[#1a1a1a] text-zinc-300 border-[#ff00ff]/40 hover:border-[#ff00ff]'
               }`}
             >
               <User className="w-3.5 h-3.5" /> P1: {CHARACTERS[selectedP1].name}{' '}
-              {activeSlot === 'P1' && <span className="bg-black text-white text-[9px] px-1 py-0.5 rounded font-mono">CHOOSING</span>}
+              {sharedCursor && activeSlot === 'P1' && <span className="bg-black text-white text-[9px] px-1 py-0.5 rounded font-mono">CHOOSING</span>}
             </button>
 
             <button
@@ -436,14 +460,14 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
                 setActiveSlot('P2');
               }}
               className={`flex-1 sm:flex-none px-3 py-1.5 text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border-2 transition-all cursor-pointer ${
-                activeSlot === 'P2'
+                sharedCursor && activeSlot === 'P2'
                   ? 'bg-[#00ffff] text-black border-white shadow-[0_0_15px_rgba(0,255,255,0.6)] animate-pulse'
                   : 'bg-[#1a1a1a] text-zinc-300 border-[#00ffff]/40 hover:border-[#00ffff]'
               }`}
             >
               {mode === 'AI_COMPANION' ? <Bot className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
               {mode === 'AI_COMPANION' ? 'AI BUDDY' : 'P2'}: {selectedP2 ? CHARACTERS[selectedP2].name : 'NONE'}{' '}
-              {activeSlot === 'P2' && <span className="bg-black text-white text-[9px] px-1 py-0.5 rounded font-mono">CHOOSING</span>}
+              {sharedCursor && activeSlot === 'P2' && <span className="bg-black text-white text-[9px] px-1 py-0.5 rounded font-mono">CHOOSING</span>}
             </button>
           </div>
         </div>
