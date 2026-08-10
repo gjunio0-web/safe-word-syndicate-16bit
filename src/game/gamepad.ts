@@ -325,18 +325,38 @@ export function readPlayerPads(): PlayerPadInputs {
   // would not read, while the title screen worked, because `readMenuState`
   // merges every pad and never notices a dead one.
   //
-  // The test is `everChanged`, not staleness. Staleness would evict a player
-  // who set their controller down for three seconds and hand their slot to
-  // player two mid-match. Never having moved at all is something only a
-  // phantom does — a real pad reports the moment it is touched, and the
-  // browser only lists it after a first press in the first place.
+  // The test is never staleness. Staleness would evict a player who set their
+  // controller down for three seconds and hand their slot to player two
+  // mid-match.
+  //
+  // It is two questions, and a slot is only defended when both answer yes.
+  // `everChanged` asks whether the entry is a device at all: a phantom reports
+  // the same frozen timestamp forever, which nothing real does. `touched` asks
+  // whether anybody has ever pressed anything on it, which is the difference
+  // between a controller in someone's hands and one that has sat on the table
+  // since the page loaded.
+  //
+  // The second question is what lets this run without a reset between stages.
+  // The reported defect was a player who picked their fighter with one
+  // controller and drove it with the other: two pads listed, the untouched one
+  // holding player one by index alone. That used to be corrected by wiping
+  // every slot at the start of a match and rebuilding them, and the rebuild is
+  // what swapped two people's fighters at every stage boundary. Correcting it
+  // here instead means the assignment never has to be thrown away, so it can
+  // survive the whole campaign.
+  const inSomeonesHands = (index: number | null) => {
+    if (index === null) return false;
+    const activity = padActivity.get(index);
+    return !!activity?.everChanged && activity.lastActiveFrame >= 0;
+  };
+
   for (let earlier = 0; earlier < slotOrder.length; earlier++) {
     const earlierIndex = held(slotOrder[earlier]);
-    if (earlierIndex !== null && padActivity.get(earlierIndex)?.everChanged) continue;
+    if (inSomeonesHands(earlierIndex)) continue;
 
     for (let later = earlier + 1; later < slotOrder.length; later++) {
       const laterIndex = held(slotOrder[later]);
-      if (laterIndex === null || !padActivity.get(laterIndex)?.everChanged) continue;
+      if (!inSomeonesHands(laterIndex)) continue;
       assign(slotOrder[earlier], laterIndex);
       if (earlierIndex === null) assign(slotOrder[later], null);
       else assign(slotOrder[later], earlierIndex);

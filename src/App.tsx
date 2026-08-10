@@ -595,9 +595,18 @@ export default function App() {
       settingsOverride ?? settings,
       secondSlotIsHuman(mode)
     );
-    // Slots are not inherited between matches: co-op and solo assign them
-    // differently, and a stale assignment would survive the mode change.
-    resetPadAssignments();
+    // Slots are deliberately *not* released here any more.
+    //
+    // They used to be, on the grounds that co-op and solo assigned them
+    // differently and a stale assignment would survive a mode change. One order
+    // now serves every mode, so there is nothing left to go stale — and the
+    // rebuild that followed the release was itself a defect: it handed player
+    // one to whichever pad had been touched most recently, so two people in
+    // co-op swapped fighters at every stage boundary.
+    //
+    // What the release was covering for is fixed at its source in gamepad.ts:
+    // a pad nobody has ever touched no longer holds a slot against one that is
+    // in someone's hands. Returning to the title still clears everything.
     setEngineVersion((v) => v + 1);
     setCurrentStageIdx(stageIdx);
     setScreen('GAMEPLAY');

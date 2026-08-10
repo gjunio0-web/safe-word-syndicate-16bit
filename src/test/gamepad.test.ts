@@ -159,6 +159,72 @@ describe('player assignment', () => {
   });
 
   /**
+   * Two people in co-op keep the fighter they started with, across the whole
+   * campaign.
+   *
+   * `startStage` used to release every slot on each stage and rebuild them,
+   * and the rebuild preferred whichever pad had been touched most recently —
+   * so the player who happened to be swinging at the moment the stage ended
+   * took player one on the next one, and two people swapped characters.
+   *
+   * Held here without any reset at all, which is the point: the assignment is
+   * meant to survive a stage now, so the only thing that may move a slot is a
+   * pad genuinely leaving or dying.
+   */
+  it('does not swap two players when one of them stops moving', () => {
+    let tick = 100;
+    const both = (pressing: 0 | 1 | null) =>
+      connect([
+        pad({ index: 0, timestamp: ++tick, buttons: pressing === 0 ? { 2: true } : {} }),
+        pad({ index: 1, timestamp: tick, buttons: pressing === 1 ? { 1: true } : {} }),
+      ]);
+
+    // Both people press something on the opening frame: index 0 is player one.
+    connect([
+      pad({ index: 0, timestamp: tick, buttons: { 2: true } }),
+      pad({ index: 1, timestamp: tick, buttons: { 1: true } }),
+    ]);
+    readPlayerPads();
+
+    // Then one of them fights for a long stretch while the other stands still.
+    for (let i = 0; i < 300; i++) {
+      both(1);
+      readPlayerPads();
+    }
+
+    both(0);
+    const pads = readPlayerPads();
+    expect(pads.p1!.punch, 'player one is still the pad that started there').toBe(true);
+    expect(pads.p2!.punch, 'and player two is still the other one').toBe(false);
+  });
+
+  /**
+   * The same defect the per-stage reset used to paper over, now settled where
+   * it happens: one person, two pads listed, only one of them ever touched.
+   * No reset anywhere in this test.
+   */
+  it('takes player one off a pad nobody has ever touched', () => {
+    const idle = (timestamp: number) => pad({ index: 0, timestamp });
+    const used = (timestamp: number, pressing: boolean) =>
+      pad({ index: 1, timestamp, buttons: pressing ? { 0: true } : {} });
+
+    // Both listed from the start; the untouched one has the lower index and
+    // claims player one on the opening frame.
+    connect([idle(1), used(1, false)]);
+    readPlayerPads();
+
+    for (let frame = 2; frame <= 40; frame++) {
+      connect([idle(frame), used(frame, frame > 20)]);
+      readPlayerPads();
+    }
+
+    connect([idle(41), used(41, true)]);
+    const pads = readPlayerPads();
+    expect(pads.p1?.jump, 'the pad in someone\'s hands holds player one').toBe(true);
+    expect(pads.p2?.jump ?? false, 'the untouched one does not').toBe(false);
+  });
+
+  /**
    * Reported from play: the menus were driven and the fighter picked with one
    * controller, and in the match the other controller moved the character.
    *
@@ -292,13 +358,23 @@ describe('recovering a slot from a dead controller', () => {
 
   it('does not steal a slot from a holder that is still reporting', () => {
     let tick = 100;
-    connect([pad({ index: 0, timestamp: tick })]);
+    // Pressed once, then left alone. That opening press is what makes this a
+    // resting player rather than a controller nobody has ever touched, and the
+    // two are not the same case: a slot is only defended for a pad somebody
+    // has actually used. Without it the test passed for an unrelated reason —
+    // the challenger's frozen timestamp made it look like a phantom — and
+    // would have gone on passing whatever the defence did.
+    connect([pad({ index: 0, timestamp: tick, buttons: { 2: true } })]);
     readPlayerPads();
 
     // Holder keeps refreshing; a second pad is pressed but must not take over.
+    let challengerTick = 500;
     for (let i = 0; i < 200; i++) {
       tick++;
-      connect([pad({ index: 0, timestamp: tick }), pad({ index: 1, timestamp: 1, buttons: { 0: true } })]);
+      connect([
+        pad({ index: 0, timestamp: tick }),
+        pad({ index: 1, timestamp: ++challengerTick, buttons: { 0: true } }),
+      ]);
       readPlayerPads();
     }
 
