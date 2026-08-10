@@ -110,48 +110,51 @@ describe('gamepad mapping', () => {
  * was driving.
  */
 describe('player assignment', () => {
-  it('gives the first pad to player two in co-op, leaving the keyboard on P1', () => {
-    connect([pad({ index: 0 })]);
-    const pads = readPlayerPads(true);
-    expect(pads.p1).toBeNull();
-    expect(pads.p2).not.toBeNull();
-  });
-
-  it('gives the first pad to player one outside co-op', () => {
+  it('gives the first pad to player one, in co-op as anywhere else', () => {
+    // Co-op used to invert this and hand the first pad to player two, so the
+    // keyboard kept player one. That read well with one pad and badly with
+    // two: whoever switched on first ended up on the fighter to the left.
     connect([pad({ index: 3 })]);
-    const pads = readPlayerPads(false);
+    const pads = readPlayerPads();
     expect(pads.p1).not.toBeNull();
     expect(pads.p2).toBeNull();
   });
 
+  it('gives the second pad to player two, whatever the indices are', () => {
+    connect([pad({ index: 3, buttons: { 0: true } }), pad({ index: 7, buttons: { 1: true } })]);
+    const pads = readPlayerPads();
+    // Lower index first: index 3 pressed jump, index 7 pressed kick.
+    expect(pads.p1!.jump).toBe(true);
+    expect(pads.p2!.kick).toBe(true);
+  });
+
   it('keeps the slot when a pad drops out for a frame and returns', () => {
     connect([pad({ index: 0 })]);
-    readPlayerPads(true);
+    readPlayerPads();
 
     connect([]);
-    readPlayerPads(true);
+    readPlayerPads();
 
     connect([pad({ index: 0 })]);
-    const pads = readPlayerPads(true);
-    expect(pads.p1).toBeNull();
-    expect(pads.p2).not.toBeNull();
+    const pads = readPlayerPads();
+    expect(pads.p1).not.toBeNull();
   });
 
   it('does not let a second device steal the slot already held', () => {
     connect([pad({ index: 0 })]);
-    readPlayerPads(true);
+    readPlayerPads();
 
     connect([pad({ index: 0 }), pad({ index: 1 })]);
-    const pads = readPlayerPads(true);
-    expect(pads.p2).not.toBeNull();
+    const pads = readPlayerPads();
+    expect(pads.p1).not.toBeNull();
   });
 
   it('releases slots between matches', () => {
     connect([pad({ index: 0 })]);
-    readPlayerPads(true);
+    readPlayerPads();
     resetPadAssignments();
 
-    const pads = readPlayerPads(false);
+    const pads = readPlayerPads();
     expect(pads.p1).not.toBeNull();
   });
 
@@ -178,20 +181,20 @@ describe('player assignment', () => {
     // Character select: index 1 walks the roster and confirms.
     for (let frame = 1; frame <= 40; frame++) {
       connect([idle(frame), used(frame, frame > 20)]);
-      readPlayerPads(false);
+      readPlayerPads();
     }
 
     // The match begins. Slots are released and the button is already back up.
     resetPadAssignments();
     connect([idle(41), used(41, false)]);
 
-    const pads = readPlayerPads(false);
+    const pads = readPlayerPads();
     expect(pads.p1, 'the pad that chose the fighter should drive it').not.toBeNull();
 
     // Named rather than inferred: only index 1 is pressing on this frame.
     connect([idle(42), used(42, true)]);
-    expect(readPlayerPads(false).p1?.jump, 'player one reads the used pad').toBe(true);
-    expect(readPlayerPads(false).p2?.jump ?? false, 'player two is not the used pad').toBe(false);
+    expect(readPlayerPads().p1?.jump, 'player one reads the used pad').toBe(true);
+    expect(readPlayerPads().p2?.jump ?? false, 'player two is not the used pad').toBe(false);
   });
 });
 
@@ -254,56 +257,56 @@ describe('connection change detection', () => {
  */
 describe('recovering a slot from a dead controller', () => {
   /** Advances enough frames for a pad with a frozen timestamp to go stale. */
-  const idle = (frames: number, coop = true) => {
-    for (let i = 0; i < frames; i++) readPlayerPads(coop);
+  const idle = (frames: number) => {
+    for (let i = 0; i < frames; i++) readPlayerPads();
   };
 
   it('hands the slot to a pad being used when the holder has gone quiet', () => {
     const dead = pad({ index: 0, timestamp: 100 });
     connect([dead]);
-    readPlayerPads(true);
+    readPlayerPads();
 
     // Switched off: still listed, still "connected", timestamp frozen.
     idle(200);
 
     // A replacement is plugged in and the player presses a button.
     connect([dead, pad({ index: 1, timestamp: 500, buttons: { 0: true } })]);
-    const pads = readPlayerPads(true);
+    const pads = readPlayerPads();
 
-    expect(pads.p2).not.toBeNull();
-    expect(pads.p2!.jump).toBe(true);
+    expect(pads.p1).not.toBeNull();
+    expect(pads.p1!.jump).toBe(true);
   });
 
   it('leaves a resting controller alone when nothing is competing for it', () => {
     // Firefox only advances `timestamp` on state change, so an untouched live
     // pad looks exactly like a dead one. It must not lose its slot for that.
     connect([pad({ index: 0, timestamp: 100 })]);
-    readPlayerPads(true);
+    readPlayerPads();
     idle(400);
 
     connect([pad({ index: 0, timestamp: 100, buttons: { 2: true } })]);
-    const pads = readPlayerPads(true);
-    expect(pads.p2).not.toBeNull();
-    expect(pads.p2!.punch).toBe(true);
+    const pads = readPlayerPads();
+    expect(pads.p1).not.toBeNull();
+    expect(pads.p1!.punch).toBe(true);
   });
 
   it('does not steal a slot from a holder that is still reporting', () => {
     let tick = 100;
     connect([pad({ index: 0, timestamp: tick })]);
-    readPlayerPads(true);
+    readPlayerPads();
 
     // Holder keeps refreshing; a second pad is pressed but must not take over.
     for (let i = 0; i < 200; i++) {
       tick++;
       connect([pad({ index: 0, timestamp: tick }), pad({ index: 1, timestamp: 1, buttons: { 0: true } })]);
-      readPlayerPads(true);
+      readPlayerPads();
     }
 
-    const pads = readPlayerPads(true);
-    expect(pads.p2).not.toBeNull();
-    expect(pads.p2!.jump).toBe(false);
-    // The live second pad takes the free slot instead of the occupied one.
+    const pads = readPlayerPads();
     expect(pads.p1).not.toBeNull();
+    expect(pads.p1!.jump).toBe(false);
+    // The live second pad takes the free slot instead of the occupied one.
+    expect(pads.p2).not.toBeNull();
   });
 
   it('ignores a replacement that is present but untouched', () => {
@@ -312,16 +315,16 @@ describe('recovering a slot from a dead controller', () => {
     // is what proves which of them the slot still points at.
     const dead = () => pad({ index: 0, timestamp: 100, buttons: { 2: true } });
     connect([dead()]);
-    readPlayerPads(true);
+    readPlayerPads();
     idle(200);
 
     connect([dead(), pad({ index: 1, timestamp: 900 })]);
-    const pads = readPlayerPads(true);
+    const pads = readPlayerPads();
 
     // Nothing was pressed on the replacement, so nothing claims: the game does
     // not guess which controller the player picked up.
-    expect(pads.p2).not.toBeNull();
-    expect(pads.p2!.punch).toBe(true);
+    expect(pads.p1).not.toBeNull();
+    expect(pads.p1!.punch).toBe(true);
   });
 });
 
@@ -340,35 +343,35 @@ describe('slot assignment under signal loss', () => {
 
   it('gives a returning pad its own slot back, not the other player\'s', () => {
     connect([held(0, 100), held(1, 100)]);
-    readPlayerPads(true);
+    readPlayerPads();
 
-    // Player one rests; their pad's timestamp stops advancing.
+    // Player two rests; their pad's timestamp stops advancing.
     let tick = 100;
     for (let i = 0; i < 200; i++) {
       tick++;
       connect([held(0, tick, true), held(1, 100)]);
-      readPlayerPads(true);
+      readPlayerPads();
     }
 
-    // Player two's pad drops for a frame, then returns mid-press.
+    // Player one's pad drops for a frame, then returns mid-press.
     connect([held(1, 100)]);
-    readPlayerPads(true);
+    readPlayerPads();
     connect([held(0, ++tick, true), held(1, 100)]);
-    const pads = readPlayerPads(true);
+    const pads = readPlayerPads();
 
-    expect(pads.p2, 'the returning pad should be back on player two').not.toBeNull();
-    expect(pads.p2!.punch).toBe(true);
-    expect(pads.p1, 'the resting player should keep their controller').not.toBeNull();
+    expect(pads.p1, 'the returning pad should be back on player one').not.toBeNull();
+    expect(pads.p1!.punch).toBe(true);
+    expect(pads.p2, 'the resting player should keep their controller').not.toBeNull();
   });
 
   it('still lets a replacement take over from a pad that died', () => {
     connect([held(0, 100)]);
-    readPlayerPads(true);
-    for (let i = 0; i < 200; i++) readPlayerPads(true);
+    readPlayerPads();
+    for (let i = 0; i < 200; i++) readPlayerPads();
 
     connect([held(0, 100), held(1, 900, true)]);
-    const pads = readPlayerPads(true);
-    expect(pads.p2!.punch).toBe(true);
+    const pads = readPlayerPads();
+    expect(pads.p1!.punch).toBe(true);
   });
 });
 
@@ -404,7 +407,7 @@ describe('the staleness window is counted in calls', () => {
     ]);
 
     let calls = 0;
-    let result = readPlayerPads(false);
+    let result = readPlayerPads();
     calls++;
 
     connect([
@@ -414,7 +417,7 @@ describe('the staleness window is counted in calls', () => {
     ]);
 
     do {
-      result = readPlayerPads(false);
+      result = readPlayerPads();
       calls++;
     } while (calls < 180);
 
@@ -426,7 +429,7 @@ describe('the staleness window is counted in calls', () => {
     // exists to catch, would slip by unnoticed without this.
     expect(result.p1?.punch, `pad 0 still holds P1 at call ${calls}`).toBe(false);
 
-    result = readPlayerPads(false);
+    result = readPlayerPads();
     calls++;
     expect(calls).toBe(181);
     expect(result.p1, `handed over at call ${calls}`).not.toBeNull();
@@ -460,11 +463,11 @@ describe('a phantom entry never keeps a slot from a real pad', () => {
 
   it('gives player one to the pad that is actually reporting', () => {
     listBoth(500, false);
-    readPlayerPads(false);
+    readPlayerPads();
 
     // The player presses jump. Only the live entry's data moves.
     listBoth(516, true);
-    const pads = readPlayerPads(false);
+    const pads = readPlayerPads();
 
     expect(pads.p1).not.toBeNull();
     expect(pads.p1!.jump).toBe(true);
@@ -472,10 +475,10 @@ describe('a phantom entry never keeps a slot from a real pad', () => {
 
   it('does not strand the real pad on the second slot', () => {
     listBoth(500, false);
-    readPlayerPads(false);
+    readPlayerPads();
     listBoth(516, true);
     listBoth(532, true);
-    const pads = readPlayerPads(false);
+    const pads = readPlayerPads();
 
     // Whatever else is true, the phantom must not be the one player one reads.
     expect(pads.p1).not.toEqual(NEUTRAL);
@@ -486,12 +489,12 @@ describe('a phantom entry never keeps a slot from a real pad', () => {
     // lower index keeps player one — a resting player must never lose their
     // slot to the other person.
     connect([pad({ index: 0, timestamp: 100 }), pad({ index: 1, timestamp: 100 })]);
-    readPlayerPads(false);
+    readPlayerPads();
     connect([
       pad({ index: 0, timestamp: 116, buttons: { 1: true } }),
       pad({ index: 1, timestamp: 116, buttons: { 0: true } }),
     ]);
-    const pads = readPlayerPads(false);
+    const pads = readPlayerPads();
 
     expect(pads.p1!.kick).toBe(true);
     expect(pads.p1!.jump).toBe(false);

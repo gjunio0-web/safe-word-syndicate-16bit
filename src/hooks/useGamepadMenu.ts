@@ -129,7 +129,6 @@ export function useGamepadMenu(onAction: (action: MenuAction) => void, enabled: 
  */
 export function useGamepadPlayerMenus(
   onAction: (player: 1 | 2, action: MenuAction) => void,
-  coop: boolean,
   enabled: boolean = true
 ) {
   const handlerRef = useRef(onAction);
@@ -139,12 +138,12 @@ export function useGamepadPlayerMenus(
    * Press-edge memory, held across effect runs for the same reason the shared
    * dispatcher lives at module scope.
    *
-   * Built inside the effect, these were rebuilt whenever `coop` flipped — and
-   * `coop` flips on the very keypress that enters or leaves co-op. The fresh
-   * dispatchers had never seen that direction go down, read it as a new press
-   * on the next frame, and moved the menu again, which flipped `coop` again.
-   * One tap walked the mode list all the way round and back to its start, so
-   * the mode looked frozen.
+   * These were once built inside the effect and rebuilt whenever the mode
+   * flipped — on the very keypress that flipped it. The fresh dispatchers had
+   * never seen that direction go down, read it as a new press on the next
+   * frame, and moved the menu again, which flipped the mode again. One tap
+   * walked the mode list all the way round and back to its start, so the mode
+   * looked frozen.
    */
   const stepsRef = useRef<Record<1 | 2, ReturnType<typeof createMenuDispatcher>> | null>(null);
   if (!stepsRef.current) {
@@ -158,7 +157,7 @@ export function useGamepadPlayerMenus(
     let frameId = 0;
 
     const poll = () => {
-      const states = readPlayerMenuStates(coop);
+      const states = readPlayerMenuStates();
       for (const player of [1, 2] as const) {
         const state = player === 1 ? states.p1 : states.p2;
         if (!state) continue;
@@ -171,5 +170,5 @@ export function useGamepadPlayerMenus(
 
     frameId = requestAnimationFrame(poll);
     return () => cancelAnimationFrame(frameId);
-  }, [coop, enabled]);
+  }, [enabled]);
 }

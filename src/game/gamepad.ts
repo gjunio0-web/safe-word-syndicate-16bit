@@ -233,7 +233,7 @@ function livePads(): Map<number, Gamepad> {
   return map;
 }
 
-export function readPlayerPads(coop: boolean): PlayerPadInputs {
+export function readPlayerPads(): PlayerPadInputs {
   const pads = livePads();
 
   trackActivity(pads);
@@ -278,7 +278,19 @@ export function readPlayerPads(coop: boolean): PlayerPadInputs {
   // something. Staleness alone cannot mean "gone": Firefox only advances
   // `timestamp` on state change, so a controller resting on the table looks
   // exactly like one switched off.
-  const slotOrder: Array<'p1' | 'p2'> = coop ? ['p2', 'p1'] : ['p1', 'p2'];
+  // Pads fill player one first, then player two, in every mode.
+  //
+  // Co-op used to invert this, so the first pad took player two and left the
+  // keyboard on player one — a sofa setup nobody has to configure. It read
+  // well with one pad and badly with two: whoever switched on first ended up
+  // driving the fighter on the left, the second the one on the right, and
+  // nothing on screen said so. It also made which fighter you drive depend on
+  // a mode toggle, which is not a thing a player expects to move their
+  // character.
+  //
+  // One order for every mode. Whoever switches on first is player one; a
+  // keyboard player joins on player two.
+  const slotOrder: Array<'p1' | 'p2'> = ['p1', 'p2'];
   const held = (slot: 'p1' | 'p2') => (slot === 'p1' ? assignedP1Index : assignedP2Index);
   const assign = (slot: 'p1' | 'p2', index: number | null) => {
     if (slot === 'p1') assignedP1Index = index;
@@ -515,12 +527,12 @@ function menuStateFromPad(pad: Gamepad): MenuState {
  * The slots come from the same assignment the match uses, so whoever is player
  * two on the fighting screen is player two while picking.
  */
-export function readPlayerMenuStates(coop: boolean): {
+export function readPlayerMenuStates(): {
   p1: MenuState | null;
   p2: MenuState | null;
 } {
   const pads = livePads();
-  readPlayerPads(coop);
+  readPlayerPads();
 
   const at = (index: number | null) => {
     if (index === null) return null;

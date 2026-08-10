@@ -256,13 +256,10 @@ export const CharacterSelectDesktop: React.FC<CharacterSelectDesktopProps> = ({ 
     applyMenuAction(action, mode === 'SINGLE' ? 'P1' : activeSlot, true);
   });
 
-  useGamepadPlayerMenus(
-    (player, action) => {
-      if (!readersRef.current.perPlayer) return;
-      applyMenuAction(action, player === 2 ? 'P2' : 'P1', false);
-    },
-    mode === 'COOP'
-  );
+  useGamepadPlayerMenus((player, action) => {
+    if (!readersRef.current.perPlayer) return;
+    applyMenuAction(action, player === 2 ? 'P2' : 'P1', false);
+  });
 
   /**
    * Sets a fighter for a named slot.

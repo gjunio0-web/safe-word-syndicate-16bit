@@ -518,7 +518,7 @@ export default function App() {
       // refreshes.
       if (steps > 0) {
         const coop = gameMode === 'COOP';
-        const pads = readPlayerPads(coop);
+        const pads = readPlayerPads();
         const p1Input = mergeInputs(inputRef.current, pads.p1);
         // In co-op, player two is always a person: the keyboard half plus
         // whichever controller holds that slot. Passing an input object rather
