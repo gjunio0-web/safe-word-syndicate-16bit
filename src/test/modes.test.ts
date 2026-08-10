@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { menuReadersFor, modeEntry, secondFighterFor, secondSlotIsHuman } from '../game/modes';
+import {
+  menuReadersFor,
+  modeEntry,
+  secondFighterFor,
+  secondPlayerInputFor,
+  secondSlotIsHuman,
+} from '../game/modes';
+import { mergeInputs } from '../game/gamepad';
+import { NEUTRAL } from './helpers';
 import { GameMode } from '../types';
 
 /**
@@ -122,6 +130,59 @@ describe('the character select screen always has a live reader', () => {
     for (const mode of MODES) {
       expect(menuReadersFor(1, mode).shared, mode).toBe(true);
       expect(menuReadersFor(0, mode).shared, mode).toBe(true);
+    }
+  });
+});
+
+/**
+ * Reported from play: choosing 1P + AI BUDDY started what looked like a co-op
+ * match — a second fighter standing there with nobody driving it.
+ *
+ * The loop decided who drove player two from `pads.p2 ?? undefined`, so any
+ * second entry in the browser's gamepad list counted as a second person. A
+ * spare controller left plugged in does it; so does the duplicate a DualSense
+ * produces when it is listed over Bluetooth and over its cable, which is one
+ * physical controller and one player.
+ *
+ * The rule moved out of App.tsx to be testable at all: that file has no DOM
+ * environment here, which is why a defect this plain survived in it.
+ */
+describe('who drives the second fighter', () => {
+  const padPressingRight = { ...NEUTRAL, right: true };
+
+  it('hands the buddy back to its own policy, however many pads are listed', () => {
+    // `undefined` is the signal the engine reads as "nobody is driving this
+    // one". Asserted by identity rather than by falsiness, because an empty
+    // input object is also falsy-looking and is exactly the wrong answer.
+    expect(secondPlayerInputFor('AI_COMPANION', NEUTRAL, null, mergeInputs)).toBeUndefined();
+    expect(
+      secondPlayerInputFor('AI_COMPANION', NEUTRAL, padPressingRight, mergeInputs),
+      'a listed pad is not a second person'
+    ).toBeUndefined();
+  });
+
+  it('gives a solo game nothing to drive either', () => {
+    expect(secondPlayerInputFor('SINGLE', NEUTRAL, padPressingRight, mergeInputs)).toBeUndefined();
+  });
+
+  it('gives co-op a person, with or without a controller in the slot', () => {
+    expect(secondPlayerInputFor('COOP', NEUTRAL, null, mergeInputs)).toEqual(NEUTRAL);
+    expect(secondPlayerInputFor('COOP', NEUTRAL, padPressingRight, mergeInputs)?.right).toBe(true);
+  });
+
+  it('merges the keyboard half with the pad rather than choosing between them', () => {
+    const keyboard = { ...NEUTRAL, punch: true };
+    const merged = secondPlayerInputFor('COOP', keyboard, padPressingRight, mergeInputs);
+    expect(merged?.punch, 'the keyboard half still counts').toBe(true);
+    expect(merged?.right, 'and so does the pad').toBe(true);
+  });
+
+  it('answers the same question secondSlotIsHuman does', () => {
+    // The two used to disagree, and that disagreement was the defect: the
+    // engine was told player two is not a person while the loop fed it one.
+    for (const mode of ['SINGLE', 'AI_COMPANION', 'COOP'] as GameMode[]) {
+      const driven = secondPlayerInputFor(mode, NEUTRAL, padPressingRight, mergeInputs) !== undefined;
+      expect(driven, mode).toBe(secondSlotIsHuman(mode));
     }
   });
 });

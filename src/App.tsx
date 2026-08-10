@@ -24,7 +24,7 @@ import IntroSequence from './components/IntroSequence';
 import { readPlayerPads, resetPadAssignments, mergeInputs } from './game/gamepad';
 import { advanceClock, createFrameClock, resetClock } from './game/frameClock';
 import { resolveKeyBinding } from './game/keyboard';
-import { secondFighterFor, secondSlotIsHuman } from './game/modes';
+import { secondFighterFor, secondPlayerInputFor, secondSlotIsHuman } from './game/modes';
 import { useGamepadMenu } from './hooks/useGamepadMenu';
 import { applyMenuNavigation, useMenuFocusReset } from './hooks/useMenuNavigation';
 import { CharacterSelect } from './components/CharacterSelect';
@@ -517,16 +517,13 @@ export default function App() {
       // the 180 was calibrated against — regardless of how fast the display
       // refreshes.
       if (steps > 0) {
-        const coop = gameMode === 'COOP';
         const pads = readPlayerPads();
         const p1Input = mergeInputs(inputRef.current, pads.p1);
-        // In co-op, player two is always a person: the keyboard half plus
-        // whichever controller holds that slot. Passing an input object rather
-        // than undefined is what stops the engine falling through to the AI
-        // companion — the difference between "2P CO-OP" and "1P + AI BUDDY",
-        // which until now played identically whenever a second controller was
-        // missing.
-        const p2Input = coop ? mergeInputs(inputP2Ref.current, pads.p2) : (pads.p2 ?? undefined);
+        // Who drives player two is a question about the mode, not about how
+        // many controllers happen to be listed, and the rule lives in
+        // `secondPlayerInputFor` with the rest of the mode questions — this
+        // file has no test environment and that one does.
+        const p2Input = secondPlayerInputFor(gameMode, inputP2Ref.current, pads.p2, mergeInputs);
 
         for (let i = 0; i < steps; i++) {
           // Dialogue holds the simulation without holding the clock: the overlay

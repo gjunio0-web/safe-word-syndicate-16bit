@@ -1,4 +1,4 @@
-import { CharacterId, GameMode } from '../types';
+import { CharacterId, GameMode, PlayerInput } from '../types';
 
 /**
  * Who takes the second slot, given the mode.
@@ -85,4 +85,35 @@ export interface MenuReaderPlan {
 export function menuReadersFor(padCount: number, mode: GameMode): MenuReaderPlan {
   const perPlayer = padCount >= 2 && mode === 'COOP';
   return { shared: !perPlayer, perPlayer };
+}
+
+/**
+ * What the engine is handed for player two.
+ *
+ * `undefined` is not "no input this frame" — it is the signal that nobody is
+ * driving that fighter, which is what makes the engine fall through to the
+ * companion policy. An object, however empty, means a person.
+ *
+ * The loop used to decide this from the pad list: co-op merged the keyboard
+ * with whichever pad held the slot, and every other mode passed
+ * `pads.p2 ?? undefined`. That reads the presence of a second *controller* as
+ * the presence of a second *person*, and they are not the same fact. Any
+ * second entry in `navigator.getGamepads()` was enough — a spare pad left
+ * plugged in, or the duplicate a DualSense produces when the browser lists it
+ * over Bluetooth and over its cable — and the AI buddy stopped moving the
+ * moment one appeared. Reported from play as the buddy mode starting a co-op
+ * match anyway, which is exactly what it looked like: a second fighter with
+ * nobody driving it.
+ *
+ * The mode is the fact. It already decides `secondSlotIsHuman` at construction
+ * and `secondFighterFor` on the way in; this is the third place that has to
+ * agree, and now it asks the same question the same way.
+ */
+export function secondPlayerInputFor(
+  mode: GameMode,
+  keyboard: PlayerInput,
+  pad: PlayerInput | null,
+  merge: (a: PlayerInput, b: PlayerInput | null) => PlayerInput
+): PlayerInput | undefined {
+  return secondSlotIsHuman(mode) ? merge(keyboard, pad) : undefined;
 }
