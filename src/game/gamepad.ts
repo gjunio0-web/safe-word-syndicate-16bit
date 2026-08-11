@@ -575,12 +575,41 @@ export function readPlayerMenuStates(): {
   return { p1: at(assignedP1Index), p2: at(assignedP2Index) };
 }
 
+/**
+ * Whether this index is known to be a phantom.
+ *
+ * Read-only on purpose: this is consulted from `readMenuState`, which polls on
+ * its own animation frame, and writing here would advance `assignmentFrame` at
+ * a second rate. STALE_AFTER_FRAMES is calibrated against the simulation's
+ * rate, so a second writer would quietly shorten the staleness window on any
+ * screen where both pollers run.
+ *
+ * Nothing is known until `readPlayerPads` has seen the device at least once —
+ * on the very first menus of a session there is no record and no filtering.
+ * From the roster screen onwards there is: the record survives screens, since
+ * the only thing that drops an entry is the pad leaving the browser's list.
+ */
+function isKnownPhantom(index: number): boolean {
+  const activity = padActivity.get(index);
+  return !!activity && !activity.everChanged;
+}
+
 export function readMenuState(): MenuState {
   const state = emptyMenuState();
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return state;
 
   for (const pad of navigator.getGamepads()) {
     if (!pad || !pad.connected) continue;
+    // A phantom frozen mid-direction would hold that direction true forever,
+    // and the dispatcher fires on the false-to-true edge — so the direction
+    // has no edge left to give and the player's own press of it does nothing.
+    // Reported from play as the d-pad going inert in the pause modal while
+    // confirm still worked, which is the shape of exactly this: a button is
+    // not a direction, so it still had its edge.
+    //
+    // The menus merge every listed pad rather than reading an assigned slot,
+    // which is why the slot-level defence does not reach here.
+    if (isKnownPhantom(pad.index)) continue;
 
     const dir = mapGamepadToInput(pad);
     state.UP = state.UP || dir.up;

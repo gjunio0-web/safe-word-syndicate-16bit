@@ -4,6 +4,7 @@ import {
   forgetPadDevices,
   mapGamepadToInput,
   mergeInputs,
+  readMenuState,
   readPlayerPads,
   resetPadAssignments,
   subscribeGamepadConnection,
@@ -627,5 +628,59 @@ describe('a phantom frozen holding a direction', () => {
     const pads = readPlayerPads();
 
     expect(pads.p1!.right, 'player one reads the pad being pushed').toBe(true);
+  });
+});
+
+/**
+ * Reported from play: in the pause modal the d-pad went inert while confirm
+ * still worked.
+ *
+ * That shape names the cause. The menus merge every listed pad rather than
+ * reading an assigned slot, so the slot-level defence against a phantom does
+ * not reach them; a phantom frozen mid-direction holds that direction true on
+ * every frame; and the dispatcher fires on the false-to-true edge, so a
+ * direction with no edge left cannot be pressed. A button is not a direction —
+ * which is why confirm kept working, and why the fix has to be about the state
+ * the menus read rather than about edges.
+ */
+describe('a frozen phantom does not hold a direction down in the menus', () => {
+  const frozenHoldingDown = () => pad({ index: 0, timestamp: 100, axes: [0, 1] });
+  const live = (timestamp: number) => pad({ index: 1, timestamp });
+
+  const learnTheDevices = () => {
+    // The record comes from readPlayerPads, which runs during a match; the
+    // pause modal reads it rather than writing its own.
+    for (const t of [200, 216, 232]) {
+      connect([frozenHoldingDown(), live(t)]);
+      readPlayerPads();
+    }
+  };
+
+  it('leaves the direction free for the player to press', () => {
+    learnTheDevices();
+    // Nobody is touching anything. Without the filter the merged state reports
+    // DOWN, and DOWN then has no edge left to give.
+    expect(readMenuState().DOWN, 'nothing is held').toBe(false);
+  });
+
+  it('still reads the live pad', () => {
+    learnTheDevices();
+    connect([frozenHoldingDown(), pad({ index: 1, timestamp: 248, buttons: { 13: true } })]);
+    expect(readMenuState().DOWN, 'the real pad presses down').toBe(true);
+  });
+
+  it('still reads a button on the live pad, which never broke', () => {
+    learnTheDevices();
+    connect([frozenHoldingDown(), pad({ index: 1, timestamp: 248, buttons: { 0: true } })]);
+    expect(readMenuState().CONFIRM).toBe(true);
+  });
+
+  it('trusts every pad while nothing is known about them yet', () => {
+    // Before any match has run there is no record, and a session that has only
+    // ever seen the title screen has to stay drivable. Stated rather than left
+    // implicit, because it is the limit of this defence.
+    forgetPadDevices();
+    connect([frozenHoldingDown(), live(200)]);
+    expect(readMenuState().DOWN).toBe(true);
   });
 });
