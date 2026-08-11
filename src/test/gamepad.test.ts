@@ -577,3 +577,55 @@ describe('a phantom entry never keeps a slot from a real pad', () => {
     expect(pads.p2!.jump).toBe(true);
   });
 });
+
+/**
+ * A phantom frozen mid-direction.
+ *
+ * Reported from play: with one controller connected, the fighter would now and
+ * then start walking one way on its own and stop answering the pad. The
+ * browser lists that controller twice, and the phantom entry is a snapshot —
+ * one taken while a direction was held stays held forever. Judged on contents
+ * alone it looks like the most recently used pad on every single frame, so it
+ * took player one, and the real controller could not answer: a pad resting in
+ * someone's hands has nothing pushed over, so by that same test it read as
+ * untouched.
+ */
+describe('a phantom frozen holding a direction', () => {
+  const frozenLeft = () => pad({ index: 0, timestamp: 100, axes: [-1, 0] });
+
+  it('does not take player one from the controller in someone\'s hands', () => {
+    connect([frozenLeft(), pad({ index: 1, timestamp: 200 })]);
+    readPlayerPads();
+    connect([frozenLeft(), pad({ index: 1, timestamp: 216 })]);
+    const pads = readPlayerPads();
+
+    expect(pads.p1!.left, 'player one should not be walking on its own').toBe(false);
+  });
+
+  it('does not keep player one after the real pad blinks out and returns', () => {
+    connect([frozenLeft(), pad({ index: 1, timestamp: 200 })]);
+    readPlayerPads();
+
+    // Bluetooth blinks: the live entry leaves the list for a frame.
+    connect([frozenLeft()]);
+    readPlayerPads();
+
+    // It returns, and the player is holding nothing.
+    for (const t of [216, 232, 248]) {
+      connect([frozenLeft(), pad({ index: 1, timestamp: t })]);
+      readPlayerPads();
+    }
+    const pads = readPlayerPads();
+
+    expect(pads.p1!.left, 'the walk should stop once the pad is back').toBe(false);
+  });
+
+  it('still answers the real pad', () => {
+    connect([frozenLeft(), pad({ index: 1, timestamp: 200 })]);
+    readPlayerPads();
+    connect([frozenLeft(), pad({ index: 1, timestamp: 216, axes: [1, 0] })]);
+    const pads = readPlayerPads();
+
+    expect(pads.p1!.right, 'player one reads the pad being pushed').toBe(true);
+  });
+});

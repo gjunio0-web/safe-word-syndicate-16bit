@@ -344,25 +344,37 @@ export function readPlayerPads(): PlayerPadInputs {
   // what swapped two people's fighters at every stage boundary. Correcting it
   // here instead means the assignment never has to be thrown away, so it can
   // survive the whole campaign.
-  const inSomeonesHands = (index: number | null) => {
-    if (index === null) return false;
-    const activity = padActivity.get(index);
-    return !!activity?.everChanged && activity.lastActiveFrame >= 0;
+  // The two questions are asked in two passes, weakest claim first, because a
+  // single pass could not answer both. Demanding a challenger be *touched*
+  // before it may take a slot from a phantom means a controller resting in
+  // someone's hands can never take one back — nothing is pushed over on a
+  // resting pad, so it reads as untouched, and the phantom keeps player one
+  // for the rest of the match.
+  const isDevice = (index: number | null) =>
+    index !== null && !!padActivity.get(index)?.everChanged;
+  const isHandled = (index: number | null) =>
+    isDevice(index) && (padActivity.get(index!)?.lastActiveFrame ?? -1) >= 0;
+
+  const promoteBy = (defended: (index: number | null) => boolean) => {
+    for (let earlier = 0; earlier < slotOrder.length; earlier++) {
+      const earlierIndex = held(slotOrder[earlier]);
+      if (defended(earlierIndex)) continue;
+
+      for (let later = earlier + 1; later < slotOrder.length; later++) {
+        const laterIndex = held(slotOrder[later]);
+        if (!defended(laterIndex)) continue;
+        assign(slotOrder[earlier], laterIndex);
+        if (earlierIndex === null) assign(slotOrder[later], null);
+        else assign(slotOrder[later], earlierIndex);
+        break;
+      }
+    }
   };
 
-  for (let earlier = 0; earlier < slotOrder.length; earlier++) {
-    const earlierIndex = held(slotOrder[earlier]);
-    if (inSomeonesHands(earlierIndex)) continue;
-
-    for (let later = earlier + 1; later < slotOrder.length; later++) {
-      const laterIndex = held(slotOrder[later]);
-      if (!inSomeonesHands(laterIndex)) continue;
-      assign(slotOrder[earlier], laterIndex);
-      if (earlierIndex === null) assign(slotOrder[later], null);
-      else assign(slotOrder[later], earlierIndex);
-      break;
-    }
-  }
+  // A real device outranks a phantom, whether or not anyone is pressing it.
+  promoteBy(isDevice);
+  // Among real devices, one in someone's hands outranks one nobody has touched.
+  promoteBy(isHandled);
 
   const read = (index: number | null) => {
     if (index === null) return null;
