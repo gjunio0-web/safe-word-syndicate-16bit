@@ -65,6 +65,52 @@ a próxima linha errada também não será pega. Fechar isso é validar o
 atalho no `RecordingContext`, ou uma sonda Playwright — o Chromium do
 ambiente está em `/opt/pw-browsers/chromium`.
 
+### Terceira lacuna: a tela de título não sabe distinguir um pad fantasma
+
+O navegador lista um mesmo controle duas vezes — a mesma peça pela conexão sem
+fio e pelo cabo. Uma das entradas às vezes **congela**: vira uma fotografia que
+nunca mais muda. Se ela congelar num instante em que uma direção estava
+apertada, passa a relatar aquela direção para sempre, e o jogo tem de ignorá-la.
+
+Quem sabe distinguir a foto do controle é `trackActivity`, e ela só roda a
+partir de `readPlayerPads` — ou seja, durante a partida e na tela de seleção de
+personagem. A tela de título usa só `readMenuState`, que **funde todas as
+entradas** e não anota nada. Resultado: até a primeira ida à seleção de
+personagem da sessão, não há registro e o filtro de `67b5611` não tem em que se
+apoiar.
+
+O registro **não** é apagado ao voltar ao título — `resetPadAssignments` solta
+apenas os slots. Então a janela desprotegida é estreita: splash, attract, intro
+e a primeira visita ao título. Para morder, a foto precisa congelar ali dentro
+*e* com uma direção apertada, o que é plausível porque são justamente as telas
+em que se martela botão para pular. O efeito é uma direção surda no cursor do
+título; as outras e o confirmar seguem funcionando.
+
+**Por que não está fechada.** O caderninho guarda dois fatos no mesmo lugar: "é
+um aparelho real?" (não depende de tempo) e "há quanto tempo não muda?" (contado
+em quadros da simulação, e é o que dá `STALE_AFTER_FRAMES = 180`). Deixar um
+segundo leitor escrever ali quebra o segundo fato de duas maneiras: se ele
+atualizar só a leitura guardada, a partida depois vê "não mudou" e dá o controle
+por morto; se atualizar o contador também, o relógio anda em dobro nas telas em
+que os dois leitores rodam juntos, e três segundos viram um e meio. Os dois
+desfechos são a mesma coisa na prática — **o jogador perde o controle no meio da
+luta**, que é a classe de defeito já corrigida duas vezes neste arquivo.
+
+**O que fechar exige, nesta ordem.** Primeiro um teste que **intercale** os dois
+leitores e crave que a janela de staleness continua disparando no mesmo chamado
+— os três testes que hoje vigiam isso (`does not steal a slot from a holder that
+is still reporting`, `leaves a resting controller alone`, e o que crava o
+chamado 181) exercitam só o caminho da partida e não veriam a interferência.
+Depois a mutação. Só então a mudança: dar ao fato "é real ou é foto?" um campo
+próprio, para os dois escritores nunca se cruzarem.
+
+**Registro de acerto neste assunto,** porque ele deve pesar na decisão de mexer:
+das três mudanças feitas na atribuição de controles nesta faixa, uma chegou ao
+jogador como defeito novo (a regra do "nunca tocado", que consertou a troca de
+personagens na virada de fase e abriu o buraco pelo qual a foto congelada
+segurou o P1). Conviver com a lacuna foi julgado mais barato que arriscar de
+novo sem o teste de intercalação pronto.
+
 ### Enquanto a lacuna existir
 
 Quando uma regra de UI puder morar num módulo puro, vale movê-la para lá. É o
