@@ -191,6 +191,11 @@ interface PadActivity {
   signature: string;
   /** Frame at which `signature` last differed from the poll before it. */
   lastMoveFrame: number;
+  /**
+   * How many times this entry has moved at a moment when no twin of the same
+   * identity moved. See `SOLO_MOVES_FOR_TWO_DEVICES`.
+   */
+  soloMoves: number;
 }
 
 const padActivity = new Map<number, PadActivity>();
@@ -216,29 +221,32 @@ const PHOTOGRAPH_AFTER_FRAMES = 180;
 const MOVED_TOGETHER_WITHIN_FRAMES = 2;
 
 /**
- * Frames of disagreement, both entries having just moved, that prove two
- * entries are two devices rather than one device listed twice.
+ * Moves each entry must have made on its own before a pair is taken for two
+ * devices rather than one device listed twice.
  *
- * Counted cumulatively rather than in a row, because two people do not change
- * what they are holding on thirty consecutive frames — they press, hold, and
- * release. What one device listed twice never does is *disagree* while both
- * entries are being refreshed, so every such frame is evidence, whenever it
- * falls.
+ * "On its own" means the other entry did not move around the same moment. Two
+ * entries of one controller move together — the browser refreshes them from the
+ * same device state — so neither ever moves alone. Two people press things at
+ * their own times, and reach five apiece within seconds of play.
  *
- * A browser refreshing one entry a beat after the other produces a stray
- * disagreeing frame at some presses, so a duplicate can in principle collect
- * these slowly. That failure direction is the safe one: it costs the rule its
- * grip on a duplicate, which is visible, rather than costing a live player
- * their controller.
+ * Both entries have to earn it, and that is what a stopped copy can never do:
+ * it stops moving at all, so its own count freezes wherever it was, which for a
+ * copy that spent its life mirroring is zero. The real pad going on to move
+ * alone hundreds of times cannot buy the pair an exemption by itself.
+ *
+ * An earlier spelling of this asked for the two entries to be seen *disagreeing
+ * while both had just moved*. That is something one controller listed twice
+ * indeed never does — and it turned out two people rarely do either, since they
+ * do not press things on the same frame. The exemption was unreachable, so a
+ * second player holding a direction still for three seconds was taken for a
+ * photograph and lost their fighter. Reported from play.
  */
-const DISTINCT_DEVICE_FRAMES = 20;
+const SOLO_MOVES_FOR_TWO_DEVICES = 5;
 
 /** Entries currently taken for a photograph of a device listed elsewhere. */
 const photographs = new Set<number>();
 /** Pairs proved to be separate devices. Sticky for the session. */
 const distinctDevices = new Set<string>();
-/** How long each undecided pair has been disagreeing, both entries moving. */
-const disagreeingFrames = new Map<string, number>();
 
 const pairKey = (id: string, a: number, b: number) =>
   `${id}#${Math.min(a, b)}:${Math.max(a, b)}`;
@@ -264,11 +272,6 @@ function groupsById(pads: Map<number, Gamepad>): Map<string, number[]> {
   }
   return byId;
 }
-
-const justMoved = (index: number) => {
-  const activity = padActivity.get(index);
-  return !!activity && assignmentFrame - activity.lastMoveFrame <= MOVED_TOGETHER_WITHIN_FRAMES;
-};
 
 /**
  * Decides which listed entries are photographs of a device listed elsewhere.
@@ -300,6 +303,25 @@ function updatePhotographs(pads: Map<number, Gamepad>) {
   photographs.clear();
 
   for (const [id, group] of groupsById(pads)) {
+    // Who moved without company — judged two frames late, so a twin that was
+    // simply a beat behind has had time to show up. Judging it on the spot
+    // counted every skewed refresh as independent movement, and a copy that
+    // collected enough of those before it froze bought the pair an exemption
+    // and walked away from the rule entirely.
+    for (const index of group) {
+      const activity = padActivity.get(index);
+      if (!activity) continue;
+      const moved = activity.lastMoveFrame;
+      if (assignmentFrame - moved !== MOVED_TOGETHER_WITHIN_FRAMES) continue;
+
+      const alone = !group.some((other) => {
+        if (other === index) return false;
+        const twin = padActivity.get(other);
+        return !!twin && Math.abs(twin.lastMoveFrame - moved) <= MOVED_TOGETHER_WITHIN_FRAMES;
+      });
+      if (alone) activity.soloMoves++;
+    }
+
     for (let a = 0; a < group.length; a++) {
       for (let b = a + 1; b < group.length; b++) {
         const key = pairKey(id, group[a], group[b]);
@@ -309,15 +331,11 @@ function updatePhotographs(pads: Map<number, Gamepad>) {
         const second = padActivity.get(group[b]);
         if (!first || !second) continue;
 
-        const bothJustMoved = justMoved(group[a]) && justMoved(group[b]);
-        if (!bothJustMoved || first.signature === second.signature) continue;
-
-        const seen = (disagreeingFrames.get(key) ?? 0) + 1;
-        if (seen >= DISTINCT_DEVICE_FRAMES) {
+        if (
+          first.soloMoves >= SOLO_MOVES_FOR_TWO_DEVICES &&
+          second.soloMoves >= SOLO_MOVES_FOR_TWO_DEVICES
+        ) {
           distinctDevices.add(key);
-          disagreeingFrames.delete(key);
-        } else {
-          disagreeingFrames.set(key, seen);
         }
       }
     }
@@ -373,6 +391,7 @@ function trackActivity(pads: Map<number, Gamepad>) {
           lastActiveFrame: -1,
           signature: '',
           lastMoveFrame: assignmentFrame,
+          soloMoves: 0,
         };
 
     const signature = controlSignature(pad);
@@ -605,7 +624,6 @@ export function forgetPadDevices() {
   padActivity.clear();
   photographs.clear();
   distinctDevices.clear();
-  disagreeingFrames.clear();
   assignmentFrame = 0;
 }
 

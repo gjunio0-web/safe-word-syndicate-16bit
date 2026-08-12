@@ -813,23 +813,23 @@ describe('a duplicate that froze after working drives no fighter', () => {
     // the same model are told apart. A duplicate can fake a disagreeing frame
     // whenever the browser updates one entry before the other, so one such
     // frame must not be enough to buy the exemption.
-    for (let frame = 0; frame < 200; frame++) {
-      const behind = frame % 10 === 0;
-      const shown: number[] = frame % 30 < 15 ? [1, 0] : [0, 0];
-      const late: number[] = frame % 30 === 0 || frame % 30 === 15 ? [0, 0] : shown;
-      connect([twin(0, clock(frame), shown), twin(1, clock(frame), behind ? late : shown)]);
+    const shown = (frame: number): number[] =>
+      frame % 37 < 18 ? [1, 0] : frame % 53 < 20 ? [-1, 0] : [0, 0];
+    for (let frame = 0; frame < 400; frame++) {
+      // The same transitions on both entries, one of them a frame behind.
+      connect([twin(0, clock(frame), shown(frame)), twin(1, clock(frame), shown(frame - 1))]);
       readPlayerPads();
     }
 
-    for (let frame = 200; frame < 600; frame++) {
+    for (let frame = 400; frame < 900; frame++) {
       connect([
-        twin(0, clock(199), [1, 0]),
+        twin(0, clock(399), [1, 0]),
         frame % 40 < 5 ? pressing(1, clock(frame)) : twin(1, clock(frame)),
       ]);
       readPlayerPads();
     }
 
-    connect([twin(0, clock(199), [1, 0]), pressing(1, clock(999))]);
+    connect([twin(0, clock(399), [1, 0]), pressing(1, clock(999))]);
     const pads = readPlayerPads();
     expect(pads.p1!.right, 'the copy is still caught').toBe(false);
     expect(pads.p1!.punch, 'and the real pad drives the fighter').toBe(true);
@@ -913,25 +913,164 @@ describe('a controller listed twice never costs the player their controller', ()
     expect(pads.p1!.right, 'and it still reports the direction they are holding').toBe(true);
   });
 
-  it('leaves a second person holding a direction alone once both have played', () => {
-    // Two controllers of the same model report the same identity, so one of
-    // them standing still while the other plays looks from here exactly like a
-    // copy. What separates them is that both have been seen moving at once,
-    // showing different things — which one device listed twice never does.
-    const busy = (timestamp: number, punching: boolean) =>
-      ({ ...pad({ index: 0, timestamp, buttons: punching ? { 2: true } : {} }), id: ID }) as Gamepad;
-    const walking = (timestamp: number, right: boolean) =>
-      ({ ...pad({ index: 1, timestamp, axes: right ? [1, 0] : [0, 0] }), id: ID }) as Gamepad;
+  it('gives a second player three seconds before any proof of two devices exists', () => {
+    // The grace period, measured. Two controllers of the same model are only
+    // told apart once each has been seen moving on its own, and at the very
+    // start of a session neither has. Until then a player who presses a
+    // direction and holds it perfectly still is indistinguishable from an entry
+    // that stopped being refreshed, and this window is all that stands between
+    // them and losing their fighter.
+    //
+    // Pinned as an absolute call number rather than against the constant it
+    // guards, because an assertion written in terms of that constant cannot
+    // fail when the constant moves — and shortening it is exactly the change
+    // that would take a live player's controller away.
+    const clock = (frame: number) => 1000 + frame * 16;
+    const holder = (frame: number) =>
+      ({
+        ...pad({
+          index: 1,
+          timestamp: clock(frame < 3 ? frame : 3),
+          axes: frame < 3 ? [0, 0] : [1, 0],
+        }),
+        id: ID,
+      }) as Gamepad;
+
+    let lost = -1;
+    let heldAt182 = false;
+    for (let frame = 0; frame < 500; frame++) {
+      connect([entry(0, clock(frame), frame % 12 < 6), holder(frame)]);
+      const pads = readPlayerPads();
+      if (frame === 182) heldAt182 = !!pads.p2?.right;
+      if (lost < 0 && frame > 3 && !pads.p2?.right) lost = frame;
+    }
+
+    expect(heldAt182, 'still theirs a frame before the window closes').toBe(true);
+    expect(lost, 'and the window is three seconds from the press, not less').toBe(183);
+  });
+
+  it('leaves a player alone while both entries are showing the same thing', () => {
+    // Two people walking right at once, one of them also jabbing. The jabbing
+    // entry moves; the walking one sits perfectly still, and neither has moved
+    // alone enough to prove they are two devices.
+    //
+    // What spares the still player here is that the two entries agree: an entry
+    // showing what its twin is showing is not evidence of anything, whoever
+    // moved last. Without that the second player loses their fighter three
+    // seconds into walking alongside the first, which is an ordinary thing to
+    // do in this game.
+    const clock = (frame: number) => 1000 + frame * 16;
+    const jabbing = (frame: number) =>
+      ({
+        ...pad({
+          index: 0,
+          timestamp: clock(frame),
+          axes: [1, 0],
+          buttons: frame % 30 < 5 ? { 2: true } : {},
+        }),
+        id: ID,
+      }) as Gamepad;
+    const walking = () =>
+      ({ ...pad({ index: 1, timestamp: clock(0), axes: [1, 0] }), id: ID }) as Gamepad;
+
+    let lost = -1;
+    for (let frame = 0; frame < 500; frame++) {
+      connect([jabbing(frame), walking()]);
+      const pads = readPlayerPads();
+      // Checked away from the jab, where the two entries read alike.
+      if (lost < 0 && frame % 30 >= 10 && !pads.p2?.right) lost = frame;
+    }
+
+    expect(lost, 'the second player keeps their fighter throughout').toBe(-1);
+  });
+
+  it('leaves a second person holding a direction alone, at human timing', () => {
+    // Reported from play: in co-op the second player's controller went dead
+    // during the fight while the pause modal still answered it. The modal
+    // merges every listed pad and ignores slots, and any button press unfroze
+    // the verdict for a frame — so the modal looked fine while the fighter
+    // stood there.
+    //
+    // The rule wanted proof that two entries were two devices, and asked for
+    // them to be seen disagreeing while both had *just* moved. One controller
+    // listed twice never does that; neither, it turns out, do two people, who
+    // press things at their own moments. The proof was unreachable and the
+    // second player was taken for a photograph.
+    //
+    // The timing here is deliberately irregular and out of step between the two
+    // players. An earlier version of this test moved both on fixed cycles that
+    // lined up often enough to hide the defect completely.
+    const ID2 = 'DualSense Wireless Controller';
+    interface Holding {
+      axes?: number[];
+      punch?: boolean;
+      kick?: boolean;
+    }
+    const at = (index: number, timestamp: number, holding: Holding) => {
+      const buttons: Record<number, boolean> = {};
+      if (holding.punch) buttons[2] = true;
+      if (holding.kick) buttons[1] = true;
+      return {
+        ...pad({ index, timestamp, axes: holding.axes ?? [0, 0], buttons }),
+        id: ID2,
+      } as Gamepad;
+    };
+
+    // A crude stand-in for a person: hold something for a while, then something
+    // else, at lengths that do not divide into each other.
+    const person = (seed: number): ((frame: number) => Holding) => {
+      // A plain generator with a long period. An earlier version of this used
+      // `(state * 31 + seed) % 7`, which for seed 7 has a fixed point at zero:
+      // that "player" held one direction for fifteen seconds and never touched
+      // anything else, which is not a person and quietly changed what the test
+      // was about.
+      let seeded = seed;
+      const next = () => {
+        seeded = (seeded * 1103515245 + 12345) % 2147483648;
+        return seeded / 2147483648;
+      };
+      let holding: Holding = {};
+      let until = 0;
+      return (frame: number) => {
+        if (frame >= until) {
+          const roll = next();
+          until = frame + 6 + Math.floor(next() * 40);
+          holding =
+            roll < 0.2
+              ? { axes: [1, 0] }
+              : roll < 0.4
+                ? { axes: [-1, 0] }
+                : roll < 0.6
+                  ? { punch: true }
+                  : roll < 0.8
+                    ? { kick: true }
+                    : {};
+        }
+        return holding;
+      };
+    };
 
     const clock = (frame: number) => 1000 + frame * 16;
-    for (let frame = 0; frame < 120; frame++) {
-      connect([busy(clock(frame), frame % 6 < 3), walking(clock(frame), frame % 8 < 4)]);
+    const one = person(7);
+    const two = person(23);
+    for (let frame = 0; frame < 900; frame++) {
+      connect([at(0, clock(frame), one(frame)), at(1, clock(frame), two(frame))]);
       readPlayerPads();
     }
 
-    // Then the second player holds right, dead steady, for four seconds.
-    for (let frame = 120; frame < 400; frame++) {
-      connect([busy(clock(frame), frame % 6 < 3), walking(clock(120), true)]);
+    // Then the second player holds right, dead steady, for four seconds, while
+    // the first goes on punching — so the two entries show plainly different
+    // things throughout. On a browser that refreshes a pad only when its state
+    // changes, the second player's clock stops with them.
+    //
+    // The difference matters: an earlier version of this test let the first
+    // player wander back onto the same direction, and then the pair agreeing
+    // was what spared the second player rather than the rule under test.
+    for (let frame = 900; frame < 1200; frame++) {
+      connect([
+        at(0, clock(frame), { punch: frame % 12 < 6 }),
+        at(1, clock(900), { axes: [1, 0] }),
+      ]);
       readPlayerPads();
     }
     const pads = readPlayerPads();
@@ -939,6 +1078,7 @@ describe('a controller listed twice never costs the player their controller', ()
     expect(pads.p2, 'the second player still has a controller').not.toBeNull();
     expect(pads.p2!.right, 'and it still reports what they are holding').toBe(true);
   });
+
 
 });
 
