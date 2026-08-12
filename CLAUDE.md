@@ -122,7 +122,7 @@ personagens na virada de fase e abriu o buraco pelo qual a foto congelada
 segurou o P1). Conviver com a lacuna foi julgado mais barato que arriscar de
 novo sem o teste de intercalação pronto.
 
-### A cópia que congelou depois de funcionar, e o que a regra dela custa
+### A cópia que congelou depois de funcionar — ERRATA, e a lacuna segue aberta
 
 `everChanged` pergunta se a entrada já se mexeu **alguma vez**, e por isso só
 pega a cópia que nasceu morta. A que foi reportada trabalhou uma fase inteira e
@@ -132,28 +132,37 @@ ficou com o P1 segurando uma direção. O primeiro conserto filtrou apenas
 continuou andando**, porque a partida lê um slot atribuído e não o estado
 fundido.
 
-O que separa uma cópia de um segundo controle **não** é obsolescência sozinha:
-dois pads do mesmo modelo relatam o mesmo `id`, e num navegador que só atualiza
-o relógio do pad quando o estado muda, ficar parado é indistinguível de estar
-congelado. Demitir por obsolescência tiraria o controle de um jogador de co-op
-três segundos depois de ele parar — a classe de defeito já corrigida duas vezes.
+**A tentativa de fechar isso no caminho da partida (`e00ad5c`) foi revertida.**
+A versão anterior desta seção afirmava que a regra estava medida e no lugar, com
+"179 quadros ≈ 3 s" como limite. Estava **errado**: o número era real, mas a
+regra custava o controle do jogador. Ela rebaixava a entrada que ficara quieta
+enquanto uma gêmea seguia reportando. Basta o navegador atualizar as duas
+entradas em ritmos diferentes — uma a cada poll, outra só quando o estado muda —
+para que **ficar parado três segundos** faça a entrada **real** parecer a
+ultrapassada. Ela ia para o P2, que solo e parceiro não leem, e o passo de
+promoção não tinha caminho de volta depois que as duas voltavam a estar vivas:
+**controle morto pelo resto da partida.** Reportado jogando, poucas horas depois
+do push.
 
-A regra espera **prova** de que são dois aparelhos: um aparelho listado duas
-vezes mostra a mesma coisa nas duas entradas; duas pessoas não, e discordam por
-trechos longos. Só contam quadros em que **as duas** entradas foram atualizadas,
-senão a cópia congelada discordaria da gêmea para sempre e argumentaria a
-própria saída.
+Nenhum teste daquela regra cobria isso: todos moviam a cópia e o pad real no
+mesmo ritmo. O caso que faltava agora está na suíte para sempre —
+`a controller listed twice never costs the player their controller` — e nenhuma
+tentativa futura passa sem ele. O estado atual do defeito também está cravado,
+como medição e não como desejo, em `a duplicate that froze after working still
+drives the fighter`.
 
-Três limites, todos medidos:
+**O que isto ensina, e é o terceiro registro do mesmo tipo neste arquivo:**
+obsolescência não distingue "cópia congelada" de "aparelho real parado", em
+nenhuma direção. Dois pads do mesmo modelo relatam o mesmo `id`; um navegador
+pode atualizar duas entradas do mesmo aparelho em ritmos diferentes. Qualquer
+regra futura precisa de uma prova **positiva** de qual entrada é o aparelho —
+não da ausência de mudança — e precisa ser **reversível**, para que uma decisão
+errada se desfaça sozinha no quadro seguinte em vez de durar a partida inteira.
 
-- **179 quadros ≈ 3 s** de lutador andando sozinho antes de a regra disparar.
-  Medido na suíte e repetido no Chromium com o laço real da página; contra o
-  código anterior, 600 quadros e 10,5 s depois ainda andava.
-- **Um par julgado "dois aparelhos" nunca é rejulgado.** É a direção escolhida
-  para errar: um par julgado errado significa que o andar sozinho não é pego —
-  visível e recuperável — em vez de um jogador perder o controle na luta.
-- **Entrada sem `id` nunca é cópia de nada.** Navegador real sempre preenche;
-  pad sintético de teste, não.
+**Placar desta faixa do código:** quatro mudanças na atribuição de controles,
+duas chegaram ao jogador como defeito novo. É a faixa mais cara do projeto por
+mudança feita, e o lutador andando sozinho — visível, e o jogo segue jogável —
+é mais barato que qualquer uma das duas regressões que tentaram consertá-lo.
 
 ### Enquanto a lacuna existir
 

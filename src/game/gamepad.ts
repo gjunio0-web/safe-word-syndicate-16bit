@@ -168,15 +168,6 @@ interface PadActivity {
    */
   everChanged: boolean;
   /**
-   * Coarse snapshot of this entry's controls, as of the last poll.
-   *
-   * Kept so two entries carrying the same identity can be compared. Buttons
-   * are recorded as pressed or not and axes are rounded to a tenth, because
-   * the question is whether two entries are showing the same thing, and stick
-   * noise in the third decimal is not two people doing different things.
-   */
-  signature: string;
-  /**
    * Frame at which a control on this pad was last off its resting position.
    *
    * This is the record of "somebody is holding this one", and it is a
@@ -191,107 +182,6 @@ interface PadActivity {
 
 const padActivity = new Map<number, PadActivity>();
 let assignmentFrame = 0;
-
-/**
- * Frames of unbroken disagreement before two entries carrying the same
- * identity are taken to be two devices rather than one device listed twice.
- *
- * Unbroken rather than cumulative on purpose. A browser can refresh one of the
- * two entries a frame before the other, which shows up as a single frame of
- * disagreement at every press and release; counting those up would eventually
- * reach any total and throw the answer away. Two people playing disagree for
- * long stretches — one walks while the other stands — so a fifth of a second
- * of continuous disagreement is reached almost at once and a one-frame skew
- * never is.
- */
-const DISTINCT_DEVICE_FRAMES = 12;
-
-/** Pairs of indices shown to be separate devices. Keyed by identity and pair. */
-const distinctDevices = new Set<string>();
-/** How long each undecided pair has been disagreeing without a break. */
-const divergingFrames = new Map<string, number>();
-
-const pairKey = (id: string, a: number, b: number) =>
-  `${id}#${Math.min(a, b)}:${Math.max(a, b)}`;
-
-/** Indices grouped by the identity string the browser reports for them. */
-function groupsById(pads: Map<number, Gamepad>): Map<string, number[]> {
-  const byId = new Map<string, number[]>();
-  for (const [index, pad] of pads) {
-    // An entry with no identity cannot be shown to be a copy of anything.
-    // Real browsers always fill this in; synthetic pads in tests may not.
-    if (typeof pad.id !== 'string' || pad.id === '') continue;
-    const group = byId.get(pad.id);
-    if (group) group.push(index);
-    else byId.set(pad.id, [index]);
-  }
-  return byId;
-}
-
-/**
- * Records which same-identity pairs have proved to be two separate devices.
- *
- * This is the fact that makes the rule below safe to run during a match. Two
- * controllers of the same model report the same `id`, so identity alone cannot
- * say whether a second entry is a second player or a second listing of the
- * same pad — and the two want opposite treatment. Guessing wrong in one
- * direction leaves a fighter walking on its own; guessing wrong in the other
- * takes a controller away from somebody mid-fight, which is the defect this
- * file has already had to fix twice.
- *
- * There is a positive test for it. A device listed twice reports the *same*
- * thing on both entries; two people never do for long. So disagreement is
- * evidence of two devices, and agreement is evidence of nothing either way.
- *
- * Only frames on which both entries were refreshed are counted. Once a copy
- * freezes it disagrees with its live twin forever, and that disagreement is
- * the defect rather than evidence against it — counting it would let the copy
- * argue its own way out of being caught.
- *
- * A verdict of "two devices" is never withdrawn. Withdrawing it would restore
- * a rule that can take a live player's controller away, and this is the
- * direction to fail in: a pair wrongly judged separate only means the walking
- * fighter is not caught, which is visible and recoverable.
- */
-function trackDivergence(pads: Map<number, Gamepad>) {
-  for (const [id, group] of groupsById(pads)) {
-    for (let a = 0; a < group.length; a++) {
-      for (let b = a + 1; b < group.length; b++) {
-        const key = pairKey(id, group[a], group[b]);
-        if (distinctDevices.has(key)) continue;
-
-        const first = padActivity.get(group[a]);
-        const second = padActivity.get(group[b]);
-        if (!first || !second) continue;
-
-        const bothRefreshed =
-          first.lastChangeFrame === assignmentFrame && second.lastChangeFrame === assignmentFrame;
-        const run =
-          bothRefreshed && first.signature !== second.signature
-            ? (divergingFrames.get(key) ?? 0) + 1
-            : 0;
-
-        if (run >= DISTINCT_DEVICE_FRAMES) {
-          distinctDevices.add(key);
-          divergingFrames.delete(key);
-        } else {
-          divergingFrames.set(key, run);
-        }
-      }
-    }
-  }
-}
-
-/** See `PadActivity.signature`. */
-function controlSignature(pad: Gamepad): string {
-  let signature = '';
-  for (const button of pad.buttons) {
-    signature += button && (button.pressed || button.value > TRIGGER_THRESHOLD) ? '1' : '0';
-  }
-  signature += '|';
-  for (const axis of pad.axes) signature += `${Math.round(axis * 10)},`;
-  return signature;
-}
 
 /**
  * Records whether each pad's data is still being refreshed.
@@ -318,11 +208,9 @@ function trackActivity(pads: Map<number, Gamepad>) {
           timestamp: pad.timestamp,
           lastChangeFrame: assignmentFrame,
           everChanged: false,
-          signature: '',
           lastActiveFrame: -1,
         };
 
-    entry.signature = controlSignature(pad);
     if (hasActivity(pad)) entry.lastActiveFrame = assignmentFrame;
     padActivity.set(index, entry);
   }
@@ -330,8 +218,6 @@ function trackActivity(pads: Map<number, Gamepad>) {
   for (const index of [...padActivity.keys()]) {
     if (!pads.has(index)) padActivity.delete(index);
   }
-
-  trackDivergence(pads);
 }
 
 function isResponsive(index: number | null): boolean {
@@ -339,64 +225,6 @@ function isResponsive(index: number | null): boolean {
   const activity = padActivity.get(index);
   if (!activity) return false;
   return assignmentFrame - activity.lastChangeFrame < STALE_AFTER_FRAMES;
-}
-
-/**
- * Entries that a twin of the same device has outlived.
- *
- * The browser sometimes lists one controller twice under two indices carrying
- * the same identity, and one of the two copies can stop being refreshed while
- * the other goes on working. Frozen mid-direction, the dead copy reports that
- * direction on every frame forever — which is the fighter walking off on its
- * own with nobody touching anything.
- *
- * `everChanged` cannot see this one. It asks whether an entry has moved even
- * once since it appeared, which is true of a copy that worked for a whole stage
- * and then stopped. The question that separates them is not about the entry's
- * whole life but about now: has it gone quiet while a twin of the same device
- * kept reporting?
- *
- * Three conditions, and all three are needed:
- *
- *   *a twin exists* — same `id`, another index. A lone controller has nothing
- *   to fall behind and is never touched by this rule, which matters because on
- *   a browser that only refreshes a pad's clock when its state changes, a
- *   direction held steady looks exactly like a frozen one;
- *
- *   *this entry is stale* — unchanged for the whole staleness window, counted
- *   in simulation frames by the same clock `isResponsive` uses, not in the
- *   browser's milliseconds. Three seconds, so a controller resting on the table
- *   between waves is not enough;
- *
- *   *a twin is not stale* — something carrying this identity is still
- *   reporting. Two quiet entries are two quiet entries; neither is evidence
- *   about the other.
- *
- *   *the twin has not been shown to be a different device* — `trackDivergence`
- *   above. Without this the rule cannot tell a copy from a second controller of
- *   the same model resting on the table, and would hand one co-op player the
- *   other's fighter three seconds after they set their pad down.
- *
- * Entries the browser gives no identity string are skipped: a twin is a claim
- * about identity, and nothing can be shown to be a copy of something else
- * without one. Real browsers always fill `id` in.
- */
-function outlivedTwins(pads: Map<number, Gamepad>): Set<number> {
-  const outlived = new Set<number>();
-
-  for (const [id, group] of groupsById(pads)) {
-    for (const index of group) {
-      if (isResponsive(index)) continue;
-      const outlivedBy = group.some(
-        (other) =>
-          other !== index &&
-          isResponsive(other) &&
-          !distinctDevices.has(pairKey(id, index, other))
-      );
-      if (outlivedBy) outlived.add(index);
-    }
-  }
-  return outlived;
 }
 
 /** Any control off its resting position. Used to mean "this player is here". */
@@ -421,10 +249,6 @@ export function readPlayerPads(): PlayerPadInputs {
   const pads = livePads();
 
   trackActivity(pads);
-
-  // Computed once per frame, after the activity record is up to date and
-  // before anything reads a slot.
-  const outlived = outlivedTwins(pads);
 
   // Release slots whose pad left the list entirely.
   if (assignedP1Index !== null && !pads.has(assignedP1Index)) assignedP1Index = null;
@@ -538,20 +362,10 @@ export function readPlayerPads(): PlayerPadInputs {
   // someone's hands can never take one back — nothing is pushed over on a
   // resting pad, so it reads as untouched, and the phantom keeps player one
   // for the rest of the match.
-  //
-  // A third question was added after the first two shipped and the defect came
-  // back: is this entry still the one reporting for its device? `everChanged`
-  // only catches a copy that was born dead, and the copy that was reported had
-  // worked for a whole stage before it froze — so both of the questions above
-  // answer yes for it, and it kept player one while holding a direction down.
-  // `outlivedTwins` is that third question, and it is asked last because it is
-  // the strongest claim of the three.
   const isDevice = (index: number | null) =>
     index !== null && !!padActivity.get(index)?.everChanged;
   const isHandled = (index: number | null) =>
     isDevice(index) && (padActivity.get(index!)?.lastActiveFrame ?? -1) >= 0;
-  const isLive = (index: number | null) =>
-    isHandled(index) && !outlived.has(index!);
 
   const promoteBy = (defended: (index: number | null) => boolean) => {
     for (let earlier = 0; earlier < slotOrder.length; earlier++) {
@@ -573,20 +387,9 @@ export function readPlayerPads(): PlayerPadInputs {
   promoteBy(isDevice);
   // Among real devices, one in someone's hands outranks one nobody has touched.
   promoteBy(isHandled);
-  // And among those, the entry still reporting outranks the copy that stopped.
-  promoteBy(isLive);
 
-  // Reading is refused as well as ranked, and both are needed.
-  //
-  // Ranking alone leaves the stopped copy holding player two, which is read in
-  // co-op and would drive the second fighter. Refusing to read alone leaves it
-  // squatting on player one with the live pad stranded on a slot that solo and
-  // buddy modes never read, so the player's own controller would go dead.
-  //
-  // `null` is what the loop already gets when a slot is empty, so the keyboard
-  // covers the slot exactly as it does with no pad in it.
   const read = (index: number | null) => {
-    if (index === null || outlived.has(index)) return null;
+    if (index === null) return null;
     const pad = pads.get(index);
     return pad ? mapGamepadToInput(pad) : null;
   };
@@ -624,8 +427,6 @@ export function resetPadAssignments() {
 export function forgetPadDevices() {
   resetPadAssignments();
   padActivity.clear();
-  distinctDevices.clear();
-  divergingFrames.clear();
   assignmentFrame = 0;
 }
 
@@ -777,68 +578,13 @@ export function readPlayerMenuStates(): {
   const pads = livePads();
   readPlayerPads();
 
-  // Same refusal the match path makes, for the same reason: this screen reads
-  // one slot per player, so a stopped copy holding a slot would hold that
-  // player's cursor against a direction they cannot press.
-  const outlived = outlivedTwins(pads);
-
   const at = (index: number | null) => {
-    if (index === null || outlived.has(index)) return null;
+    if (index === null) return null;
     const pad = pads.get(index);
     return pad ? menuStateFromPad(pad) : null;
   };
 
   return { p1: at(assignedP1Index), p2: at(assignedP2Index) };
-}
-
-/**
- * Entries that are a stale copy of another entry for the same device.
- *
- * The browser sometimes lists one controller twice, under two indices carrying
- * the same identity, and one of the two can stop being refreshed while the
- * other goes on working. Frozen mid-direction, the dead copy reports that
- * direction on every frame forever.
- *
- * The test used to be "has this entry ever changed?", and that is the wrong
- * question. It catches a copy that was born dead and misses one that worked for
- * twenty minutes and then stopped — which is the case that was reported, and
- * which measurement confirmed slipped straight through: with the copy frozen
- * from the first frame the merged menu state read nothing, and with the copy
- * frozen after a while it read RIGHT with nobody touching anything.
- *
- * The right question needs no history at all. Timestamps come from one clock,
- * so a stopped entry falls further behind its working twin with every poll.
- *
- * The comparison is a gap rather than "smaller", and that is not a detail. Two
- * identical controllers report the identical `id` string — two DualSense pads
- * in co-op are indistinguishable by name — and their timestamps differ by a
- * fraction of a frame at any instant. Taking "smaller" as the test would drop
- * whichever of the two happened to be read second, alternating between them,
- * and cost a real player their input. A gap of a full second is something two
- * live pads never show and a stopped one passes within half a second.
- *
- * A single controller has no sibling to fall behind, so a player with one pad
- * is never affected — including on browsers that only refresh a pad's clock
- * when its state changes.
- */
-const DUPLICATE_STALE_MS = 1000;
-
-function shadowedDuplicates(pads: Gamepad[]): Set<number> {
-  const freshestById = new Map<string, number>();
-  for (const pad of pads) {
-    if (typeof pad.id !== 'string' || pad.id === '') continue;
-    const best = freshestById.get(pad.id);
-    if (best === undefined || pad.timestamp > best) freshestById.set(pad.id, pad.timestamp);
-  }
-
-  const shadowed = new Set<number>();
-  for (const pad of pads) {
-    const freshest = freshestById.get(pad.id);
-    if (freshest !== undefined && freshest - pad.timestamp > DUPLICATE_STALE_MS) {
-      shadowed.add(pad.index);
-    }
-  }
-  return shadowed;
 }
 
 /**
@@ -865,12 +611,8 @@ export function readMenuState(): MenuState {
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return state;
 
   const listed = navigator.getGamepads().filter((p): p is Gamepad => !!p && p.connected);
-  const shadowed = shadowedDuplicates(listed);
 
   for (const pad of listed) {
-    // A stale copy of a device that is still working elsewhere in the list.
-    // Frozen mid-direction it would hold that direction true forever.
-    if (shadowed.has(pad.index)) continue;
     // A phantom frozen mid-direction would hold that direction true forever,
     // and the dispatcher fires on the false-to-true edge — so the direction
     // has no edge left to give and the player's own press of it does nothing.
