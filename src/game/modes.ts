@@ -99,9 +99,8 @@ export function menuReadersFor(padCount: number, mode: GameMode): MenuReaderPlan
  * `pads.p2 ?? undefined`. That reads the presence of a second *controller* as
  * the presence of a second *person*, and they are not the same fact. Any
  * second entry in `navigator.getGamepads()` was enough — a spare pad left
- * plugged in, or the duplicate a DualSense produces when the browser lists it
- * over Bluetooth and over its cable — and the AI buddy stopped moving the
- * moment one appeared. Reported from play as the buddy mode starting a co-op
+ * connected, or the duplicate entry a browser sometimes lists for a single
+ * controller — and the AI buddy stopped moving the moment one appeared. Reported from play as the buddy mode starting a co-op
  * match anyway, which is exactly what it looked like: a second fighter with
  * nobody driving it.
  *

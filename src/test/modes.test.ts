@@ -140,9 +140,12 @@ describe('the character select screen always has a live reader', () => {
  *
  * The loop decided who drove player two from `pads.p2 ?? undefined`, so any
  * second entry in the browser's gamepad list counted as a second person. A
- * spare controller left plugged in does it; so does the duplicate a DualSense
- * produces when it is listed over Bluetooth and over its cable, which is one
- * physical controller and one player.
+ * spare controller left connected does it; so does the duplicate entry a
+ * browser sometimes lists for a single controller — one physical pad, one
+ * player, two entries. Why a browser does that is not something this project
+ * has established, and an earlier version of this comment asserted a cause
+ * (a pad seen over Bluetooth and over its cable) that was a guess and was
+ * wrong for the setup that reported the defect.
  *
  * The rule moved out of App.tsx to be testable at all: that file has no DOM
  * environment here, which is why a defect this plain survived in it.

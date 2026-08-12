@@ -67,10 +67,14 @@ ambiente está em `/opt/pw-browsers/chromium`.
 
 ### Terceira lacuna: a tela de título não sabe distinguir um pad fantasma
 
-O navegador lista um mesmo controle duas vezes — a mesma peça pela conexão sem
-fio e pelo cabo. Uma das entradas às vezes **congela**: vira uma fotografia que
-nunca mais muda. Se ela congelar num instante em que uma direção estava
-apertada, passa a relatar aquela direção para sempre, e o jogo tem de ignorá-la.
+O navegador lista um mesmo controle duas vezes, sob dois índices com a mesma
+identidade. Uma das entradas às vezes **congela**: vira uma fotografia que nunca
+mais muda. Se ela congelar num instante em que uma direção estava apertada,
+passa a relatar aquela direção para sempre, e o jogo tem de ignorá-la. Por que o
+navegador duplica a entrada não é coisa que este projeto tenha estabelecido —
+uma versão anterior deste parágrafo afirmava uma causa (o mesmo pad visto pela
+conexão sem fio e pelo cabo) que era palpite e estava **errada** para a
+instalação que reportou o defeito: um controle só, sem fio, listado duas vezes.
 
 Quem sabe distinguir a foto do controle é `trackActivity`, e ela só roda a
 partir de `readPlayerPads` — ou seja, durante a partida e na tela de seleção de
@@ -98,11 +102,18 @@ luta**, que é a classe de defeito já corrigida duas vezes neste arquivo.
 
 **O que fechar exige, nesta ordem.** Primeiro um teste que **intercale** os dois
 leitores e crave que a janela de staleness continua disparando no mesmo chamado
-— os três testes que hoje vigiam isso (`does not steal a slot from a holder that
+— os três testes que já vigiavam isso (`does not steal a slot from a holder that
 is still reporting`, `leaves a resting controller alone`, e o que crava o
 chamado 181) exercitam só o caminho da partida e não veriam a interferência.
 Depois a mutação. Só então a mudança: dar ao fato "é real ou é foto?" um campo
 próprio, para os dois escritores nunca se cruzarem.
+
+**O primeiro passo está feito.** `the menu reader does not move the staleness
+window` roda `readMenuState` duas vezes por quadro entre chamados de
+`readPlayerPads` e crava que a troca de slot acontece no chamado 181 nos dois
+cenários — número absoluto, não a constante. A mutação `STALE_AFTER_FRAMES = 1`
+o reprova. Os passos dois e três seguem por fazer; enquanto seguirem, o leitor
+de menus continua **sem caneta** sobre `padActivity`.
 
 **Registro de acerto neste assunto,** porque ele deve pesar na decisão de mexer:
 das três mudanças feitas na atribuição de controles nesta faixa, uma chegou ao
@@ -110,6 +121,39 @@ jogador como defeito novo (a regra do "nunca tocado", que consertou a troca de
 personagens na virada de fase e abriu o buraco pelo qual a foto congelada
 segurou o P1). Conviver com a lacuna foi julgado mais barato que arriscar de
 novo sem o teste de intercalação pronto.
+
+### A cópia que congelou depois de funcionar, e o que a regra dela custa
+
+`everChanged` pergunta se a entrada já se mexeu **alguma vez**, e por isso só
+pega a cópia que nasceu morta. A que foi reportada trabalhou uma fase inteira e
+só então congelou — para ela `everChanged` responde "sim, é um aparelho", e ela
+ficou com o P1 segurando uma direção. O primeiro conserto filtrou apenas
+`readMenuState`, então o modal parou de segurar a direção e **o lutador
+continuou andando**, porque a partida lê um slot atribuído e não o estado
+fundido.
+
+O que separa uma cópia de um segundo controle **não** é obsolescência sozinha:
+dois pads do mesmo modelo relatam o mesmo `id`, e num navegador que só atualiza
+o relógio do pad quando o estado muda, ficar parado é indistinguível de estar
+congelado. Demitir por obsolescência tiraria o controle de um jogador de co-op
+três segundos depois de ele parar — a classe de defeito já corrigida duas vezes.
+
+A regra espera **prova** de que são dois aparelhos: um aparelho listado duas
+vezes mostra a mesma coisa nas duas entradas; duas pessoas não, e discordam por
+trechos longos. Só contam quadros em que **as duas** entradas foram atualizadas,
+senão a cópia congelada discordaria da gêmea para sempre e argumentaria a
+própria saída.
+
+Três limites, todos medidos:
+
+- **179 quadros ≈ 3 s** de lutador andando sozinho antes de a regra disparar.
+  Medido na suíte e repetido no Chromium com o laço real da página; contra o
+  código anterior, 600 quadros e 10,5 s depois ainda andava.
+- **Um par julgado "dois aparelhos" nunca é rejulgado.** É a direção escolhida
+  para errar: um par julgado errado significa que o andar sozinho não é pego —
+  visível e recuperável — em vez de um jogador perder o controle na luta.
+- **Entrada sem `id` nunca é cópia de nada.** Navegador real sempre preenche;
+  pad sintético de teste, não.
 
 ### Enquanto a lacuna existir
 
