@@ -56,15 +56,28 @@ export function validateStages(stages: StageConfig[]): StageValidationIssue[] {
  * stays playable.
  */
 export function assertStagesAreCompletable(stages: StageConfig[]): void {
-  // Exactly one stage ends the campaign. Zero means victory is unreachable;
-  // more than one means it fires early, which is precisely what happened when
-  // Madam Mizydia — the boss of two stages — was treated as the final boss
-  // wherever she appeared.
+  // At most one stage ends the campaign. Two would fire victory early, which
+  // is precisely what happened when Madam Mizydia — the boss of two stages —
+  // was treated as the final boss wherever she appeared.
+  //
+  // Zero used to be an error too, on the reasoning that victory would be
+  // unreachable. That reasoning holds for the full campaign and not for a cut
+  // that stops before Mizydia: such a build has a last stage and no final one,
+  // on purpose, and ends on its own route rather than on the victory screen.
+  // The rule that survives is the one that was actually protecting something.
   const finals = stages.filter((s) => s.isFinalStage);
-  if (finals.length !== 1) {
+  if (finals.length > 1) {
     throw new Error(
-      `[stageData] expected exactly one stage flagged isFinalStage, found ${finals.length}` +
-        (finals.length ? `: ${finals.map((s) => s.id).join(', ')}` : '')
+      `[stageData] expected at most one stage flagged isFinalStage, found ${finals.length}: ` +
+        finals.map((s) => s.id).join(', ')
+    );
+  }
+
+  // The full campaign still has to have one. Losing it would mean the engine
+  // never declares the campaign won, and nothing else would notice.
+  if (stages.length > 1 && finals.length === 0) {
+    throw new Error(
+      '[stageData] a multi-stage campaign needs exactly one stage flagged isFinalStage, found none'
     );
   }
 

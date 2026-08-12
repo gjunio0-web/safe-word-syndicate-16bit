@@ -12,7 +12,7 @@ import {
   GameSettings,
   DialogueLine,
 } from './types';
-import { STAGES } from './game/stageData';
+import { ACTIVE_STAGES } from './game/campaign';
 import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
@@ -584,7 +584,7 @@ export default function App() {
     const mode = modeOverride ?? gameMode;
     const p1 = p1Override ?? p1Char;
     const p2 = secondFighterFor(mode, p2Override ?? p2Char);
-    const stage = STAGES[stageIdx];
+    const stage = ACTIVE_STAGES[stageIdx];
     engineRef.current = new GameEngine(
       stage,
       p1,
@@ -620,7 +620,7 @@ export default function App() {
   };
 
   const handleNextStage = () => {
-    if (currentStageIdx < STAGES.length - 1) {
+    if (currentStageIdx < ACTIVE_STAGES.length - 1) {
       startStage(currentStageIdx + 1);
     } else {
       setScreen('VICTORY');
@@ -807,7 +807,7 @@ export default function App() {
               returnToTitle();
             }}
             onRestartStage={() => startStage(currentStageIdx)}
-            stageName={STAGES[currentStageIdx].name}
+            stageName={ACTIVE_STAGES[currentStageIdx].name}
           />
 
           {/* min-h-0: a flex item's default minimum main size is 'auto' —
@@ -853,7 +853,7 @@ export default function App() {
       {/* 5. STAGE CLEAR SCREEN */}
       {screen === 'STAGE_CLEAR' && engineRef.current && (
         <StageClearScreen
-          stageName={STAGES[currentStageIdx].name}
+          stageName={ACTIVE_STAGES[currentStageIdx].name}
           stats={engineRef.current.stats}
           onNextStage={handleNextStage}
         />

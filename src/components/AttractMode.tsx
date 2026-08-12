@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CHARACTERS } from '../game/characterData';
-import { STAGES, renderStageBackground } from '../game/stageData';
+import { renderStageBackground } from '../game/stageData';
+import { ACTIVE_STAGES } from '../game/campaign';
 import { CharacterId } from '../types';
 import { FullscreenPrompt } from './FullscreenPrompt';
 
@@ -33,7 +34,7 @@ function buildSequence(): Panel[] {
     ...Object.values(CHARACTERS).map(
       (c): Panel => ({ kind: 'CHARACTER', charId: c.id, durationMs: CHARACTER_MS })
     ),
-    ...STAGES.map((_, i): Panel => ({ kind: 'STAGE', stageIndex: i, durationMs: STAGE_MS })),
+    ...ACTIVE_STAGES.map((_, i): Panel => ({ kind: 'STAGE', stageIndex: i, durationMs: STAGE_MS })),
   ];
 }
 
@@ -111,7 +112,7 @@ export const AttractMode: React.FC<AttractModeProps> = ({ onInsertCoin }) => {
         if (ctx) {
           renderStageBackground(
             ctx,
-            STAGES[current.stageIndex].bgType,
+            ACTIVE_STAGES[current.stageIndex].bgType,
             cameraX,
             canvas.width,
             canvas.height
@@ -127,7 +128,7 @@ export const AttractMode: React.FC<AttractModeProps> = ({ onInsertCoin }) => {
   }, [panelIndex]);
 
   const character = panel?.kind === 'CHARACTER' ? CHARACTERS[panel.charId] : null;
-  const stage = panel?.kind === 'STAGE' ? STAGES[panel.stageIndex] : null;
+  const stage = panel?.kind === 'STAGE' ? ACTIVE_STAGES[panel.stageIndex] : null;
 
   return (
     <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden flex items-center justify-center">
