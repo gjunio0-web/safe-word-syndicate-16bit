@@ -1,7 +1,13 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
+# The SPA catch-all. Functions are matched before redirects, so
+# /.netlify/functions/telemetry reaches the function rather than being
+# rewritten into the app — which is the reason the telemetry endpoint uses
+# that default path instead of a prettier one that would need an exception
+# carved out here.
 [[redirects]]
   from = "/*"
   to = "/index.html"
