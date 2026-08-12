@@ -178,10 +178,172 @@ interface PadActivity {
    * `-1` means never touched since the entry appeared.
    */
   lastActiveFrame: number;
+  /**
+   * What the controls were showing at the last poll, as one comparable string.
+   *
+   * Deliberately built from the controls and never from `Gamepad.timestamp`.
+   * The clock is the browser's; the controls are the device's. Two entries the
+   * browser lists for one controller can have their clocks refreshed at
+   * different rates — one every poll, the other only on a state change — and a
+   * rule that read the clock therefore could not tell which entry was the real
+   * device. That mistake shipped once and cost the player their controller.
+   */
+  signature: string;
+  /** Frame at which `signature` last differed from the poll before it. */
+  lastMoveFrame: number;
 }
 
 const padActivity = new Map<number, PadActivity>();
 let assignmentFrame = 0;
+
+/**
+ * Frames an entry's controls must sit perfectly unchanged, while a twin of the
+ * same device is moving, before it is taken for a photograph. Three seconds.
+ */
+const PHOTOGRAPH_AFTER_FRAMES = 180;
+
+/**
+ * How close together two entries must have moved for a frame to say anything
+ * about how many devices there are.
+ *
+ * Two frames, which is a browser refreshing one entry a beat after the other —
+ * not a window a stopped copy can sit inside. This is what keeps the copy from
+ * arguing its own way out: once it freezes it stops moving, and two frames
+ * later it can no longer take part in the proof at all. A wider window let it
+ * race the rule, and whether it won came down to whether the player happened to
+ * be pressing something different in the moments after the freeze.
+ */
+const MOVED_TOGETHER_WITHIN_FRAMES = 2;
+
+/**
+ * Frames of disagreement, both entries having just moved, that prove two
+ * entries are two devices rather than one device listed twice.
+ *
+ * Counted cumulatively rather than in a row, because two people do not change
+ * what they are holding on thirty consecutive frames — they press, hold, and
+ * release. What one device listed twice never does is *disagree* while both
+ * entries are being refreshed, so every such frame is evidence, whenever it
+ * falls.
+ *
+ * A browser refreshing one entry a beat after the other produces a stray
+ * disagreeing frame at some presses, so a duplicate can in principle collect
+ * these slowly. That failure direction is the safe one: it costs the rule its
+ * grip on a duplicate, which is visible, rather than costing a live player
+ * their controller.
+ */
+const DISTINCT_DEVICE_FRAMES = 20;
+
+/** Entries currently taken for a photograph of a device listed elsewhere. */
+const photographs = new Set<number>();
+/** Pairs proved to be separate devices. Sticky for the session. */
+const distinctDevices = new Set<string>();
+/** How long each undecided pair has been disagreeing, both entries moving. */
+const disagreeingFrames = new Map<string, number>();
+
+const pairKey = (id: string, a: number, b: number) =>
+  `${id}#${Math.min(a, b)}:${Math.max(a, b)}`;
+
+/** What the controls read right now, exactly. Any change at all is a move. */
+function controlSignature(pad: Gamepad): string {
+  let signature = '';
+  for (const button of pad.buttons) signature += button ? `${button.value};` : ';';
+  signature += '|';
+  for (const axis of pad.axes) signature += `${axis};`;
+  return signature;
+}
+
+/** Indices grouped by the identity string the browser reports for them. */
+function groupsById(pads: Map<number, Gamepad>): Map<string, number[]> {
+  const byId = new Map<string, number[]>();
+  for (const [index, pad] of pads) {
+    // An entry with no identity cannot be shown to be a copy of anything.
+    if (typeof pad.id !== 'string' || pad.id === '') continue;
+    const group = byId.get(pad.id);
+    if (group) group.push(index);
+    else byId.set(pad.id, [index]);
+  }
+  return byId;
+}
+
+const justMoved = (index: number) => {
+  const activity = padActivity.get(index);
+  return !!activity && assignmentFrame - activity.lastMoveFrame <= MOVED_TOGETHER_WITHIN_FRAMES;
+};
+
+/**
+ * Decides which listed entries are photographs of a device listed elsewhere.
+ *
+ * The rule that shipped before this one asked "has this entry gone quiet while
+ * a twin kept reporting?", reading the browser's clock. That question has no
+ * safe answer: the browser may refresh two entries of one device at different
+ * rates, so the entry left behind can be the *real* one. It was, and the player
+ * lost their controller for the rest of the match.
+ *
+ * This asks a question that cannot point the wrong way. An entry is a
+ * photograph only when a twin is **moving** while it is not. A frozen copy
+ * never moves, so it can never accuse the real pad of anything — which makes a
+ * solo player with one controller listed twice safe by construction rather than
+ * by calibration. The reverse works: the moment the player does anything, the
+ * real entry moves, the copy does not, and the copy is caught.
+ *
+ * The verdict is recomputed every frame from how long each entry has sat still,
+ * so it undoes itself on the very next frame an entry moves. A wrong decision
+ * costs a frame, not a match.
+ *
+ * Two controllers of the same model report the same identity, and one of them
+ * standing still while the other plays looks from here exactly like a copy. So
+ * a pair that has been seen disagreeing while *both* were moving is exempt for
+ * the rest of the session — a copy can never earn that exemption, because a
+ * copy that has stopped is not moving and a copy that is running agrees.
+ */
+function updatePhotographs(pads: Map<number, Gamepad>) {
+  photographs.clear();
+
+  for (const [id, group] of groupsById(pads)) {
+    for (let a = 0; a < group.length; a++) {
+      for (let b = a + 1; b < group.length; b++) {
+        const key = pairKey(id, group[a], group[b]);
+        if (distinctDevices.has(key)) continue;
+
+        const first = padActivity.get(group[a]);
+        const second = padActivity.get(group[b]);
+        if (!first || !second) continue;
+
+        const bothJustMoved = justMoved(group[a]) && justMoved(group[b]);
+        if (!bothJustMoved || first.signature === second.signature) continue;
+
+        const seen = (disagreeingFrames.get(key) ?? 0) + 1;
+        if (seen >= DISTINCT_DEVICE_FRAMES) {
+          distinctDevices.add(key);
+          disagreeingFrames.delete(key);
+        } else {
+          disagreeingFrames.set(key, seen);
+        }
+      }
+    }
+
+    for (const index of group) {
+      const activity = padActivity.get(index);
+      if (!activity) continue;
+      if (assignmentFrame - activity.lastMoveFrame < PHOTOGRAPH_AFTER_FRAMES) continue;
+
+      // "It moved while I was standing still" — compared against my own last
+      // move, not against a window. That makes the verdict hold for as long as
+      // I go on standing still, and drop the instant I move, without any latch
+      // to get stuck: the moment this entry moves, `lastMoveFrame` becomes now,
+      // no twin can have moved after it, and the accusation evaporates.
+      const accused = group.some((other) => {
+        if (other === index) return false;
+        if (distinctDevices.has(pairKey(id, index, other))) return false;
+        const twin = padActivity.get(other);
+        return (
+          !!twin && twin.lastMoveFrame > activity.lastMoveFrame && twin.signature !== activity.signature
+        );
+      });
+      if (accused) photographs.add(index);
+    }
+  }
+}
 
 /**
  * Records whether each pad's data is still being refreshed.
@@ -209,7 +371,13 @@ function trackActivity(pads: Map<number, Gamepad>) {
           lastChangeFrame: assignmentFrame,
           everChanged: false,
           lastActiveFrame: -1,
+          signature: '',
+          lastMoveFrame: assignmentFrame,
         };
+
+    const signature = controlSignature(pad);
+    if (previous && signature !== entry.signature) entry.lastMoveFrame = assignmentFrame;
+    entry.signature = signature;
 
     if (hasActivity(pad)) entry.lastActiveFrame = assignmentFrame;
     padActivity.set(index, entry);
@@ -218,6 +386,8 @@ function trackActivity(pads: Map<number, Gamepad>) {
   for (const index of [...padActivity.keys()]) {
     if (!pads.has(index)) padActivity.delete(index);
   }
+
+  updatePhotographs(pads);
 }
 
 function isResponsive(index: number | null): boolean {
@@ -246,9 +416,15 @@ function livePads(): Map<number, Gamepad> {
 }
 
 export function readPlayerPads(): PlayerPadInputs {
-  const pads = livePads();
+  const listed = livePads();
 
-  trackActivity(pads);
+  trackActivity(listed);
+
+  // A photograph is dropped from the list outright, so it cannot hold a slot,
+  // cannot be read, and releases whatever slot it was holding on the frame it
+  // is caught — which is what lets the real entry be promoted into it by the
+  // rules already below. It comes back the frame it moves again.
+  const pads = new Map([...listed].filter(([index]) => !photographs.has(index)));
 
   // Release slots whose pad left the list entirely.
   if (assignedP1Index !== null && !pads.has(assignedP1Index)) assignedP1Index = null;
@@ -427,6 +603,9 @@ export function resetPadAssignments() {
 export function forgetPadDevices() {
   resetPadAssignments();
   padActivity.clear();
+  photographs.clear();
+  distinctDevices.clear();
+  disagreeingFrames.clear();
   assignmentFrame = 0;
 }
 
@@ -623,6 +802,10 @@ export function readMenuState(): MenuState {
     // The menus merge every listed pad rather than reading an assigned slot,
     // which is why the slot-level defence does not reach here.
     if (isKnownPhantom(pad.index)) continue;
+    // And the same for a copy that worked before it froze, which `everChanged`
+    // above answers "a device" for. The verdict is written by the match path,
+    // so a session that has only ever seen the title screen has none yet.
+    if (photographs.has(pad.index)) continue;
 
     const dir = mapGamepadToInput(pad);
     state.UP = state.UP || dir.up;

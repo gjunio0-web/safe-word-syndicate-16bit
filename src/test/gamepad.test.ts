@@ -707,18 +707,14 @@ describe('a duplicate that froze after working', () => {
     id: 'DualSense Wireless Controller',
   }) as Gamepad;
 
-  it('still holds the direction down, which is the open defect', () => {
-    // The copy stopped at 5000 while the live one has reached 7000, and the
-    // merged reader takes it at face value. Stated as the measured present
-    // behaviour rather than as a wish.
-    //
-    // A rule that dropped the entry whose clock was a second behind its twin
-    // shipped here and was reverted: a browser may refresh two entries of one
-    // device at different rates, so the entry left behind can be the real one,
-    // and a second of not touching anything then killed the pad in the menus.
-    // Whatever closes this needs positive proof of which entry is the device.
+  it('is trusted by the merged reader until a match has judged it', () => {
+    // The merged reader has no record of its own — it reads the verdict the
+    // match path writes. Before a session's first match there is none, so on
+    // the title screen a stopped copy is still merged in. In a pause modal,
+    // which is where this was reported, the match has been running and the
+    // verdict is there.
     connect([twin(0, 5000, [1, 0]), twin(1, 7000)]);
-    expect(readMenuState().RIGHT, 'the stopped copy is still merged in').toBe(true);
+    expect(readMenuState().RIGHT, 'no match has run, so nothing is known').toBe(true);
   });
 
   it('still counts while the two are keeping pace', () => {
@@ -745,38 +741,98 @@ describe('a duplicate that froze after working', () => {
 
 /**
  * The duplicate that froze after working, on the path that decides who drives
- * the fighter. NOT CLOSED — this block records what the match path still does
- * and, more importantly, what an attempt to close it did instead.
+ * the fighter.
  *
- * The attempt (commit e00ad5c, reverted here) demoted an entry that had gone
- * quiet while a same-identity twin kept reporting, and refused to read it. It
- * cost a player their controller in the middle of a match, which is worse than
- * the defect it addressed and is the third time this file has produced that
- * failure. The test below is the case that was missing, and it is kept: no
- * future attempt may pass without it.
+ * Reported from play. A browser lists one controller under two indices, one
+ * copy stops being refreshed while the other goes on working, and frozen
+ * mid-direction it reports that direction forever. What it cost the player is
+ * everything, not merely a fighter that wanders: the copy holds player one, the
+ * loop ORs the keyboard into that slot so the keyboard cannot cancel it either,
+ * and the real pad sits on player two, which a solo game never reads.
+ *
+ * The rule that catches it asks which entry moved while the other stood still,
+ * and never looks at `Gamepad.timestamp` — an earlier rule did, and since a
+ * browser may refresh the two entries at different rates it could point at the
+ * real pad instead. That shipped and cost the player their controller.
  */
-describe('a duplicate that froze after working still drives the fighter', () => {
+describe('a duplicate that froze after working drives no fighter', () => {
   const ID = 'DualSense Wireless Controller';
   const twin = (index: number, timestamp: number, axes: number[] = [0, 0]) =>
     ({ ...pad({ index, timestamp, axes }), id: ID }) as Gamepad;
+  const pressing = (index: number, timestamp: number) =>
+    ({ ...pad({ index, timestamp, buttons: { 2: true } }), id: ID }) as Gamepad;
 
-  it('is not caught by anything the match path knows, and that is the open gap', () => {
-    // Both entries mirror while the player pushes right, then one stops being
-    // refreshed still showing it. `everChanged` says "a device" of the copy —
-    // it moved plenty before it froze — so nothing here demotes or silences it.
-    const clock = (frame: number) => 1000 + frame * 16;
+  const clock = (frame: number) => 1000 + frame * 16;
+
+  /** Both entries mirror while the player pushes right; then one freezes. */
+  function upToTheFreeze() {
     for (let frame = 0; frame < 40; frame++) {
       connect([twin(0, clock(frame), [1, 0]), twin(1, clock(frame), [1, 0])]);
       readPlayerPads();
     }
-    for (let frame = 40; frame < 640; frame++) {
-      connect([twin(0, clock(39), [1, 0]), twin(1, clock(frame))]);
+  }
+
+  it('stops driving the fighter once the player has gone on playing', () => {
+    upToTheFreeze();
+    for (let frame = 40; frame < 400; frame++) {
+      connect([
+        twin(0, clock(39), [1, 0]),
+        frame % 40 < 5 ? pressing(1, clock(frame)) : twin(1, clock(frame)),
+      ]);
       readPlayerPads();
     }
 
-    // Stated as the measured present behaviour rather than as a wish, so the
-    // day it changes this test says so instead of quietly agreeing.
-    expect(readPlayerPads().p1!.right, 'still walking on its own after 600 frames').toBe(true);
+    connect([twin(0, clock(39), [1, 0]), pressing(1, clock(999))]);
+    const pads = readPlayerPads();
+    expect(pads.p1!.right, 'the fighter is no longer walking on its own').toBe(false);
+    expect(pads.p1!.punch, 'and the pad in the player\'s hands drives it').toBe(true);
+  });
+
+  it('frees the direction in a pause modal, which is where it was reported', () => {
+    // The merged menu reader has no record of its own; it reads the verdict the
+    // match path writes. By the time a pause modal is open a match has been
+    // running, so the verdict is there — and without this the d-pad is inert in
+    // the modal while confirm still works, because the dispatcher fires on the
+    // false-to-true edge and a direction stuck true has no edge left to give.
+    upToTheFreeze();
+    for (let frame = 40; frame < 400; frame++) {
+      connect([
+        twin(0, clock(39), [1, 0]),
+        frame % 40 < 5 ? pressing(1, clock(frame)) : twin(1, clock(frame)),
+      ]);
+      readPlayerPads();
+    }
+
+    connect([twin(0, clock(39), [1, 0]), twin(1, clock(999))]);
+    expect(readMenuState().RIGHT, 'nobody is holding right').toBe(false);
+  });
+
+  it('is not talked out of it by a browser refreshing one entry a beat late', () => {
+    // The two entries are exempted for the session once they have been seen
+    // disagreeing while both had just moved — which is how two controllers of
+    // the same model are told apart. A duplicate can fake a disagreeing frame
+    // whenever the browser updates one entry before the other, so one such
+    // frame must not be enough to buy the exemption.
+    for (let frame = 0; frame < 200; frame++) {
+      const behind = frame % 10 === 0;
+      const shown: number[] = frame % 30 < 15 ? [1, 0] : [0, 0];
+      const late: number[] = frame % 30 === 0 || frame % 30 === 15 ? [0, 0] : shown;
+      connect([twin(0, clock(frame), shown), twin(1, clock(frame), behind ? late : shown)]);
+      readPlayerPads();
+    }
+
+    for (let frame = 200; frame < 600; frame++) {
+      connect([
+        twin(0, clock(199), [1, 0]),
+        frame % 40 < 5 ? pressing(1, clock(frame)) : twin(1, clock(frame)),
+      ]);
+      readPlayerPads();
+    }
+
+    connect([twin(0, clock(199), [1, 0]), pressing(1, clock(999))]);
+    const pads = readPlayerPads();
+    expect(pads.p1!.right, 'the copy is still caught').toBe(false);
+    expect(pads.p1!.punch, 'and the real pad drives the fighter').toBe(true);
   });
 });
 
@@ -824,6 +880,66 @@ describe('a controller listed twice never costs the player their controller', ()
 
     expect(readPlayerPads().p1?.punch, 'player one answers the press').toBe(true);
   });
+  it('never mistakes the pad being held for the photograph', () => {
+    // The case the reverted rule got backwards, and the reason the accusation
+    // is "it moved while I stood still" rather than "its clock is newer".
+    //
+    // The player holds right and nothing else, so the real entry's controls sit
+    // on one value — on a browser that refreshes a pad only when its state
+    // changes, its clock sits still too. The other entry's clock ticks on. The
+    // old rule read that and took the real pad for the dead one; this one
+    // cannot, because the other entry's *controls* never moved, so it has
+    // nothing to accuse anybody with.
+    let real = 1000;
+    let other = 1000;
+    for (let frame = 0; frame < 60; frame++) {
+      real += 16;
+      other += 16;
+      connect([entry(0, real, frame % 10 < 3), entry(1, other)]);
+      readPlayerPads();
+    }
+
+    const holding = () =>
+      ({ ...pad({ index: 0, timestamp: real, axes: [1, 0] }), id: ID }) as Gamepad;
+    for (let frame = 0; frame < 300; frame++) {
+      other += 16;
+      connect([holding(), entry(1, other)]);
+      readPlayerPads();
+    }
+
+    connect([holding(), entry(1, other)]);
+    const pads = readPlayerPads();
+    expect(pads.p1, 'the player still has a controller').not.toBeNull();
+    expect(pads.p1!.right, 'and it still reports the direction they are holding').toBe(true);
+  });
+
+  it('leaves a second person holding a direction alone once both have played', () => {
+    // Two controllers of the same model report the same identity, so one of
+    // them standing still while the other plays looks from here exactly like a
+    // copy. What separates them is that both have been seen moving at once,
+    // showing different things — which one device listed twice never does.
+    const busy = (timestamp: number, punching: boolean) =>
+      ({ ...pad({ index: 0, timestamp, buttons: punching ? { 2: true } : {} }), id: ID }) as Gamepad;
+    const walking = (timestamp: number, right: boolean) =>
+      ({ ...pad({ index: 1, timestamp, axes: right ? [1, 0] : [0, 0] }), id: ID }) as Gamepad;
+
+    const clock = (frame: number) => 1000 + frame * 16;
+    for (let frame = 0; frame < 120; frame++) {
+      connect([busy(clock(frame), frame % 6 < 3), walking(clock(frame), frame % 8 < 4)]);
+      readPlayerPads();
+    }
+
+    // Then the second player holds right, dead steady, for four seconds.
+    for (let frame = 120; frame < 400; frame++) {
+      connect([busy(clock(frame), frame % 6 < 3), walking(clock(120), true)]);
+      readPlayerPads();
+    }
+    const pads = readPlayerPads();
+
+    expect(pads.p2, 'the second player still has a controller').not.toBeNull();
+    expect(pads.p2!.right, 'and it still reports what they are holding').toBe(true);
+  });
+
 });
 
 /**
