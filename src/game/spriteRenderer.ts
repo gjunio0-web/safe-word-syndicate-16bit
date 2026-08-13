@@ -510,6 +510,10 @@ function renderPlayerSprite(
         ctx.beginPath();
         ctx.arc(0, -60, 62, Math.PI * 0.15, Math.PI * 0.85);
         ctx.stroke();
+
+        // Effects own their own stroke; the body does not inherit it.
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 2.5;
       }
 
       // 1. COMBAT BOOTS (Worn Brown Leather, sampled from the character art)
@@ -524,6 +528,10 @@ function renderPlayerSprite(
         ctx.beginPath();
         ctx.arc(8, -42, 44, -0.6, 0.6);
         ctx.stroke();
+
+        // Effects own their own stroke; the body does not inherit it.
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 2.5;
       } else if (isJumping) {
         drawArcadeBoot(ctx, -18, -26, 16, 14, '#54483c');
         drawArcadeBoot(ctx, 6, -18, 16, 14, '#54483c');
@@ -823,6 +831,10 @@ function renderPlayerSprite(
           ctx.beginPath();
           ctx.ellipse(0, -60, 42, 22, 0, 0, Math.PI * 2);
           ctx.stroke();
+
+          // Effects own their own stroke; the body does not inherit it.
+          ctx.strokeStyle = outline;
+          ctx.lineWidth = 2.5;
         }
       }
 
@@ -835,6 +847,10 @@ function renderPlayerSprite(
         ctx.beginPath();
         ctx.arc(10, -42, 44, -0.7, 0.7);
         ctx.stroke();
+
+        // Effects own their own stroke; the body does not inherit it.
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 2.5;
       } else if (isFlying) {
         // Streamlined flying boot angle
         drawArcadeBoot(ctx, -20, -10, 16, 13, '#422817');
@@ -1064,6 +1080,10 @@ function renderPlayerSprite(
           ctx.arc(30, -48, reach, -0.75, 0.75);
           ctx.stroke();
         }
+
+        // Effects own their own stroke; the body does not inherit it.
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 2.5;
       }
 
       // 1. CYBERNETIC ARMORED BIKER BOOTS
