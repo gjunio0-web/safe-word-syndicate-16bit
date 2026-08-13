@@ -904,37 +904,70 @@ function renderPlayerSprite(
       ctx.fill();
       ctx.stroke();
 
-      // Leather harness. The straps used to be two horizontal bars; the
-      // character art has them crossing from the shoulders into the O-ring.
+      // Leather harness.
       ctx.fillStyle = '#121216';
+
+      ctx.fillRect(-16, -76, 32, 6);
+
+      // One strap per side, chest to hip in a single run: pinched at the ring,
+      // flaring above and below it. Drawn as four separate pieces this left a
+      // two-pixel band of skin straight across the harness where the upper
+      // pieces stopped and the lower ones started.
       ctx.beginPath();
-      ctx.moveTo(-19, -75);
-      ctx.lineTo(-13, -75);
-      ctx.lineTo(6, -60);
-      ctx.lineTo(1, -57);
+      ctx.moveTo(-14, -71);
+      ctx.lineTo(-11, -68);
+      ctx.lineTo(-8, -66);
+      ctx.lineTo(-7, -64);
+      ctx.lineTo(-6, -61);
+      ctx.lineTo(-9, -59);
+      ctx.lineTo(-18, -44);
+      ctx.lineTo(-11, -43.2);
+      ctx.lineTo(2, -59);
+      ctx.lineTo(-2, -61.5);
+      ctx.lineTo(-4, -63.5);
+      ctx.lineTo(-5, -66);
+      ctx.lineTo(-4.5, -68);
+      ctx.lineTo(-3, -71);
       ctx.closePath();
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(19, -75);
-      ctx.lineTo(13, -75);
-      ctx.lineTo(-6, -60);
-      ctx.lineTo(-1, -57);
+      ctx.moveTo(14, -71);
+      ctx.lineTo(11, -68);
+      ctx.lineTo(8, -66);
+      ctx.lineTo(7, -64);
+      ctx.lineTo(6, -61);
+      ctx.lineTo(9, -59);
+      ctx.lineTo(18, -44);
+      ctx.lineTo(11, -43.2);
+      ctx.lineTo(-2, -59);
+      ctx.lineTo(2, -61.5);
+      ctx.lineTo(4, -63.5);
+      ctx.lineTo(5, -66);
+      ctx.lineTo(4.5, -68);
+      ctx.lineTo(3, -71);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillRect(-18, -73, 36, 4);
+      // The leather closes all the way around the ring rather than pinching to
+      // nothing at three and nine o'clock.
+      ctx.beginPath();
+      ctx.arc(0, -66, 7.5, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Studs along the chest strap
       ctx.fillStyle = '#94a3b8';
-      for (let sx = -14; sx <= 14; sx += 7) {
-        ctx.fillRect(sx, -72, 2, 2);
-      }
-
-      ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
-      ctx.arc(0, -66, 6, 0, Math.PI * 2);
+      ctx.arc(0, -66, 4.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
+      ctx.fillStyle = '#f5b082';
+      ctx.beginPath();
+      ctx.arc(0, -66, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#94a3b8';
+      for (const [sx, sy] of [[-6, -72.5], [6, -72.5], [13, -72.5],
+                              [-5.8, -56.5], [5.8, -56.5], [-10.5, -50.5], [10.5, -50.5]]) {
+        ctx.fillRect(sx - 1, sy, 2, 2);
+      }
 
       ctx.strokeStyle = outline;
 
