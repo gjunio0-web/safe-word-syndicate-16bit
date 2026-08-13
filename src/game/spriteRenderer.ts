@@ -989,16 +989,42 @@ function renderPlayerSprite(
       ctx.stroke();
 
       // 6. SPIKED GOLDEN BLONDE HAIR
+      //
+      // This used to be a band across the forehead with points on top and
+      // nothing wrapping the skull, so the scalp showed above the notch at
+      // x = 4 and all around the sides. Gold points, a straight rim, and a
+      // bare head under it: a player asked whether he was wearing a crown.
+      //
+      // What kills that reading is coverage, not the points. The mass now owns
+      // the whole top of the skull and runs down past the temples, tapering to
+      // a tip at jaw height on both sides — hair frames a face, a crown sits on
+      // one. The stroke is spelled out here too: it used to inherit whatever
+      // the smirk left behind, which outlined the hair in a colour belonging to
+      // nothing else on the sprite and made it read as a separate object.
+      ctx.strokeStyle = '#8a5a10';
+      ctx.lineWidth = 2;
       ctx.fillStyle = '#facc15';
       ctx.beginPath();
-      ctx.moveTo(-16, -92);
-      ctx.lineTo(-21, -105);
-      ctx.lineTo(-13, -99);
-      ctx.lineTo(-5, -108);
-      ctx.lineTo(4, -99);
-      ctx.lineTo(13, -107);
-      ctx.lineTo(19, -96);
-      ctx.lineTo(14, -86);
+      ctx.moveTo(-12, -82);
+      ctx.lineTo(-15, -88);
+      ctx.lineTo(-16, -100);
+      ctx.lineTo(-18, -107);
+      ctx.lineTo(-12, -103);
+      ctx.lineTo(-8, -112);
+      ctx.lineTo(-3, -105);
+      ctx.lineTo(2, -111);
+      ctx.lineTo(7, -104);
+      ctx.lineTo(13, -109);
+      ctx.lineTo(16, -100);
+      ctx.lineTo(15, -88);
+      ctx.lineTo(12, -82);
+      ctx.lineTo(11, -91);
+      ctx.lineTo(8, -97);
+      ctx.lineTo(3, -101);
+      ctx.lineTo(0, -99);
+      ctx.lineTo(-3, -101);
+      ctx.lineTo(-8, -97);
+      ctx.lineTo(-11, -91);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
