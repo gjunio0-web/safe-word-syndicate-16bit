@@ -913,7 +913,15 @@ export class GameEngine {
     // stunned, which would otherwise freeze the timer exactly when it matters.
 
     // Passive Power Meter Regeneration (+0.04 per frame = ~2.4%/sec)
-    player.powerMeter = Math.min(100, player.powerMeter + 0.04);
+    //
+    // Not while flying. Fun Maker's flight is supposed to be paid for out of
+    // this same meter, and this line ran first and unconditionally: the flight
+    // drain took 0.02 a frame, this handed back 0.04, and the meter climbed to
+    // the cap while he hovered. Flight was free and unlimited, measured at
+    // +1.2%/sec in the air.
+    if (player.action !== 'FLYING') {
+      player.powerMeter = Math.min(100, player.powerMeter + 0.04);
+    }
 
     if (player.comboTimer > 0) {
       player.comboTimer--;
@@ -964,6 +972,20 @@ export class GameEngine {
 
     // --- FUN MAKER SPECIAL FLYING ABILITY ---
     const isFunMaker = player.charId === 'FUN_MAKER';
+
+    // Flight ends the moment it stops being paid for.
+    //
+    // This has to sit outside the block below, which is gated on a positive
+    // meter and no suppression. The old exit lived inside that block, so it
+    // could only fire under the conditions that made it unnecessary: an empty
+    // tank turned the gate false, the whole block stopped running, and nothing
+    // was left to end the flight. `updateEntityPhysics` skips gravity while the
+    // action is FLYING, so the hero would have hung in the air with no controls
+    // and no way down. It never happened only because the meter never emptied.
+    if (player.action === 'FLYING' && (player.powerMeter <= 0 || player.suppressedTimer > 0)) {
+      player.action = 'JUMP';
+    }
+
     const isFlyingCurrently = player.action === 'FLYING';
 
     if (isFunMaker && player.powerMeter > 0 && player.suppressedTimer === 0) {
@@ -990,7 +1012,8 @@ export class GameEngine {
           }
         }
 
-        // Very slow special drain rate (0.02 per frame = ~1.2/sec -> 50s+ flight duration!)
+        // Flight drain: 0.02 per frame, ~1.2%/sec. With the passive regen held
+        // off above, a full meter buys 5001 frames of air — 83 seconds, measured.
         player.powerMeter = Math.max(0, player.powerMeter - 0.02);
 
         // Vertical Altitude Flight Control (Zero Gravity Hovering)
@@ -1046,8 +1069,6 @@ export class GameEngine {
         } else if (input.kick) {
           this.performKick(player, input);
         }
-      } else if (isFlyingCurrently && player.powerMeter <= 0) {
-        player.action = 'JUMP';
       }
     }
 
