@@ -907,51 +907,57 @@ function renderPlayerSprite(
       // Leather harness.
       ctx.fillStyle = '#121216';
 
-      ctx.fillRect(-16, -76, 32, 6);
+      ctx.fillRect(-15, -75.5, 30, 5);
 
       // One strap per side, chest to hip in a single run: pinched at the ring,
       // flaring above and below it. Drawn as four separate pieces this left a
       // two-pixel band of skin straight across the harness where the upper
       // pieces stopped and the lower ones started.
+      //
+      // The inner edge stops short of the centre line instead of sweeping past
+      // it. Carried across, the two straps overlapped into one mass below the
+      // ring and the chest measured 73% leather against the reference art's
+      // 52%; it read as a black vest at the size the sprite is drawn. Held back,
+      // the pair reads as an X centred on the ring with skin in the V beneath.
       ctx.beginPath();
-      ctx.moveTo(-14, -71);
-      ctx.lineTo(-11, -68);
+      ctx.moveTo(-12, -71);
+      ctx.lineTo(-10, -68);
       ctx.lineTo(-8, -66);
       ctx.lineTo(-7, -64);
-      ctx.lineTo(-6, -61);
+      ctx.lineTo(-6.5, -61);
       ctx.lineTo(-9, -59);
-      ctx.lineTo(-18, -44);
-      ctx.lineTo(-11, -43.2);
-      ctx.lineTo(2, -59);
-      ctx.lineTo(-2, -61.5);
-      ctx.lineTo(-4, -63.5);
+      ctx.lineTo(-16, -44);
+      ctx.lineTo(-11, -44.8);
+      ctx.lineTo(-4.5, -58.5);
+      ctx.lineTo(-3.5, -61);
+      ctx.lineTo(-4.5, -63.5);
       ctx.lineTo(-5, -66);
-      ctx.lineTo(-4.5, -68);
-      ctx.lineTo(-3, -71);
+      ctx.lineTo(-5.5, -68);
+      ctx.lineTo(-7, -71);
       ctx.closePath();
       ctx.fill();
       ctx.beginPath();
-      ctx.moveTo(14, -71);
-      ctx.lineTo(11, -68);
+      ctx.moveTo(12, -71);
+      ctx.lineTo(10, -68);
       ctx.lineTo(8, -66);
       ctx.lineTo(7, -64);
-      ctx.lineTo(6, -61);
+      ctx.lineTo(6.5, -61);
       ctx.lineTo(9, -59);
-      ctx.lineTo(18, -44);
-      ctx.lineTo(11, -43.2);
-      ctx.lineTo(-2, -59);
-      ctx.lineTo(2, -61.5);
-      ctx.lineTo(4, -63.5);
+      ctx.lineTo(16, -44);
+      ctx.lineTo(11, -44.8);
+      ctx.lineTo(4.5, -58.5);
+      ctx.lineTo(3.5, -61);
+      ctx.lineTo(4.5, -63.5);
       ctx.lineTo(5, -66);
-      ctx.lineTo(4.5, -68);
-      ctx.lineTo(3, -71);
+      ctx.lineTo(5.5, -68);
+      ctx.lineTo(7, -71);
       ctx.closePath();
       ctx.fill();
 
       // The leather closes all the way around the ring rather than pinching to
       // nothing at three and nine o'clock.
       ctx.beginPath();
-      ctx.arc(0, -66, 7.5, 0, Math.PI * 2);
+      ctx.arc(0, -66, 6, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#94a3b8';
@@ -964,8 +970,10 @@ function renderPlayerSprite(
       ctx.fill();
 
       ctx.fillStyle = '#94a3b8';
+      // The middle pair sits at x = 7 rather than 5.8: with the straps narrowed
+      // it was landing on the very edge of the leather.
       for (const [sx, sy] of [[-6, -72.5], [6, -72.5], [13, -72.5],
-                              [-5.8, -56.5], [5.8, -56.5], [-10.5, -50.5], [10.5, -50.5]]) {
+                              [-7, -56.5], [7, -56.5], [-10.5, -50.5], [10.5, -50.5]]) {
         ctx.fillRect(sx - 1, sy, 2, 2);
       }
 
