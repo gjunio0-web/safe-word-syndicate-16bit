@@ -52,16 +52,6 @@ class StubAudio {
   loop = false;
   volume = 1;
   currentTime = 0;
-  /**
-   * Kept because a test that only asks whether *something* is playing passes
-   * just as well when the wrong track is playing.
-   */
-  src: string;
-
-  constructor(src: string = '') {
-    this.src = src;
-  }
-
   play() {
     this.paused = false;
     return Promise.resolve();

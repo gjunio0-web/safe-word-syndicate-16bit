@@ -15,26 +15,6 @@ import { loadAudioTrackBlobs, saveAudioTrackBlob, removeAudioTrackBlob } from '.
  */
 const MANIFEST_RETRY_DELAYS_MS = [500, 1500, 4000];
 
-/**
- * How long a track request waits for the file list before giving up on it and
- * starting the synth.
- *
- * The synth is meant to say "no file was supplied for this slot", and it used
- * to also say "the list has not arrived yet" — two different things with the
- * same sound. The attract screen is where that showed: it is the first screen
- * to ask for music and it asks 1400ms after the page loads (BOOT_MS), while
- * the manifest is still in flight on anything slower than a desk. The player
- * heard the built-in chiptune, then a hard cut into the middle of the real
- * track once the list landed. Reported from play.
- *
- * Deliberately shorter than the retry ladder above, which spans six seconds:
- * if the first attempt and a retry both fail, the game starts the synth rather
- * than holding the opening screen silent for six seconds, and a later retry
- * still swaps the file in through `refreshActiveTrack`. Silence is the better
- * answer for a moment, not for a wait.
- */
-const CATALOGUE_WAIT_MS = 3000;
-
 
 /**
  * Narrows a stored key to a track slot.
@@ -92,11 +72,8 @@ class SoundEngine {
   private unlockArmed: boolean = false;
   private unlockListeners: Set<() => void> = new Set();
 
-  /** Resolves when the track catalogue is assembled, or has failed to be. */
-  private readonly catalogueReady: Promise<void>;
-
   constructor() {
-    this.catalogueReady = this.restorePersistedTracks();
+    this.restorePersistedTracks();
     if (typeof window !== 'undefined') {
       this.armUnlock();
       window.addEventListener('pagehide', () => this.suspendAudio());
@@ -181,34 +158,32 @@ class SoundEngine {
     }
   }
 
-  /**
-   * Resolves once the track catalogue has been assembled — or has failed to
-   * be. See `CATALOGUE_WAIT_MS` for why anything waits on it.
-   */
-  private async restorePersistedTracks(): Promise<void> {
-    // 1. Tracks placed in public/audio/, published through the static manifest
-    const fromManifest = (async () => {
-      if (typeof window === 'undefined') return;
-      const data = await this.fetchAudioManifest();
-      if (!data || data.files.length === 0) return;
+  private async restorePersistedTracks() {
+    try {
+      // 1. Tracks placed in public/audio/, published through the static manifest
+      if (typeof window !== 'undefined') {
+        this.fetchAudioManifest().then((data) => {
+          if (data && data.files.length > 0) {
+            const files: string[] = data.files;
 
-      // Each file claims the slot its name matches, and nothing else. The
-      // previous version fell back to position — files[0] became the title
-      // theme, files[3] the boss — so the ten-track soundtrack landed
-      // alphabetically: the title screen played the stage one theme and six
-      // tracks never loaded at all.
-      for (const file of data.files) {
-        const slot = matchTrackByFilename(file);
-        if (slot && !this.customTrackNames[slot]) {
-          this.syncTrackAliases(slot, `/audio/${file}`, file);
-        }
+            // Each file claims the slot its name matches, and nothing else. The
+            // previous version fell back to position — files[0] became the title
+            // theme, files[3] the boss — so the ten-track soundtrack landed
+            // alphabetically: the title screen played the stage one theme and six
+            // tracks never loaded at all.
+            for (const file of files) {
+              const slot = matchTrackByFilename(file);
+              if (slot && !this.customTrackNames[slot]) {
+                this.syncTrackAliases(slot, `/audio/${file}`, file);
+              }
+            }
+
+            this.refreshActiveTrack();
+          }
+        });
       }
 
-      this.refreshActiveTrack();
-    })();
-
-    // 2. Check IndexedDB in browser for files uploaded via Jukebox Modal
-    const fromStorage = (async () => {
+      // 2. Check IndexedDB in browser for files uploaded via Jukebox Modal
       const persisted = await loadAudioTrackBlobs();
       let restoredCount = 0;
       Object.entries(persisted).forEach(([trackId, data]) => {
@@ -220,13 +195,9 @@ class SoundEngine {
       if (restoredCount > 0) {
         this.refreshActiveTrack();
       }
-    })();
-
-    // Concurrently, not in sequence: the manifest carries its own retry ladder
-    // and awaiting it first would hold a player's own uploaded tracks behind
-    // several seconds of backoff. Settled rather than all, because either side
-    // failing is an ordinary outcome the synth fallback already covers.
-    await Promise.allSettled([fromManifest, fromStorage]);
+    } catch {
+      // ignore
+    }
   }
 
   /**
@@ -868,39 +839,6 @@ class SoundEngine {
 
     // Try HTML5 Audio file playback first
     const audioUrl = this.customTrackUrls[track];
-
-    // No file *yet* is not the same as no file. Waiting for the catalogue here
-    // is what keeps the opening screen from playing the chiptune and then
-    // cutting into the middle of the real track a second later.
-    //
-    // Unconditional rather than guarded by a "has it settled" flag: once the
-    // catalogue has settled the race below resolves on the spot, so the flag
-    // bought a microtask and could not be shown to change anything.
-    //
-    // The token check is the same one the callbacks below use: entering the
-    // intro cutscene calls `stopBgm()`, which bumps it, so a catalogue that
-    // settles mid-cutscene finds a stale token and stays quiet instead of
-    // starting the title theme over the cutscene's own music.
-    if (!audioUrl) {
-      Promise.race([
-        this.catalogueReady,
-        new Promise((resolve) => setTimeout(resolve, CATALOGUE_WAIT_MS)),
-      ]).then(() => {
-        if (this.playbackToken !== currentToken || !this.musicEnabled) return;
-
-        // Settled inline rather than by calling `playBgm` again: a second call
-        // would find the catalogue still unsettled and wait all over again, so
-        // a manifest slower than the wait meant the synth never started at all
-        // and the screen stayed silent. Caught by measuring, not by reading.
-        const arrived = this.customTrackUrls[track];
-        if (arrived) {
-          this.playBgm(track, true);
-          return;
-        }
-        this.playSynthBgm(track, currentToken);
-      });
-      return;
-    }
     if (audioUrl) {
       const audio = new Audio(audioUrl);
       audio.loop = true;
