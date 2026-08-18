@@ -13,6 +13,7 @@ import {
   DialogueLine,
 } from './types';
 import { ACTIVE_STAGES } from './game/campaign';
+import { useTelemetry } from './hooks/useTelemetry';
 import { GameEngine } from './game/engine';
 import { GameCanvas } from './components/GameCanvas';
 import { OnScreenControls } from './components/OnScreenControls';
@@ -166,6 +167,7 @@ export default function App() {
   // jukebox — stays mouse-operable; only the fighter's own controls move to
   // keyboard alone.
   const isMobile = useIsMobileDevice();
+  const telemetry = useTelemetry();
   const isPortrait = useIsPortrait();
   const [showAudioModal, setShowAudioModal] = useState(false);
   const [showDifficultyModal, setShowDifficultyModal] = useState(false);
@@ -455,6 +457,11 @@ export default function App() {
   // current one through a ref to know when the game keys are in play.
   const screenRef = useRef<GameScreen>(screen);
   const isPausedRef = useRef<boolean>(isPaused);
+  // Same reason as the others: the loop effect is keyed on the things that
+  // should restart it, and the stage index is not one of them — a stage change
+  // already tears the loop down through `screen`. Reading it through a ref
+  // keeps it out of the dependency list without lying to the linter.
+  const stageIdxRef = useRef<number>(currentStageIdx);
   useEffect(() => {
     inputRef.current = inputP1;
   }, [inputP1]);
@@ -471,6 +478,10 @@ export default function App() {
     screenRef.current = screen;
     isPausedRef.current = isPaused;
   }, [screen, isPaused]);
+
+  useEffect(() => {
+    stageIdxRef.current = currentStageIdx;
+  }, [currentStageIdx]);
 
   // Main Gameplay Update Loop, driven by a fixed-step clock
   useEffect(() => {
@@ -556,19 +567,26 @@ export default function App() {
       // Victory is checked before stage clear: on the final stage both flags
       // can rise on the same step, and stage clear winning meant the campaign
       // ended on a screen offering a NEXT STAGE that does not exist.
+      // Sampled here rather than inside the step loop, for the same reason
+      // the screen checks are: once per video frame is plenty for a record
+      // nobody looks at until the run is over.
+      telemetry.sample(engineRef.current, stageIdxRef.current);
+
       if (engineRef.current.bossDefeated) {
         setSayonaraKilled(engineRef.current.sayonaraKilled);
+        telemetry.end('COMPLETED');
         setScreen('VICTORY');
       } else if (engineRef.current.stageCleared) {
         setScreen('STAGE_CLEAR');
       } else if (engineRef.current.gameOver) {
+        telemetry.end('GAME_OVER');
         setScreen('GAME_OVER');
       }
     };
 
     animFrameId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [screen, isPaused, gameMode, anyModalOpen]);
+  }, [screen, isPaused, gameMode, anyModalOpen, telemetry]);
 
   const startStage = (
     stageIdx: number,
@@ -616,6 +634,13 @@ export default function App() {
     // Difficulty is chosen from the title screen's own modal now, not passed
     // through this screen, so `settings` already holds whatever the player
     // picked and there is nothing left to reconcile here.
+    telemetry.begin({
+      hero: p1,
+      partner: p2 ?? null,
+      mode: mode ?? gameMode,
+      difficulty: settings.difficulty,
+      touch: isMobile,
+    });
     startStage(0, p1, p2, settings, mode);
   };
 
@@ -623,6 +648,7 @@ export default function App() {
     if (currentStageIdx < ACTIVE_STAGES.length - 1) {
       startStage(currentStageIdx + 1);
     } else {
+      telemetry.end('COMPLETED');
       setScreen('VICTORY');
     }
   };
@@ -650,6 +676,9 @@ export default function App() {
    * left it, with no control anywhere else to undo it.
    */
   const returnToTitle = () => {
+    // Only reports if a session is still open: reaching the title from the
+    // victory screen has already been recorded as a win.
+    telemetry.end('ABANDONED');
     setSettings((prev) => ({ ...prev, soundEnabled: true, musicEnabled: true }));
     sound.setEnabled(true, true);
     setScreen('TITLE');

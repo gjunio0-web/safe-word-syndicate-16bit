@@ -23,18 +23,25 @@ const ENDPOINT = '/.netlify/functions/telemetry';
 /**
  * Whether this session is worth reporting.
  *
- * A session that never got past the first wave is almost always someone who
- * opened the link, saw the attract loop, and left — a click, not a play. They
- * would otherwise dominate a run of forty sessions and drag every average
- * toward zero, and the questions being asked are about people who played.
+ * Only one condition: it has to have ended. An unsealed session is a run still
+ * in progress, and reporting one would put a half-finished row next to
+ * finished ones with no way to tell them apart.
  *
- * The threshold is on progress rather than on time, because time is the thing
- * being measured and a rule that discards short sessions would guarantee the
- * answer it was meant to discover.
+ * There was a second condition here and it was wrong. It required progress
+ * past the first wave, on the reasoning that people who open a link, watch the
+ * attract loop and leave would swamp a run of forty sessions. They would — but
+ * they never get a session at all, because one is only opened when a fighter
+ * is chosen, several screens later. What the rule actually discarded was every
+ * player who fought through wave one and stopped, on the first stage, which is
+ * the exact population the whole exercise exists to observe. Wave indices are
+ * zero-based, so those sessions read as stage 0, wave 0, and were silently
+ * dropped as bounces.
+ *
+ * The lesson worth keeping: a filter defended by a story about who it excludes
+ * needs a test that shows it excluding them, or it is just a story.
  */
 export function isWorthSending(session: SessionSnapshot): boolean {
-  if (!session.outcome) return false;
-  return session.furthestStage > 0 || session.furthestWave > 0;
+  return session.outcome !== null;
 }
 
 /** The body, as JSON. Separated so a test can read what would be sent. */

@@ -23,8 +23,12 @@ describe('deciding what to send', () => {
     expect(isWorthSending(played())).toBe(true);
   });
 
-  it('drops a click that never reached a wave', () => {
-    const bounced = finishSession(
+  it('keeps a run that ended on the very first wave', () => {
+    // Wave indices are zero-based and stage indices are too, so a player who
+    // fought wave one of stage one and stopped reads as 0/0. That is the most
+    // common shape a first-stage run can have and dropping it would empty the
+    // dataset of exactly what it exists to measure.
+    const firstWave = finishSession(
       startSession({
         build: 'FULL',
         hero: 'FUN_MAKER',
@@ -34,7 +38,9 @@ describe('deciding what to send', () => {
       }),
       'LEFT'
     );
-    expect(isWorthSending(bounced)).toBe(false);
+    expect(firstWave.furthestStage).toBe(0);
+    expect(firstWave.furthestWave).toBe(0);
+    expect(isWorthSending(firstWave)).toBe(true);
   });
 
   it('drops a session that has not ended yet', () => {
@@ -82,20 +88,17 @@ describe('what goes on the wire', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('does not send a session it decided against', () => {
+  it('does not send a session that has not ended', () => {
     const beacon = vi.fn(() => true);
     vi.stubGlobal('navigator', { sendBeacon: beacon });
-    const bounced = finishSession(
-      startSession({
-        build: 'FULL',
-        hero: 'FEET_MASTER',
-        mode: 'SINGLE',
-        difficulty: 'NORMAL',
-        touch: false,
-      }),
-      'LEFT'
-    );
-    expect(sendSession(bounced)).toBe(false);
+    const open = startSession({
+      build: 'FULL',
+      hero: 'FEET_MASTER',
+      mode: 'SINGLE',
+      difficulty: 'NORMAL',
+      touch: false,
+    });
+    expect(sendSession(open)).toBe(false);
     expect(beacon).not.toHaveBeenCalled();
   });
 
