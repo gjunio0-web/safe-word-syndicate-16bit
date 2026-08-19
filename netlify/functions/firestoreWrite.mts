@@ -49,3 +49,33 @@ export function firestoreWrite(
       `sessions/${documentId}`,
   };
 }
+
+/**
+ * How long a session is kept.
+ *
+ * Six months, counted as 183 days rather than as "six months", because month
+ * arithmetic has no answer for the 31st: adding six months to 31 August lands
+ * on a date that does not exist, and every language resolves that differently.
+ * A fixed count of days is unambiguous and is what a reader of this file can
+ * verify without knowing which rounding rule was in fashion.
+ */
+export const RETENTION_DAYS = 183;
+
+/**
+ * When a session written now should disappear.
+ *
+ * This is the field a Firestore TTL policy deletes on. The deletion is the
+ * database's job rather than a script somebody has to remember to run —
+ * retention that depends on a person remembering is not retention.
+ *
+ * `receivedAt` is passed in rather than read from the clock here, for the same
+ * reason the day is: a function that decides from the current time cannot be
+ * pinned by a test.
+ */
+export function expiresAt(receivedAt: string): string {
+  const received = new Date(receivedAt);
+  if (Number.isNaN(received.getTime())) {
+    throw new Error(`expiresAt: not a date: ${receivedAt}`);
+  }
+  return new Date(received.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}

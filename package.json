@@ -7,14 +7,15 @@
   "author": "Argos Outis Digital Bunker",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "eslint . && tsc --noEmit && tsc -p netlify/functions && vite build",
+    "build": "eslint . && tsc --noEmit && tsc -p netlify/functions && tsc -p scripts && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc -p netlify/functions",
+    "typecheck": "tsc --noEmit && tsc -p netlify/functions && tsc -p scripts",
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:watch": "vitest",
     "compress:intro": "node scripts/compress-intro.mjs",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "telemetry:read": "node --experimental-strip-types scripts/read-telemetry.mts"
   },
   "dependencies": {
     "lucide-react": "^0.546.0",

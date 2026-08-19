@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { firestoreWrite } from '../../netlify/functions/firestoreWrite.mts';
+import {
+  RETENTION_DAYS,
+  expiresAt,
+  firestoreWrite,
+} from '../../netlify/functions/firestoreWrite.mts';
 
 /**
  * The write the collector performs on the far end.
@@ -46,5 +50,27 @@ describe('writing a session to Firestore', () => {
     // midnight would write two rows. Passing it in is what makes that visible
     // rather than a surprise in the data.
     expect(firestoreWrite('p', 's', '1999-12-31').url).toContain('1999-12-31_s');
+  });
+});
+
+describe('how long a session is kept', () => {
+  it('marks it for deletion six months on', () => {
+    // The database deletes it, on a TTL policy watching this field. Retention
+    // that depends on someone remembering to run a script is not retention.
+    expect(expiresAt('2026-08-19T12:00:00.000Z')).toBe('2027-02-18T12:00:00.000Z');
+  });
+
+  it('counts the six months in days, so the 31st has an answer', () => {
+    // Adding six calendar months to 31 August lands on a date that does not
+    // exist, and every language resolves that differently. 183 days does not
+    // have the problem.
+    expect(RETENTION_DAYS).toBe(183);
+    expect(expiresAt('2026-08-31T00:00:00.000Z')).toBe('2027-03-02T00:00:00.000Z');
+  });
+
+  it('refuses a date it cannot read rather than inventing one', () => {
+    // A silent NaN here would write a document with no expiry, which would sit
+    // in the collection for ever without anyone noticing.
+    expect(() => expiresAt('not a date')).toThrow(/not a date/);
   });
 });
