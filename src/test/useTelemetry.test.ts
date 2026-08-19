@@ -96,6 +96,88 @@ describe('what a finished run reports', () => {
   });
 });
 
+describe('a player who switches apps and comes back', () => {
+  let beacon: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    beacon = vi.fn(() => true);
+    vi.stubGlobal('navigator', { sendBeacon: beacon });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reports leaving without losing the win that follows', async () => {
+    const { sendSession } = await import('../game/telemetryTransport');
+
+    // The hook's rule, modelled: hiding reports a sealed copy and leaves the
+    // live session alone, so a real ending can still arrive later.
+    let held: ReturnType<typeof startSession> | null = recordProgress(
+      startSession({
+        build: 'FULL',
+        hero: 'ANGRY_CORSO',
+        mode: 'SINGLE',
+        difficulty: 'NORMAL',
+        touch: true,
+      }),
+      0,
+      2
+    );
+
+    const reportInterim = () => {
+      if (held) sendSession(finishSession(held, 'LEFT'));
+    };
+    const end = (outcome: 'COMPLETED') => {
+      if (!held) return;
+      const sealed = finishSession(held, outcome);
+      held = null;
+      sendSession(sealed);
+    };
+
+    reportInterim();
+    // Switching apps must not seal the live session, or the win below would
+    // be filed as a walk-away at wave two.
+    expect(held!.outcome).toBeNull();
+
+    held = recordProgress(held!, 2, 2);
+    end('COMPLETED');
+
+    expect(beacon).toHaveBeenCalledTimes(2);
+    const bodies = beacon.mock.calls.map((c) => c[1] as Blob);
+    expect(bodies).toHaveLength(2);
+    // Both reports carry the same session id, which is what lets the far end
+    // overwrite the first with the second instead of counting two runs.
+    expect(held).toBeNull();
+  });
+
+  it('reports nothing more once the run has really ended', async () => {
+    const { sendSession } = await import('../game/telemetryTransport');
+    let held: ReturnType<typeof startSession> | null = recordProgress(
+      startSession({
+        build: 'FULL',
+        hero: 'FEET_MASTER',
+        mode: 'SINGLE',
+        difficulty: 'NORMAL',
+        touch: true,
+      }),
+      0,
+      1
+    );
+    const end = (o: 'COMPLETED') => {
+      if (!held) return;
+      const sealed = finishSession(held, o);
+      held = null;
+      sendSession(sealed);
+    };
+    const reportInterim = () => {
+      if (held) sendSession(finishSession(held, 'LEFT'));
+    };
+
+    end('COMPLETED');
+    reportInterim();
+
+    expect(beacon).toHaveBeenCalledOnce();
+  });
+});
+
 describe('closing the session once', () => {
   let beacon: ReturnType<typeof vi.fn>;
 

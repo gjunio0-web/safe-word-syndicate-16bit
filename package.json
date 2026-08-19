@@ -7,9 +7,9 @@
   "author": "Argos Outis Digital Bunker",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "eslint . && tsc --noEmit && vite build",
+    "build": "eslint . && tsc --noEmit && tsc -p netlify/functions && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p netlify/functions",
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -82,12 +82,10 @@ export function useTelemetry() {
   }, []);
 
   /**
-   * Seals and sends.
+   * Seals, sends, and closes the session for good.
    *
-   * Clearing the ref afterwards is what stops the tab-closing handler from
-   * sending a second copy of a session that already reported — the collector
-   * refuses to change a sealed outcome, but nothing stops a beacon going out
-   * twice, and two rows for one play is a worse lie than a missing one.
+   * For real endings only — a win, a loss, walking back to the title. After
+   * this the run is over and nothing more should be reported about it.
    */
   const end = useCallback((outcome: SessionOutcome) => {
     const s = session.current;
@@ -97,22 +95,46 @@ export function useTelemetry() {
   }, []);
 
   /**
+   * Reports where the run stands without ending it.
+   *
+   * This is the difference between a tab that died and a player who answered
+   * a message. Both look identical from here — the page is hidden and may
+   * never come back — so both are reported, and neither closes the session.
+   *
+   * `finishSession` returns a sealed copy and leaves the original alone, so
+   * the live session stays open and unsealed and can still reach a real
+   * ending later. If it does, that ending is sent under the same session id
+   * and the far end overwrites the earlier row: last write wins, and the last
+   * write is the truest one.
+   *
+   * The earlier design closed the session here, and it was wrong in a way
+   * that mattered. Switching apps mid-fight is ordinary behaviour on a phone,
+   * and phones are most of this audience — so a large share of players who
+   * went on to win would have been filed forever as having walked away at
+   * whichever wave they happened to be on. That is not a lost row; it is a
+   * wrong one, in the exact column the whole exercise is trying to read.
+   */
+  const reportInterim = useCallback(() => {
+    const s = session.current;
+    if (!s) return;
+    sendSession(finishSession(s, 'LEFT'));
+  }, []);
+
+  /**
    * The session nobody finishes on purpose.
    *
    * `visibilitychange` to hidden rather than `unload` or `beforeunload`: mobile
    * browsers frequently kill a backgrounded tab without ever firing an unload,
    * and on phones — which is most of this audience — hidden is the last
-   * reliable moment there is. Someone who switches apps and comes back has
-   * reported already, which is why `end` empties the ref rather than trusting
-   * the outcome seal alone.
+   * reliable moment there is.
    */
   useEffect(() => {
     const onHidden = () => {
-      if (document.visibilityState === 'hidden') end('LEFT');
+      if (document.visibilityState === 'hidden') reportInterim();
     };
     document.addEventListener('visibilitychange', onHidden);
     return () => document.removeEventListener('visibilitychange', onHidden);
-  }, [end]);
+  }, [reportInterim]);
 
   /*
    * Stable across renders, because the gameplay loop lists this object in its
