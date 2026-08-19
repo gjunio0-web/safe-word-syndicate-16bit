@@ -19,7 +19,6 @@ import {
   BARK_DURATION_FRAMES,
   OUTRO_MAX_FRAMES,
   VIEWPORT_WIDTH,
-  PLAYER_BODY_SEPARATION_Y,
   ENEMY_BODY_SEPARATION_X,
   ENEMY_BODY_SEPARATION_Y,
   PLAYER_PUSH_SHARE,
@@ -35,6 +34,7 @@ import {
   ARENA_MAX_Y,
   ATTACKER_STANDOFF_X,
   ATTACKER_STANDOFF_TOLERANCE,
+  MELEE_DEPTH_WINDOW,
   SAYONARA_TELEGRAPH_FRAMES,
   SAYONARA_CHARGE_FRAMES,
   SAYONARA_RECOVER_FRAMES,
@@ -64,7 +64,7 @@ import {
 } from './companionAi';
 import { sound } from './sound';
 import { STEP_MS } from './frameClock';
-import { restingSeparationX } from './spacing';
+import { restingSeparationX, restingSeparationY } from './spacing';
 
 /**
  * What the HUD actually shows, in display form.
@@ -1160,6 +1160,16 @@ export class GameEngine {
   }
 
   /**
+   * How far apart two bodies rest, in depth.
+   *
+   * Same arrangement as the method above: the rule lives in `spacing.ts`, this
+   * is the name the call sites in here use.
+   */
+  private minSeparationY(a: EntityState, b: EntityState): number {
+    return restingSeparationY(a, b);
+  }
+
+  /**
    * Puts a fighter who has run out of health on the ground, and counts the
    * body down to removal.
    *
@@ -1211,9 +1221,8 @@ export class GameEngine {
 
         // Enemies crowd each other more tightly than they crowd the player.
         // A single shared spacing put every attacker outside its own reach.
-        const betweenEnemies = !a.isPlayer && !b.isPlayer;
         const minDx = this.minSeparationX(a, b);
-        const minDy = betweenEnemies ? ENEMY_BODY_SEPARATION_Y : PLAYER_BODY_SEPARATION_Y;
+        const minDy = this.minSeparationY(a, b);
 
         if (absDx < minDx && absDy < minDy) {
           // Split the correction by weight instead of evenly. An even split
@@ -2104,6 +2113,9 @@ export class GameEngine {
         this.minSeparationX(enemy, targetPlayer) + 4
       );
 
+      // How far off the player's line the enemy may be and still swing.
+      const depthWindow = MELEE_DEPTH_WINDOW;
+
       // No attack slot: hold the standoff ring and wait for one to open.
       // This is what keeps the crowd from shoving the committed attackers out
       // of their own reach.
@@ -2138,7 +2150,7 @@ export class GameEngine {
         }
         enemy.vy = absDy > 12 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
         enemy.action = 'WALK';
-      } else if (absDx > idealRange || absDy > 16) {
+      } else if (absDx > idealRange || absDy > depthWindow) {
         // Approach towards target. Each axis moves only if IT is the one out
         // of range — otherwise an enemy already at ideal X range keeps
         // walking horizontally into the player just because Y is still
@@ -2167,7 +2179,7 @@ export class GameEngine {
               Math.abs(other.y - enemy.y) < ENEMY_BODY_SEPARATION_Y + 4
           );
         enemy.vx = wantsAdvanceX && !blockedAhead ? (dx > 0 ? 1 : -1) * info.speed * 0.8 : 0;
-        enemy.vy = absDy > 16 ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
+        enemy.vy = absDy > depthWindow ? (dy > 0 ? 1 : -1) * info.speed * 0.5 : 0;
         enemy.action = 'WALK';
       } else {
         // Perfect arm's length position! Stop moving and attack

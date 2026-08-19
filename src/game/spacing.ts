@@ -2,7 +2,9 @@ import { EntityState } from '../types';
 import {
   DEFAULT_BUILD_WIDTH,
   ENEMY_BODY_SEPARATION_X,
+  ENEMY_BODY_SEPARATION_Y,
   PLAYER_BODY_SEPARATION_X,
+  PLAYER_BODY_SEPARATION_Y,
 } from './constants';
 
 /**
@@ -65,4 +67,22 @@ export function restingSeparationX(a: EntityState, b: EntityState): number {
   // fighter hitting it.
   if (a.width <= DEFAULT_BUILD_WIDTH && b.width <= DEFAULT_BUILD_WIDTH) return base;
   return Math.max(base, (a.width + b.width) / 2);
+}
+
+/**
+ * How far apart two bodies come to rest in depth.
+ *
+ * Same question as the rule above, on the axis that comment says is left alone
+ * by build width — and it still is. Depth spacing is two tuned numbers, a
+ * tight one for a pair of enemies and a wider one when a player is involved,
+ * and nothing about a fighter's build moves them.
+ *
+ * Pulled out here for the reason the X rule was pulled out: this distance is
+ * the floor under every depth window in the game, and a window written under
+ * it is a fighter that lines up forever and never swings. Whoever needs the
+ * floor now reads it instead of restating the ternary.
+ */
+export function restingSeparationY(a: EntityState, b: EntityState): number {
+  const betweenEnemies = !a.isPlayer && !b.isPlayer;
+  return betweenEnemies ? ENEMY_BODY_SEPARATION_Y : PLAYER_BODY_SEPARATION_Y;
 }

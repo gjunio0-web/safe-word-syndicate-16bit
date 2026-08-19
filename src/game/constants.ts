@@ -114,6 +114,15 @@ export const ATTACKERS_BY_DIFFICULTY: Record<'EASY' | 'NORMAL' | 'PUNK_HARD', nu
  */
 export const DEFAULT_BUILD_WIDTH = 60;
 
+/**
+ * How far off the player's line a melee enemy may stand and still swing.
+ *
+ * Named rather than written twice in the engine — the branch that decides to
+ * attack and the one that walks the enemy back into line have to agree, and
+ * two literals cannot be relied on to.
+ */
+export const MELEE_DEPTH_WINDOW = 16;
+
 /** Horizontal distance kept by melee enemies waiting for an attack slot. */
 export const ATTACKER_STANDOFF_X = 190;
 
