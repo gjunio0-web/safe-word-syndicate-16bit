@@ -2,12 +2,15 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { startEngine, advance, NEUTRAL } from './helpers';
 import {
   finishSession,
+  onPageHidden,
+  onRunEnded,
+  onVisibilityChange,
   recordDeath,
   recordProgress,
   recordStats,
   startSession,
 } from '../game/telemetry';
-import { isWorthSending } from '../game/telemetryTransport';
+import { isWorthSending, sendSession } from '../game/telemetryTransport';
 
 /*
  * The hook itself needs a DOM this project does not run, so what is covered
@@ -97,20 +100,13 @@ describe('what a finished run reports', () => {
 });
 
 describe('a player who switches apps and comes back', () => {
-  let beacon: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    beacon = vi.fn(() => true);
-    vi.stubGlobal('navigator', { sendBeacon: beacon });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('reports leaving without losing the win that follows', async () => {
-    const { sendSession } = await import('../game/telemetryTransport');
-
-    // The hook's rule, modelled: hiding reports a sealed copy and leaves the
-    // live session alone, so a real ending can still arrive later.
-    let held: ReturnType<typeof startSession> | null = recordProgress(
+  /*
+   * These call the rules the hook calls. An earlier version of this block
+   * redefined them locally and checked the copy, so putting the defect back
+   * into the hook — hiding the tab ending the run — left every test green.
+   */
+  const midRun = () =>
+    recordProgress(
       startSession({
         build: 'FULL',
         hero: 'ANGRY_CORSO',
@@ -122,63 +118,59 @@ describe('a player who switches apps and comes back', () => {
       2
     );
 
-    const reportInterim = () => {
-      if (held) sendSession(finishSession(held, 'LEFT'));
-    };
-    const end = (outcome: 'COMPLETED') => {
-      if (!held) return;
-      const sealed = finishSession(held, outcome);
-      held = null;
-      sendSession(sealed);
-    };
-
-    reportInterim();
-    // Switching apps must not seal the live session, or the win below would
-    // be filed as a walk-away at wave two.
-    expect(held!.outcome).toBeNull();
-
-    held = recordProgress(held!, 2, 2);
-    end('COMPLETED');
-
-    expect(beacon).toHaveBeenCalledTimes(2);
-    const bodies = beacon.mock.calls.map((c) => c[1] as Blob);
-    expect(bodies).toHaveLength(2);
-    // Both reports carry the same session id, which is what lets the far end
-    // overwrite the first with the second instead of counting two runs.
-    expect(held).toBeNull();
+  it('reports where the run stands', () => {
+    const live = midRun();
+    const { send } = onPageHidden(live);
+    expect(send?.outcome).toBe('LEFT');
+    expect(send?.furthestWave).toBe(2);
   });
 
-  it('reports nothing more once the run has really ended', async () => {
-    const { sendSession } = await import('../game/telemetryTransport');
-    let held: ReturnType<typeof startSession> | null = recordProgress(
-      startSession({
-        build: 'FULL',
-        hero: 'FEET_MASTER',
-        mode: 'SINGLE',
-        difficulty: 'NORMAL',
-        touch: true,
-      }),
-      0,
-      1
-    );
-    const end = (o: 'COMPLETED') => {
-      if (!held) return;
-      const sealed = finishSession(held, o);
-      held = null;
-      sendSession(sealed);
-    };
-    const reportInterim = () => {
-      if (held) sendSession(finishSession(held, 'LEFT'));
-    };
+  it('leaves the run open, so the win that follows is not lost', () => {
+    // The defect this replaced: the run was sealed here, and a player who
+    // came back and won was filed forever as having walked away at wave two.
+    const live = midRun();
+    const { keep } = onPageHidden(live);
+    expect(keep).toBe(live);
+    expect(keep?.outcome).toBeNull();
+  });
 
-    end('COMPLETED');
-    reportInterim();
+  it('sends the later ending under the same session id', () => {
+    const live = midRun();
+    const hidden = onPageHidden(live);
+    const won = onRunEnded(recordProgress(hidden.keep!, 2, 2), 'COMPLETED');
 
-    expect(beacon).toHaveBeenCalledOnce();
+    expect(won.send?.sessionId).toBe(hidden.send?.sessionId);
+    expect(won.send?.outcome).toBe('COMPLETED');
+    // Which is what lets the far end overwrite the first row rather than
+    // count two runs. See the firestoreWrite test for that half.
+    expect(won.send?.furthestStage).toBe(2);
+  });
+
+  it('closes the run for good once it really ends', () => {
+    expect(onRunEnded(midRun(), 'COMPLETED').keep).toBeNull();
+  });
+
+  it('says nothing when the page comes back', () => {
+    const live = midRun();
+    const back = onVisibilityChange('visible', live);
+    expect(back.send).toBeNull();
+    expect(back.keep).toBe(live);
+  });
+
+  it('routes hiding to the rule that keeps the run', () => {
+    // Pins the wiring inside the pure function, which is the part a mutation
+    // would otherwise flip back to the ending path unnoticed.
+    const live = midRun();
+    expect(onVisibilityChange('hidden', live)).toEqual(onPageHidden(live));
+  });
+
+  it('has nothing to say when no run is open', () => {
+    expect(onPageHidden(null)).toEqual({ send: null, keep: null });
+    expect(onRunEnded(null, 'COMPLETED')).toEqual({ send: null, keep: null });
   });
 });
 
-describe('closing the session once', () => {
+describe('what actually goes out', () => {
   let beacon: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -187,13 +179,8 @@ describe('closing the session once', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('does not report the same run twice when the tab closes after a win', async () => {
-    const { sendSession } = await import('../game/telemetryTransport');
-
-    // The hook's rule: seal, send, then drop the reference. Modelled here
-    // because a second beacon is a second row, and two rows for one play is a
-    // worse lie than a missing one.
-    let held: ReturnType<typeof startSession> | null = recordProgress(
+  it('reports twice for one run that was interrupted and then finished', () => {
+    const live = recordProgress(
       startSession({
         build: 'FULL',
         hero: 'FUN_MAKER',
@@ -205,15 +192,41 @@ describe('closing the session once', () => {
       3
     );
 
-    const end = (outcome: 'COMPLETED' | 'LEFT') => {
-      if (!held) return;
-      const sealed = finishSession(held, outcome);
-      held = null;
-      sendSession(sealed);
+    // What the hook does with a transition: keep what it says to keep, send
+    // what it says to send.
+    let held: ReturnType<typeof startSession> | null = live;
+    const apply = (t: { send: typeof live | null; keep: typeof live | null }) => {
+      held = t.keep;
+      if (t.send) sendSession(t.send);
     };
 
-    end('COMPLETED');
-    end('LEFT');
+    apply(onVisibilityChange('hidden', held));
+    expect(held, 'the run survives the app switch').not.toBeNull();
+    apply(onRunEnded(held, 'COMPLETED'));
+
+    expect(beacon).toHaveBeenCalledTimes(2);
+    expect(held, 'and is closed afterwards').toBeNull();
+  });
+
+  it('says nothing more after the run has ended', () => {
+    let held: ReturnType<typeof startSession> | null = recordProgress(
+      startSession({
+        build: 'FULL',
+        hero: 'FEET_MASTER',
+        mode: 'SINGLE',
+        difficulty: 'NORMAL',
+        touch: true,
+      }),
+      0,
+      1
+    );
+    const apply = (t: { send: typeof held; keep: typeof held }) => {
+      held = t.keep;
+      if (t.send) sendSession(t.send);
+    };
+
+    apply(onRunEnded(held, 'COMPLETED'));
+    apply(onVisibilityChange('hidden', held));
 
     expect(beacon).toHaveBeenCalledOnce();
   });

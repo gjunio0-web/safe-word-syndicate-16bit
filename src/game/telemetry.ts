@@ -157,3 +157,74 @@ export function finishSession(
   if (session.outcome) return session;
   return { ...session, outcome };
 }
+
+/**
+ * What a moment in the run means for the session being held.
+ *
+ * The hook that owns the session cannot be exercised by this suite — it needs
+ * a DOM this project does not run — so the decisions it makes live here
+ * instead, where a test can reach them. That is not tidiness: the rule below
+ * was changed to fix a real defect, and a mutation putting the defect back
+ * left the whole suite green, because the tests modelled the rule locally
+ * rather than calling it.
+ */
+export interface SessionTransition {
+  /** The sealed copy to report, or null when there is nothing to say. */
+  send: SessionSnapshot | null;
+  /** The session to go on holding. Null once the run is over for good. */
+  keep: SessionSnapshot | null;
+}
+
+/**
+ * A real ending: a win, a loss, or walking back to the title.
+ *
+ * Reports and closes. Nothing more should be said about this run afterwards,
+ * which is what `keep: null` enforces — the outcome seal alone would not, since
+ * nothing stops a second beacon going out, and two rows for one play is a worse
+ * lie than a missing one.
+ */
+export function onRunEnded(
+  session: SessionSnapshot | null,
+  outcome: SessionOutcome
+): SessionTransition {
+  if (!session) return { send: null, keep: null };
+  return { send: finishSession(session, outcome), keep: null };
+}
+
+/**
+ * The page went away, and may or may not come back.
+ *
+ * Reports where the run stands and *keeps it open*. A tab that died and a
+ * player who answered a message look identical from the page's side, so both
+ * are reported and neither is treated as an ending.
+ *
+ * The earlier version closed the session here and it was wrong in a way that
+ * mattered: switching apps mid-fight is ordinary on a phone, and phones are
+ * most of this audience, so a large share of players who went on to win were
+ * filed forever as having walked away at whichever wave they happened to be
+ * on. Not a lost row — a wrong one, in the exact column the exercise exists to
+ * read.
+ *
+ * `finishSession` returns a sealed copy and leaves the original alone, which is
+ * what makes this possible: the live session stays unsealed and can still reach
+ * a real ending later, under the same session id, and the far end overwrites
+ * the earlier row.
+ */
+export function onPageHidden(session: SessionSnapshot | null): SessionTransition {
+  if (!session) return { send: null, keep: null };
+  return { send: finishSession(session, 'LEFT'), keep: session };
+}
+
+/**
+ * The whole visibility rule, so the hook's handler has no judgement left in it.
+ *
+ * Becoming visible again says nothing worth reporting — the run never stopped
+ * from this side, and a beacon per app switch back would be noise.
+ */
+export function onVisibilityChange(
+  state: 'hidden' | 'visible',
+  session: SessionSnapshot | null
+): SessionTransition {
+  if (state !== 'hidden') return { send: null, keep: session };
+  return onPageHidden(session);
+}

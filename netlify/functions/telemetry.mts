@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { firestoreWrite } from './firestoreWrite.mts';
 
 /**
  * Receives a finished play session and files it.
@@ -177,26 +178,14 @@ export default async (request: Request): Promise<Response> => {
     const token = await getAccessToken(clientEmail, privateKey);
     const day = new Date().toISOString().slice(0, 10);
 
-    /*
-     * PATCH, not POST, and the document id is the session id.
-     *
-     * One run can report more than once. A player who switches apps mid-fight
-     * — ordinary on a phone — is reported as having left, because from the
-     * page's side a backgrounded tab and a closed one are the same event. If
-     * they come back and win, that win arrives later under the same session
-     * id and has to replace the earlier row rather than sit beside it.
-     *
-     * POST to the collection would refuse the second write outright, leaving
-     * the wrong row in place. PATCH writes or overwrites, so the last report
-     * wins — and the last report is always the one that saw more of the run.
-     */
-    const docId = encodeURIComponent(`${day}_${body.sessionId}`);
-    const url =
-      `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/` +
-      `sessions/${docId}`;
+    // Method and address come from `firestoreWrite`, which is a separate file
+    // so that a test can read the decision. See the comment there: PATCH to a
+    // named document rather than POST to the collection is what lets a run
+    // report twice without being counted twice.
+    const { method, url } = firestoreWrite(projectId, body.sessionId, day);
 
     const res = await fetch(url, {
-      method: 'PATCH',
+      method,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: toDocument(body, new Date().toISOString()) }),
     });

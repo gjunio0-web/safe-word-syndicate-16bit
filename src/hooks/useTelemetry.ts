@@ -5,7 +5,9 @@ import { IS_DEMO } from '../game/campaign';
 import {
   SessionOutcome,
   SessionSnapshot,
-  finishSession,
+  SessionTransition,
+  onRunEnded,
+  onVisibilityChange,
   recordDeath,
   recordProgress,
   recordStats,
@@ -82,43 +84,22 @@ export function useTelemetry() {
   }, []);
 
   /**
-   * Seals, sends, and closes the session for good.
+   * Carries out a decision made in `telemetry.ts`.
    *
-   * For real endings only — a win, a loss, walking back to the title. After
-   * this the run is over and nothing more should be reported about it.
+   * Every judgement about what to send and what to keep lives there, in plain
+   * functions a test can call. What is left here is the part that cannot be
+   * tested without a DOM: holding the reference and subscribing to an event.
    */
-  const end = useCallback((outcome: SessionOutcome) => {
-    const s = session.current;
-    if (!s) return;
-    session.current = null;
-    sendSession(finishSession(s, outcome));
+  const apply = useCallback((transition: SessionTransition) => {
+    session.current = transition.keep;
+    if (transition.send) sendSession(transition.send);
   }, []);
 
-  /**
-   * Reports where the run stands without ending it.
-   *
-   * This is the difference between a tab that died and a player who answered
-   * a message. Both look identical from here — the page is hidden and may
-   * never come back — so both are reported, and neither closes the session.
-   *
-   * `finishSession` returns a sealed copy and leaves the original alone, so
-   * the live session stays open and unsealed and can still reach a real
-   * ending later. If it does, that ending is sent under the same session id
-   * and the far end overwrites the earlier row: last write wins, and the last
-   * write is the truest one.
-   *
-   * The earlier design closed the session here, and it was wrong in a way
-   * that mattered. Switching apps mid-fight is ordinary behaviour on a phone,
-   * and phones are most of this audience — so a large share of players who
-   * went on to win would have been filed forever as having walked away at
-   * whichever wave they happened to be on. That is not a lost row; it is a
-   * wrong one, in the exact column the whole exercise is trying to read.
-   */
-  const reportInterim = useCallback(() => {
-    const s = session.current;
-    if (!s) return;
-    sendSession(finishSession(s, 'LEFT'));
-  }, []);
+  /** Seals, sends, and closes the run: a win, a loss, walking back to title. */
+  const end = useCallback(
+    (outcome: SessionOutcome) => apply(onRunEnded(session.current, outcome)),
+    [apply]
+  );
 
   /**
    * The session nobody finishes on purpose.
@@ -129,12 +110,11 @@ export function useTelemetry() {
    * reliable moment there is.
    */
   useEffect(() => {
-    const onHidden = () => {
-      if (document.visibilityState === 'hidden') reportInterim();
-    };
+    const onHidden = () =>
+      apply(onVisibilityChange(document.visibilityState, session.current));
     document.addEventListener('visibilitychange', onHidden);
     return () => document.removeEventListener('visibilitychange', onHidden);
-  }, [reportInterim]);
+  }, [apply]);
 
   /*
    * Stable across renders, because the gameplay loop lists this object in its
