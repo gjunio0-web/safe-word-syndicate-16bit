@@ -15,6 +15,7 @@ import {
   ARENA_MIN_Y,
   OUTRO_MAX_FRAMES,
   PLAYER_BODY_SEPARATION_X,
+  PLAYER_BODY_SEPARATION_Y,
   SAYONARA_CHARGE_SPEED,
   SAYONARA_RECOVER_FRAMES,
   SAYONARA_TACKLE_DEPTH,
@@ -1758,5 +1759,109 @@ describe('a fallen fighter goes down and is taken off the field', () => {
 
     expect(standing.action).not.toBe('KO');
     expect(engine.entities.includes(standing), 'and stays on the field').toBe(true);
+  });
+});
+
+/**
+ * A melee enemy has to be able to swing at the player it is touching.
+ *
+ * The window to attack is a depth: how far off the player's line the enemy may
+ * stand. The collision push is also a depth, and it drives a fighter in contact
+ * with the player *away* until they are `PLAYER_BODY_SEPARATION_Y` apart. When
+ * the window was the narrower of the two, contact and attacking were mutually
+ * exclusive: walking into a grunt and holding the button forward made it mute,
+ * so the most aggressive position in the game was also the safest one.
+ *
+ * These pin the relationship rather than the number. The window is read from
+ * the same rule the collision uses, so raising the spacing raises the window
+ * with it and neither of these has to be edited.
+ */
+describe('melee depth window', () => {
+  /** Holds a grunt at a fixed offset from the player, frame by frame. */
+  const pinAt = (engine: GameEngine, grunt: EntityState, offsetX: number, offsetY: number) => {
+    const player = engine.player1!;
+    grunt.x = player.x + offsetX;
+    grunt.y = player.y + offsetY;
+  };
+
+  const gruntFacing = (engine: GameEngine) =>
+    engine.entities.find((e) => e.enemyType === 'PURITY_PATROL')!;
+
+  it('lets a grunt hit the player who is walking into it', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 120 }]);
+    const player = engine.player1!;
+    const grunt = gruntFacing(engine);
+
+    // Walk into it first. The approach is not what this test is about — an
+    // enemy closing on a player who has not reached it yet is aligned and
+    // swings freely, and measuring from here would pass on that alone.
+    let closing = 0;
+    while (Math.abs(grunt.x - player.x) > PLAYER_BODY_SEPARATION_X + 2 && closing < 600) {
+      engine.update(input({ right: true }));
+      closing++;
+    }
+    expect(closing, 'sanity: the two of them are actually in contact').toBeLessThan(600);
+
+    // From contact onward: still pushing, which is exactly what fires the
+    // collision push that used to hold the grunt off the player's line.
+    const pressed = player.hp;
+    for (let i = 0; i < 600 && player.hp === pressed; i++) {
+      engine.update(input({ right: true }));
+    }
+
+    expect(player.hp, 'ten seconds of shoving and never a punch thrown').toBeLessThan(pressed);
+  });
+
+  it('opens the window at the distance bodies actually rest at', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 60 }]);
+    const player = engine.player1!;
+    const grunt = gruntFacing(engine);
+    const opening = player.hp;
+
+    // The far edge of the window the enemy is allowed to swing from — the
+    // resting spacing plus the same slack the window itself is built with —
+    // and not the resting spacing alone. Pinned at the resting distance this
+    // test passed with the hit check narrowed to 31, which is inside the
+    // window: a grunt authorised to swing from 31 would have punched air and
+    // nothing would have failed. Measured, not reasoned: at 27 the mutation
+    // survives, at 27 + 4 it dies.
+    for (let i = 0; i < 400 && player.hp === opening; i++) {
+      pinAt(engine, grunt, PLAYER_BODY_SEPARATION_X, PLAYER_BODY_SEPARATION_Y + 4);
+      engine.update(NEUTRAL);
+    }
+
+    // Not just thrown: landed. The check that decides whether a punch connects
+    // has to cover the whole window the enemy is allowed to swing from.
+    expect(player.hp, 'a punch thrown from the resting distance connects').toBeLessThan(opening);
+  });
+
+  it('keeps the window shut on an enemy standing off the player\'s line', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 60 }]);
+    const player = engine.player1!;
+    const grunt = gruntFacing(engine);
+    const opening = player.hp;
+
+    // Twice the resting spacing: a clear miss in depth, and the enemy is
+    // supposed to walk it off rather than punch across it. Without this, the
+    // window could be widened until depth stopped meaning anything.
+    //
+    // The swing itself is what is asserted, not the damage. A window widened
+    // past the reach of the hit check produces a grunt punching thin air,
+    // which leaves the player's health alone and would read as a pass.
+    let swings = 0;
+    for (let i = 0; i < 400; i++) {
+      pinAt(engine, grunt, PLAYER_BODY_SEPARATION_X, PLAYER_BODY_SEPARATION_Y * 2);
+      engine.update(NEUTRAL);
+      if (grunt.action === 'PUNCH1') swings++;
+    }
+
+    expect(swings, 'nobody swings from that far off the line').toBe(0);
+    expect(player.hp, 'and nothing lands from there either').toBe(opening);
   });
 });

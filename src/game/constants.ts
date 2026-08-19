@@ -120,6 +120,18 @@ export const DEFAULT_BUILD_WIDTH = 60;
  * Named rather than written twice in the engine — the branch that decides to
  * attack and the one that walks the enemy back into line have to agree, and
  * two literals cannot be relied on to.
+ *
+ * This value does not bind today, and saying so is the point of the sentence.
+ * The engine reads `max(MELEE_DEPTH_WINDOW, restingSeparationY + 4)`, and the
+ * only thing a melee enemy measures depth against is a player, where that
+ * second term is 31. So the maximum is 31 whatever this says: setting it to
+ * zero leaves the whole suite green, which is how the claim was checked rather
+ * than reasoned.
+ *
+ * It is kept as the declared lower bound — if the resting spacing ever fell
+ * below 12 this would take over — and it stays named for the reason above,
+ * since both branches still have to read the same thing. But a reader should
+ * not go looking for 16 in the game's behaviour, because it is not there.
  */
 export const MELEE_DEPTH_WINDOW = 16;
 

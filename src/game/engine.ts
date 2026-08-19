@@ -2113,8 +2113,43 @@ export class GameEngine {
         this.minSeparationX(enemy, targetPlayer) + 4
       );
 
-      // How far off the player's line the enemy may be and still swing.
-      const depthWindow = MELEE_DEPTH_WINDOW;
+      // The same floor as above, on the other axis, and for the same reason.
+      //
+      // A fighter can only swing at what its own body lets it stand next to,
+      // and depth is a place a body is held apart just as firmly as width.
+      // Touching the player fires the collision push, which drives the two of
+      // them toward `PLAYER_BODY_SEPARATION_Y` in depth, while the window to
+      // swing was 16 — so a fighter in contact was held outside its own reach,
+      // chasing an alignment its own body forbade.
+      //
+      // Measured over a minute, counting swings started and time to the
+      // player's death, with the player pressing forward and never blocking:
+      //
+      //   three grunts, pressed into    1 swing/min, survived    ->  95, 6.9s
+      //   one grunt, pressed into      35 swings/min, died 17.4s ->  75, 8.1s
+      //   standing still               78 swings/min, died  7.7s ->  78, 7.7s
+      //
+      // The first row is the defect: a full minute standing inside a crowd of
+      // three cost ten points of health. The last row is what says the fix is
+      // aimed — a player who is not pushing never fires the collision push, so
+      // the window never bound them, and nothing about them changes.
+      //
+      // An earlier draft of this comment said a single grunt threw zero
+      // punches in thirty seconds. That is wrong and does not reproduce: one
+      // grunt swings 35 times a minute and kills a pressing player in 17
+      // seconds. Narrowing the window delays a lone attacker; it takes a crowd
+      // to silence one, because a crowd holds the player apart on both axes.
+      //
+      // The suite was green through all of it because nothing pinned the 16.
+      //
+      // Reading the floor from the same rule the collision uses means the two
+      // cannot drift apart again. The slack mirrors the X floor: the push
+      // approaches the resting distance without landing on it, so a window
+      // written exactly at it flickers.
+      const depthWindow = Math.max(
+        MELEE_DEPTH_WINDOW,
+        this.minSeparationY(enemy, targetPlayer) + 4
+      );
 
       // No attack slot: hold the standoff ring and wait for one to open.
       // This is what keeps the crowd from shoving the committed attackers out
