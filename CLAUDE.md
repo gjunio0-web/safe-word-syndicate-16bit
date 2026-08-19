@@ -218,6 +218,51 @@ Armadilhas já pagas nesta base:
   os dois, mais um padrão de troca (bate alguns segundos, recua alguns).
 - **Onda real ≠ inimigos posicionados à mão.** Vários números só aparecem
   dirigindo a onda pelo motor, com a câmera e os spawns reais.
+- **Uma execução não é uma amostra.** O `setup.ts` semeia `Math.random` antes de
+  **cada teste**, então rodar o mesmo cenário duas vezes dá exatamente o mesmo
+  resultado, e três cenários dentro de um `it` compartilham um fluxo que avança
+  entre eles. Um cenário por `it`, e para ter faixa é preciso deslocar o fluxo
+  de propósito. A diferença não é cosmética: numa amostra o martelar de soco
+  mediu 31 saques/min, em doze mediu 34 [29-43].
+
+### Uma contagem de saques não é uma medida de dificuldade — ERRATA
+
+Registrado porque custou um dia e porque a afirmação errada foi minha.
+
+Ao consertar a janela de profundidade, escrevi que o `HURT` era o que torna
+martelar soco tão forte: a IA do inimigo retorna cedo em `engine.ts:1697` para
+qualquer ação que não seja `IDLE` ou `WALK`, e o grunt — que não tem cooldown,
+só um dado de 4% por quadro — perde os *dados* durante os 18 quadros de flinch.
+A conta fecha: pouco mais de meio saque perdido por soco levado.
+
+**A conta fecha e a conclusão está errada.** Duas intervenções diretas, em
+direções opostas, com doze amostras cada:
+
+```
+                                 saques/min          morte do jogador
+  linha de base, martelando   34 [29-43]           18,4 [14,3-24,5] s
+  rolar o dado durante o flinch  42 [31-53]        20,5 [15,4-25,4] s
+  flinch do inimigo 18 -> 10  37 [31-41]           17,8 [14,3-24,2] s
+```
+
+Mexer no `HURT` move a contagem de saques em 20% e deixa a sobrevivência onde
+estava — na primeira, ela até **sobe**. O mecanismo: saques guardados disparam
+todos quando o flinch acaba, e o jogador tem 6 quadros de invulnerabilidade
+após cada acerto (`engine.ts:1533`). Amontoados, são absorvidos. Medido:
+martelando, os saques subiram de 5,2 para 6,8 e os acertos no jogador caíram de
+4,3 para 4,1 — a taxa de acerto foi de 83% para 60%.
+
+A vantagem de martelar é real e grande — 12,3 s de vida sem socar contra 18,4 s
+martelando, contra três grunts — mas **não é comprada com o flinch**. De onde
+ela vem não foi investigado; o candidato é o alcance e a prioridade do soco do
+jogador.
+
+Duas lições, e a segunda é a que se repete neste arquivo:
+
+- **saques por minuto e dano recebido são grandezas diferentes**, e a primeira
+  é a fácil de medir. Uma mudança pode subir uma e baixar a outra;
+- um mecanismo que *explica* um número não é prova de que **causa** o número.
+  A explicação do `HURT` era coerente, aritmeticamente correta, e falsa.
 
 ### 3. Comentário é inventário
 
