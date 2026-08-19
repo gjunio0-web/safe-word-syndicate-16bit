@@ -21,6 +21,56 @@ import { CharacterId, GameMode } from '../types';
  * demo does not need to know.
  */
 
+/**
+ * Which deploy produced this session.
+ *
+ * Every deploy of this project writes into the same collection, so without
+ * this field a session played by whoever was testing a branch is indexed
+ * beside a session played by a stranger, and nothing tells them apart. That is
+ * not a hypothetical: the first document ever stored was a test run from the
+ * branch deploy, and it would have counted as a player.
+ *
+ * The names are the deploys, not what we hope each deploy is for. `BRANCH` is
+ * every branch deploy — today that is only `quality_env`, but the value would
+ * be the same for any other, and a name like `QUALITY` would quietly become a
+ * lie the first time a second branch is deployed.
+ */
+export type SessionChannel = 'PRODUCTION' | 'BRANCH' | 'PREVIEW' | 'DEV';
+
+/**
+ * The deploy context, translated.
+ *
+ * The argument is Netlify's `CONTEXT`, which it sets on every build. Anything
+ * it does not set — a local `vite build`, `npm run dev`, a test — is `DEV`,
+ * which is also what an unrecognised value becomes: a channel this function
+ * does not know is not a player, and guessing `PRODUCTION` would be the one
+ * wrong answer that contaminates the numbers instead of merely hiding a row.
+ */
+export function channelFor(context: string | undefined): SessionChannel {
+  switch (context) {
+    case 'production':
+      return 'PRODUCTION';
+    case 'branch-deploy':
+      return 'BRANCH';
+    case 'deploy-preview':
+      return 'PREVIEW';
+    default:
+      return 'DEV';
+  }
+}
+
+/**
+ * This build's channel, fixed when the bundle was compiled.
+ *
+ * `__BUILD_CONTEXT__` is replaced at build time by `vite.config.ts`, which can
+ * read the environment Netlify provides. The `typeof` guard is what lets this
+ * module load anywhere the substitution did not happen — the test run, most
+ * of all, where an undeclared identifier would be a ReferenceError at import.
+ */
+export const SESSION_CHANNEL: SessionChannel = channelFor(
+  typeof __BUILD_CONTEXT__ === 'undefined' ? undefined : __BUILD_CONTEXT__
+);
+
 /** How a session ended. */
 export type SessionOutcome =
   /** Cleared the last stage of the active cut. */
@@ -37,6 +87,8 @@ export interface SessionSnapshot {
   sessionId: string;
   /** Which cut of the game this was, so demo and full builds stay separable. */
   build: 'DEMO' | 'FULL';
+  /** Which deploy this was played on, so testing does not count as playing. */
+  channel: SessionChannel;
   hero: CharacterId;
   partner: CharacterId | null;
   mode: GameMode;
@@ -82,6 +134,9 @@ export function startSession(start: SessionStart): SessionSnapshot {
   return {
     sessionId: newSessionId(),
     build: start.build,
+    // Not taken from the caller. The channel is a property of the bundle, and
+    // a caller that could pass it is a caller that could pass the wrong one.
+    channel: SESSION_CHANNEL,
     hero: start.hero,
     partner: start.partner ?? null,
     mode: start.mode,

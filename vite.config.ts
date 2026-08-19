@@ -59,6 +59,17 @@ function audioManifestPlugin(): Plugin {
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss(), audioManifestPlugin()],
+    define: {
+      /**
+       * Which deploy this bundle is. Netlify sets `CONTEXT` on every build —
+       * `production`, `branch-deploy`, `deploy-preview` — and nothing sets it
+       * anywhere else, which is exactly the distinction the telemetry needs to
+       * keep a test run from counting as a player. Read once, at build time,
+       * because the alternative is the function reading a request header, and
+       * `netlify/functions/telemetry.mts` exists to not do that.
+       */
+      __BUILD_CONTEXT__: JSON.stringify(process.env.CONTEXT ?? ''),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -14,6 +14,7 @@ import { isSession, toDocument } from '../../netlify/functions/sessionDocument.m
 const valid = () => ({
   sessionId: 'abc',
   build: 'FULL',
+  channel: 'PRODUCTION',
   hero: 'FUN_MAKER',
   partner: null,
   mode: 'SINGLE',
@@ -35,6 +36,23 @@ describe('what the endpoint accepts', () => {
 
   it('takes a co-op session with a partner named', () => {
     expect(isSession({ ...valid(), partner: 'ANGRY_CORSO' })).toBe(true);
+  });
+
+  it('still takes a session from a tab that has not reloaded since the release', () => {
+    // The page and the function ship together; browser caches do not. For a
+    // while after any release a tab opened before it posts a body with no
+    // channel in it. That is a real player's run, and rejecting it to enforce
+    // a label would trade an observation for a tidy column.
+    const { channel, ...older } = valid();
+    void channel;
+    expect(isSession(older)).toBe(true);
+  });
+
+  it('refuses a channel that is present and absurd', () => {
+    // Optional is not the same as unchecked. A megabyte under this key is junk
+    // whether or not the key had to be there.
+    expect(isSession({ ...valid(), channel: 'x'.repeat(200) })).toBe(false);
+    expect(isSession({ ...valid(), channel: 42 })).toBe(false);
   });
 
   it('refuses anything that is not an object', () => {
@@ -93,6 +111,22 @@ describe('the document that gets filed', () => {
     // Nothing would look wrong until the retention promise came due.
     expect(doc().expiresAt.timestampValue).toBe('2027-02-18T12:00:00.000Z');
     expect(doc().expiresAt.stringValue).toBeUndefined();
+  });
+
+  it('records which deploy the session was played on', () => {
+    // Without it a run played while testing a branch sits in the collection
+    // beside a stranger's and nothing tells them apart. The first document
+    // ever stored was exactly that, and would have counted as a player.
+    expect(doc().channel).toEqual({ stringValue: 'PRODUCTION' });
+  });
+
+  it('writes UNKNOWN rather than leaving the field off', () => {
+    // A field that is sometimes absent makes every reader decide what absence
+    // means, and they will not all decide the same way. It is said once here.
+    const { channel, ...older } = valid();
+    void channel;
+    const filed = toDocument(older as never, '2026-08-19T12:00:00.000Z');
+    expect(filed.channel).toEqual({ stringValue: 'UNKNOWN' });
   });
 
   it('stamps the arrival server-side', () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildReport, formatReport, type SessionRow } from '../../scripts/telemetryReport.mts';
+import {
+  buildReport,
+  formatReport,
+  playerSessions,
+  toSession,
+  type SessionRow,
+} from '../../scripts/telemetryReport.mts';
 
 /**
  * The half of telemetry that answers a question.
@@ -14,6 +20,10 @@ import { buildReport, formatReport, type SessionRow } from '../../scripts/teleme
  */
 
 const session = (over: Partial<SessionRow> = {}): SessionRow => ({
+  // PRODUCTION by default so every test below reads as "these are players".
+  // The rows that are not are the subject of one describe block, and they say
+  // so explicitly.
+  channel: 'PRODUCTION',
   hero: 'FEET_MASTER',
   partner: null,
   mode: 'SINGLE',
@@ -28,6 +38,97 @@ const session = (over: Partial<SessionRow> = {}): SessionRow => ({
   enemiesDefeated: 0,
   outcome: 'LEFT',
   ...over,
+});
+
+describe('unwrapping a stored document', () => {
+  // This used to live in the runner, which imports node:fs and the network and
+  // is therefore unreachable from here. Both defects this project has shipped
+  // in the telemetry path lived in exactly that kind of file.
+  it('reads the fields back out of Firestore’s typed format', () => {
+    const row = toSession({
+      channel: { stringValue: 'PRODUCTION' },
+      hero: { stringValue: 'ANGRY_CORSO' },
+      partner: { nullValue: null },
+      touch: { booleanValue: true },
+      seconds: { integerValue: '120' },
+      deaths: {
+        arrayValue: {
+          values: [
+            { mapValue: { fields: { stage: { integerValue: '1' }, wave: { integerValue: '4' } } } },
+          ],
+        },
+      },
+    });
+
+    expect(row.channel).toBe('PRODUCTION');
+    expect(row.hero).toBe('ANGRY_CORSO');
+    expect(row.partner).toBeNull();
+    expect(row.touch).toBe(true);
+    expect(row.seconds).toBe(120);
+    expect(row.deaths).toEqual([{ stage: 1, wave: 4 }]);
+  });
+
+  it('calls a document with no channel UNKNOWN, never PRODUCTION', () => {
+    // Every document stored before the field existed lands here. Defaulting to
+    // PRODUCTION would quietly move them all into the numbers, which is the
+    // one outcome the field was added to prevent.
+    expect(toSession({ hero: { stringValue: 'FUN_MAKER' } }).channel).toBe('UNKNOWN');
+  });
+
+  it('survives a document that is missing everything', () => {
+    // A half-written document is a lost row, not a crashed report.
+    const row = toSession({});
+    expect(row.hero).toBe('');
+    expect(row.seconds).toBe(0);
+    expect(row.deaths).toEqual([]);
+    expect(row.touch).toBe(false);
+  });
+});
+
+describe('which sessions count as players', () => {
+  it('counts the production deploy and nothing else', () => {
+    // Every deploy writes into the same collection. A run played on a branch
+    // deploy was played by whoever was testing it, who already knew where the
+    // difficult wave was, and is not evidence about anybody.
+    const { players, excluded } = playerSessions([
+      session({ channel: 'PRODUCTION', hero: 'FUN_MAKER' }),
+      session({ channel: 'BRANCH', hero: 'ANGRY_CORSO' }),
+      session({ channel: 'PREVIEW', hero: 'ANGRY_CORSO' }),
+      session({ channel: 'DEV', hero: 'ANGRY_CORSO' }),
+    ]);
+
+    expect(players.map((p) => p.hero)).toEqual(['FUN_MAKER']);
+    expect(excluded).toBe(3);
+  });
+
+  it('leaves out a row that never said which deploy it came from', () => {
+    // UNKNOWN is a row stored before the field existed, or one posted by a tab
+    // that had not reloaded since the release. Counting it means guessing
+    // PRODUCTION for a row that might be a developer's: a hidden row costs one
+    // observation, a wrong row costs the number its meaning.
+    const { players, excluded } = playerSessions([session({ channel: 'UNKNOWN' })]);
+    expect(players).toHaveLength(0);
+    expect(excluded).toBe(1);
+  });
+
+  it('does not treat an unrecognised channel as production', () => {
+    // The list of channels can grow. Whatever is added is not a player until
+    // someone says it is — the default has to fail closed.
+    expect(playerSessions([session({ channel: 'production' })]).players).toHaveLength(0);
+    expect(playerSessions([session({ channel: '' })]).players).toHaveLength(0);
+  });
+
+  it('reports the numbers of the surviving rows, not of the pile', () => {
+    // The filter has to happen before the arithmetic. A report that counted 4
+    // sessions and then described 1 would be worse than either.
+    const { players } = playerSessions([
+      session({ channel: 'PRODUCTION', seconds: 100, furthestStage: 1, outcome: 'GAME_OVER' }),
+      session({ channel: 'BRANCH', seconds: 9000, furthestStage: 1, outcome: 'GAME_OVER' }),
+    ]);
+    const report = buildReport(players);
+    expect(report.sessions).toBe(1);
+    expect(report.stageOneSeconds.median).toBe(100);
+  });
 });
 
 describe('where people stop', () => {

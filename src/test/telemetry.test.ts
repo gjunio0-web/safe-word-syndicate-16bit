@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  channelFor,
   finishSession,
   recordDeath,
   recordProgress,
   recordStats,
   startSession,
+  SESSION_CHANNEL,
   SessionSnapshot,
 } from '../game/telemetry';
 
@@ -16,6 +18,41 @@ const start = () =>
     difficulty: 'NORMAL',
     touch: true,
   });
+
+describe('which deploy a session came from', () => {
+  it('calls only the production deploy PRODUCTION', () => {
+    // The one value that must never be handed out by accident: it is the value
+    // the report counts, and a wrong one puts a developer's run in the numbers.
+    expect(channelFor('production')).toBe('PRODUCTION');
+  });
+
+  it('names the other Netlify contexts apart from each other', () => {
+    // Named after the deploy rather than after what we hope it is for. BRANCH
+    // is every branch deploy — today only quality_env, and a name like QUALITY
+    // becomes a lie the first time a second branch is deployed.
+    expect(channelFor('branch-deploy')).toBe('BRANCH');
+    expect(channelFor('deploy-preview')).toBe('PREVIEW');
+  });
+
+  it('calls anything it does not recognise DEV, never PRODUCTION', () => {
+    // A local build, a context Netlify adds later, a typo in the config. Any
+    // of them landing on PRODUCTION would contaminate the numbers, which is
+    // worse than hiding a row, so the default has to fail closed.
+    for (const unknown of [undefined, '', 'dev', 'Production', 'staging', 'branch_deploy']) {
+      expect(channelFor(unknown), String(unknown)).toBe('DEV');
+    }
+  });
+
+  it('stamps the session with the channel rather than accepting one', () => {
+    // startSession takes no channel argument on purpose: the channel is a
+    // property of the bundle, and a caller that could pass it could pass the
+    // wrong one. Under the test run nothing substitutes the build constant,
+    // so this is DEV — which is also the proof it is not hard-coded to
+    // PRODUCTION somewhere.
+    expect(start().channel).toBe(SESSION_CHANNEL);
+    expect(start().channel).toBe('DEV');
+  });
+});
 
 describe('a telemetry session', () => {
   it('carries nothing that would identify the person', () => {

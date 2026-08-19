@@ -19,21 +19,19 @@
 
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildReport, formatReport, type SessionRow } from './telemetryReport.mts';
+import {
+  buildReport,
+  formatReport,
+  playerSessions,
+  toSession,
+  type FirestoreValue,
+  type SessionRow,
+} from './telemetryReport.mts';
 
 interface ServiceAccount {
   project_id: string;
   client_email: string;
   private_key: string;
-}
-
-interface FirestoreValue {
-  stringValue?: string;
-  integerValue?: string;
-  booleanValue?: boolean;
-  nullValue?: null;
-  arrayValue?: { values?: FirestoreValue[] };
-  mapValue?: { fields?: Record<string, FirestoreValue> };
 }
 
 function credentials(): ServiceAccount {
@@ -79,30 +77,6 @@ async function accessToken(account: ServiceAccount): Promise<string> {
   return ((await res.json()) as { access_token: string }).access_token;
 }
 
-/** Unwraps Firestore's typed-value format back into a plain session. */
-function toSession(fields: Record<string, FirestoreValue>): SessionRow {
-  const str = (k: string) => fields[k]?.stringValue ?? '';
-  const num = (k: string) => Number(fields[k]?.integerValue ?? 0);
-  return {
-    hero: str('hero'),
-    partner: fields.partner?.stringValue ?? null,
-    mode: str('mode'),
-    difficulty: str('difficulty'),
-    touch: fields.touch?.booleanValue ?? false,
-    build: str('build'),
-    furthestStage: num('furthestStage'),
-    furthestWave: num('furthestWave'),
-    seconds: num('seconds'),
-    score: num('score'),
-    enemiesDefeated: num('enemiesDefeated'),
-    outcome: str('outcome'),
-    deaths: (fields.deaths?.arrayValue?.values ?? []).map((d) => ({
-      stage: Number(d.mapValue?.fields?.stage?.integerValue ?? 0),
-      wave: Number(d.mapValue?.fields?.wave?.integerValue ?? 0),
-    })),
-  };
-}
-
 /** Walks the collection, following the page token to the end. */
 async function fetchSessions(projectId: string, token: string): Promise<SessionRow[]> {
   const base =
@@ -134,6 +108,22 @@ const rows = await fetchSessions(account.project_id, await accessToken(account))
 
 if (rows.length === 0) {
   console.log('No sessions stored yet.');
-} else {
+} else if (process.env.TELEMETRY_ALL) {
+  // Every channel, for looking at the collection itself rather than at
+  // players — checking that a branch deploy is writing, most of the time.
+  console.log(`all ${rows.length} sessions, every channel\n`);
   console.log(formatReport(buildReport(rows)));
+} else {
+  const { players, excluded } = playerSessions(rows);
+  // Said out loud rather than dropped quietly. A reader who does not know a
+  // filter ran cannot tell a quiet collection from a filtered one.
+  if (excluded > 0) {
+    console.log(`${excluded} session(s) not from the production deploy, excluded.`);
+    console.log('Set TELEMETRY_ALL=1 to include them.\n');
+  }
+  if (players.length === 0) {
+    console.log('No sessions from the production deploy yet.');
+  } else {
+    console.log(formatReport(buildReport(players)));
+  }
 }

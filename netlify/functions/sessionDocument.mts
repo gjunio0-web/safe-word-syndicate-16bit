@@ -27,6 +27,15 @@ export /** The shape we accept. Anything else is discarded without ceremony. */
 interface IncomingSession {
   sessionId: string;
   build: string;
+  /**
+   * Which deploy sent this. Optional on the way in, and deliberately so: the
+   * page and the function deploy together but browser caches do not, so for a
+   * while after any release a tab opened before it can still post a body from
+   * the previous shape. Rejecting those would throw away real sessions to
+   * enforce a label. They are stored as UNKNOWN instead, which the report
+   * excludes — a hidden row rather than a lost one.
+   */
+  channel?: string;
   hero: string;
   partner: string | null;
   mode: string;
@@ -60,6 +69,9 @@ function isSession(body: unknown): body is IncomingSession {
 
   if (!str('sessionId') || !str('build') || !str('hero') || !str('mode')) return false;
   if (!str('difficulty') || !str('outcome')) return false;
+  // Absent is allowed; present and not a short string is not. A body carrying
+  // a megabyte under this key is junk whether or not the key is optional.
+  if (b.channel !== undefined && !str('channel')) return false;
   if (b.partner !== null && !str('partner')) return false;
   if (typeof b.touch !== 'boolean') return false;
   if (!num('furthestStage') || !num('furthestWave')) return false;
@@ -84,6 +96,10 @@ function toDocument(s: IncomingSession, receivedAt: string): Record<string, Fire
   return {
     sessionId: { stringValue: s.sessionId },
     build: { stringValue: s.build },
+    // Always written, never left off the document: a field that is sometimes
+    // absent forces every reader to decide what absence means, and they will
+    // not all decide the same way. UNKNOWN says the same thing once, here.
+    channel: { stringValue: s.channel ?? 'UNKNOWN' },
     hero: { stringValue: s.hero },
     partner: s.partner === null ? { nullValue: null } : { stringValue: s.partner },
     mode: { stringValue: s.mode },

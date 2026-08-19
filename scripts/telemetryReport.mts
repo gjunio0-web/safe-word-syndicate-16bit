@@ -12,6 +12,9 @@
  */
 
 export interface SessionRow {
+  /** PRODUCTION, BRANCH, PREVIEW, DEV, or UNKNOWN for a row stored before the
+   * field existed. See `SessionChannel` in `src/game/telemetry.ts`. */
+  channel: string;
   hero: string;
   partner: string | null;
   mode: string;
@@ -56,6 +59,83 @@ export interface Report {
   touchShare: number;
   /** Waves that killed people, worst first. */
   deadliestWaves: Tally[];
+}
+
+/** Firestore's typed-value format, as much of it as a session uses. */
+export interface FirestoreValue {
+  stringValue?: string;
+  integerValue?: string;
+  booleanValue?: boolean;
+  nullValue?: null;
+  arrayValue?: { values?: FirestoreValue[] };
+  mapValue?: { fields?: Record<string, FirestoreValue> };
+}
+
+/**
+ * A stored document, unwrapped back into a session.
+ *
+ * Here rather than in the runner that fetches it, because every `??` below is
+ * a decision about what a missing field means, and the channel default is one
+ * the report then acts on. This project has now twice shipped a defect that
+ * lived in a file the suite could not import — the expiry written as a string,
+ * and the write issued as POST — and both times the whole suite stayed green.
+ */
+export function toSession(fields: Record<string, FirestoreValue>): SessionRow {
+  const str = (k: string) => fields[k]?.stringValue ?? '';
+  const num = (k: string) => Number(fields[k]?.integerValue ?? 0);
+  return {
+    // UNKNOWN, not '', for a document written before the field existed: the
+    // rule below reads this value, and an empty string would be a third
+    // meaning nobody declared.
+    channel: fields.channel?.stringValue ?? 'UNKNOWN',
+    hero: str('hero'),
+    partner: fields.partner?.stringValue ?? null,
+    mode: str('mode'),
+    difficulty: str('difficulty'),
+    touch: fields.touch?.booleanValue ?? false,
+    build: str('build'),
+    furthestStage: num('furthestStage'),
+    furthestWave: num('furthestWave'),
+    seconds: num('seconds'),
+    score: num('score'),
+    enemiesDefeated: num('enemiesDefeated'),
+    outcome: str('outcome'),
+    deaths: (fields.deaths?.arrayValue?.values ?? []).map((d) => ({
+      stage: Number(d.mapValue?.fields?.stage?.integerValue ?? 0),
+      wave: Number(d.mapValue?.fields?.wave?.integerValue ?? 0),
+    })),
+  };
+}
+
+/** The rows and the rows left out, counted. */
+export interface Selection {
+  players: SessionRow[];
+  /** How many rows were set aside, so the report can say so out loud. */
+  excluded: number;
+}
+
+/**
+ * The sessions a report about players is allowed to count.
+ *
+ * Only the production deploy. Everything else in the collection was played by
+ * whoever was testing something: a branch deploy, a deploy preview, a local
+ * build. Those runs are real play in the sense that a person pressed the
+ * buttons, and they are worthless as evidence about players, because the
+ * person already knew where the difficult wave was.
+ *
+ * UNKNOWN is excluded with the rest, and that is the deliberate half. It marks
+ * a row stored before this field existed, or one posted by a tab that had not
+ * reloaded since the release. Counting them would mean guessing PRODUCTION for
+ * a row that might be a developer's, which is the error that has no floor: a
+ * hidden row costs one observation, a wrong row costs the number's meaning.
+ *
+ * This lives here, and not in the runner that prints it, for the reason the
+ * whole file is here: a rule the tests cannot reach is a rule a mutation can
+ * delete in silence.
+ */
+export function playerSessions(rows: SessionRow[]): Selection {
+  const players = rows.filter((r) => r.channel === 'PRODUCTION');
+  return { players, excluded: rows.length - players.length };
 }
 
 const pct = (part: number, whole: number) =>
