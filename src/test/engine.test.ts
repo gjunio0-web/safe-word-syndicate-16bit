@@ -1864,4 +1864,53 @@ describe('melee depth window', () => {
     expect(swings, 'nobody swings from that far off the line').toBe(0);
     expect(player.hp, 'and nothing lands from there either').toBe(opening);
   });
+
+  /**
+   * How far the enemy walks in depth while closing, which is a second reader
+   * of the same window and was left unguarded.
+   *
+   * The window appears twice: the branch that decides to walk, and the line
+   * inside it that decides whether to walk *in depth*. Making only the second
+   * read the old 16 passed every test above, and the commit that noticed it
+   * argued the two agreed wherever the line ran. Measured, they do not: with
+   * the player moving they disagree in 46%, 70% and 14% of that line's
+   * executions across three patterns — and 0% with the player standing still,
+   * which is the only case the argument held for.
+   *
+   * The cost is not cosmetic and it falls on the defensive option. Circling a
+   * trio, which is how a player survives a crowd, went from 51 swings a minute
+   * and 11.7s alive to 71 and 8.5s: the enemy that keeps chasing depth it has
+   * already closed is an enemy that is nearer when it swings.
+   *
+   * The two depths below are absolute rather than written from the constant,
+   * so neither can be dragged along by it, and the second is what stops this
+   * passing on a branch that never runs.
+   */
+  it('stops chasing depth once it is near enough to swing', () => {
+    const engine = startEngine();
+    advance(engine, 30);
+    stageEnemies(engine, [{ type: 'PURITY_PATROL', dx: 400 }]);
+    const grunt = gruntFacing(engine);
+
+    // Far in X, so the enemy is in the branch that closes distance, and 24
+    // deep — inside the window it may swing from, outside the 16 the old
+    // constant would still be chasing.
+    let chasing = 0;
+    for (let i = 0; i < 120; i++) {
+      pinAt(engine, grunt, 400, 24);
+      engine.update(NEUTRAL);
+      if (grunt.vy !== 0) chasing++;
+    }
+    expect(chasing, 'already near enough in depth, so it should hold').toBe(0);
+
+    // And at 40 it does move, which is what says the assertion above is about
+    // the rule rather than about a branch that never executes.
+    let walking = 0;
+    for (let i = 0; i < 120; i++) {
+      pinAt(engine, grunt, 400, 40);
+      engine.update(NEUTRAL);
+      if (grunt.vy !== 0) walking++;
+    }
+    expect(walking, 'genuinely off the line, so it should close').toBeGreaterThan(0);
+  });
 });
